@@ -19,7 +19,7 @@ pip install -r requirements.txt
 python app.py
 ```
 
-The app will start on `http://localhost:5000`.
+The app will start on `http://localhost:8888`.
 
 ## Endpoints
 

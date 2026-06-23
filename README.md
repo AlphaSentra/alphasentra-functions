@@ -11,5 +11,18 @@ This is the **Functions App** for the **AlphaSentra Project** — a Flask backen
 python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
+```
+
+## Running the App
+
+```bash
 python app.py
 ```
+
+The app will start on `http://localhost:5000`.
+
+## Endpoints
+
+| Route | Method | Description |
+|-------|--------|-------------|
+| `/` | GET | Health check — returns `{"message": "Hello, World!"}` |

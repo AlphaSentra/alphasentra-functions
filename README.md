@@ -25,4 +25,4 @@ The app will start on `http://localhost:8888`.
 
 | Route | Method | Description |
 |-------|--------|-------------|
-| `/` | GET | Health check — returns `{"message": "Hello, World!"}` |
+| `/` | GET | Health check — returns an HTML page with "Hello, World!" |

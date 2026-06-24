@@ -1,22 +1,11 @@
-from flask import Flask, render_template_string
+from flask import Flask
+from Functions.routes import index, portfolio, register_route
 
 app = Flask(__name__)
 
-HTML_TEMPLATE = """
-<!DOCTYPE html>
-<html>
-<head>
-    <title>AlphaSentra Functions</title>
-</head>
-<body>
-    <h1>Hello, World!</h1>
-</body>
-</html>
-"""
+register_route(app, '/', 'Function Index', index)
+register_route(app, '/port', 'Portfolio Function', portfolio)
 
-@app.route("/")
-def hello():
-    return render_template_string(HTML_TEMPLATE)
 
-if __name__ == "__main__":
-    app.run(host="0.0.0.0", port=8888, debug=True)
+if __name__ == '__main__':
+    app.run(host='0.0.0.0', port=8888, debug=True)

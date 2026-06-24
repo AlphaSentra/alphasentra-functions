@@ -37,9 +37,22 @@ The Flask app uses a **route registry** pattern to manage all available endpoint
 3. The `/` (root) route renders an auto-generated Function Index page by reading `Functions/index/index.html` and passing the `ROUTES` list to it.
 4. All function modules live under `Functions/`. They are loaded by filesystem path using `importlib.util`, which allows the `Functions/` directory to remain gitignored.
 
-This makes it trivial to discover and document endpoints as the project grows.
+    This makes it trivial to discover and document endpoints as the project grows.
 
-## Adding a New Function
+    ```mermaid
+    flowchart LR
+        A[Browser] -->|request| B[Flask App<br>app.py]
+        B --> C[Route Registry<br>Functions/routes.py]
+        C -->|stores| D[ROUTES list]
+        C -->|loads| E[Function Modules<br>Functions/*/main.py]
+        E -->|returns| F[HTML string]
+        F -->|rendered by| B
+        B -->|response| A
+        D -->|displayed on| G[index page /]
+        G --> A
+    ```
+
+    ## Adding a New Function
 
 To add a new analytical function (e.g., `Functions/myfunction/`):
 

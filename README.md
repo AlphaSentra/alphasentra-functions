@@ -41,15 +41,19 @@ The Flask app uses a **route registry** pattern to manage all available endpoint
 
     ```mermaid
     flowchart TD
-        A[Browser] -->|request| B[Flask App<br>app.py]
-        B --> C[Route Registry<br>Functions/routes.py]
-        C -->|stores| D[ROUTES list]
-        C -->|loads| E[Function Modules<br>Functions/*/main.py]
-        E -->|returns| F[HTML string]
+        B[Flask App<br>app.py]
+        C[Route Registry<br>Functions/routes.py]
+        D[ROUTES list]
+        E[Function Modules<br>Functions/*/main.py]
+        F[HTML string]
+        G[index page /]
+        B --> C
+        C -->|stores| D
+        C -->|loads| E
+        E -->|returns| F
         F -->|rendered by| B
-        B -->|response| A
-        D -->|displayed on| G[index page /]
-        G --> A
+        D -->|displayed on| G
+        G -->|served by| B
     ```
 
     ## Adding a New Function

@@ -40,7 +40,7 @@ The Flask app uses a **route registry** pattern to manage all available endpoint
     This makes it trivial to discover and document endpoints as the project grows.
 
     ```mermaid
-    flowchart LR
+    flowchart TD
         A[Browser] -->|request| B[Flask App<br>app.py]
         B --> C[Route Registry<br>Functions/routes.py]
         C -->|stores| D[ROUTES list]
@@ -114,3 +114,34 @@ register_route(app, '/port/api/metrics', 'Portfolio metrics as JSON', portfolio_
 - `ROUTES` is a plain Python list populated at import time, so every route registered in `app.py` is automatically reflected on the Function Index.
 - No `@register_route` decorator syntax is used — all routes are explicitly registered via the function call.
 - The `Functions/` directory is gitignored; it is loaded at runtime from the filesystem using `importlib.util`, so there is no need to add function directories to `sys.path` manually.
+
+## Deployment
+
+### Gunicorn (Production)
+
+A `Procfile` is included for running the app with Gunicorn in production:
+
+```
+web: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
+```
+
+This starts the app using the **gevent** worker class with 2 workers and 25 concurrent connections per worker.
+
+### Render.com
+
+A `render.yaml` configuration is included for deploying to [Render.com](https://render.com):
+
+```yaml
+services:
+  - type: web
+    name: ago-functions
+    env: python
+    plan: starter
+    buildCommand: pip install -r requirements.txt
+    startCommand: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
+    healthCheckPath: /
+```
+
+Key production dependencies:
+- `gunicorn` — WSGI HTTP server
+- `gevent` — async worker class for Gunicorn

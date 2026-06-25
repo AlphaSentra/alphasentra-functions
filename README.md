@@ -1,9 +1,15 @@
+<p align="center">
+  <img src="img/banner.png" alt="Banner"/>
+</p>
+
 # AlphaSentra Functions App
 
 This is the **Functions App** for the **AlphaSentra Project** — a Flask backend that serves and renders the outputs of various analytical functions.
 
-- **PORT (Portfolio Report)** — Currently the primary function, focused on connecting eToro users and delivering portfolio analytics.
-- Additional investment analytics functions will be added over time as the project evolves.
+- **PORT (Portfolio & Risk Analytics)** — Connects eToro users and delivers portfolio analytics.
+- **EQS (Stocks AI Screener)** — AI-powered stock screening analysis.
+- **WCR (Forex AI Screener)** — AI-powered forex screening analysis.
+- **CRYP (Cryptocurrency AI Screener)** — AI-powered cryptocurrency screening analysis.
 
 ## Setup
 
@@ -26,7 +32,10 @@ The app will start on `http://localhost:8888`.
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/` | GET | Function Index — auto-generated list of all registered routes |
-| `/port` | GET | Portfolio Function (rendered live) |
+| `/port` | GET | Portfolio & Risk Analytics (rendered live) |
+| `/eqs` | GET | Stocks AI Screener (rendered live) |
+| `/wcr` | GET | Forex AI Screener (rendered live) |
+| `/cryp` | GET | Cryptocurrency AI Screener (rendered live) |
 
 ## How It Works
 
@@ -80,12 +89,12 @@ Import your function's handler in `app.py` and register it using `register_route
 
 ```python
 from flask import Flask
-from Functions.routes import index, portfolio, register_route
+from Functions.routes import index, port, register_route
 
 app = Flask(__name__)
 
 register_route(app, '/', 'Function Index', index)
-register_route(app, '/port', 'Portfolio Function', portfolio)
+register_route(app, '/port', 'Portfolio & Risk Analytics', port)
 register_route(app, '/myfunction', 'My analysis report', myfunction_handler)
 ```
 

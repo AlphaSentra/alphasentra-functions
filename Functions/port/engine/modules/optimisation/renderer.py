@@ -47,7 +47,7 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
     tickers = opt_results['tickers']
     solutions = opt_results['solutions']
     sectors = opt_results['sectors']
-    types = opt_results['types']
+    names = opt_results['names']
     
     # 2. Generate weight comparison Plotly chart
     fig = go.Figure()
@@ -205,8 +205,8 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
         
         zipped_data.append({
             'ticker': t,
+            'name': names[i],
             'sector': sectors[i],
-            'type': types[i],
             'curr_w': curr_w,
             'sharpe_w': sharpe_w,
             'sortino_w': sortino_w,
@@ -255,8 +255,8 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
             row['best_match_q'] = 0.0
 
         row_class = 'active-row'
+        name = row['name']
         sector = row['sector']
-        typ = row['type']
         curr_w = row['curr_w']
         sharpe_w = row['sharpe_w']
         sortino_w = row['sortino_w']
@@ -277,8 +277,8 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
         row_str = f"""
         <tr class="{row_class}" data-ticker="{t}" data-price="{p:.4f}" data-wcurr="{curr_w:.4f}" data-wsharpe="{sharpe_w:.4f}" data-wsortino="{sortino_w:.4f}" data-wir="{ir_w:.4f}" data-wdrawdown="{drawdown_w:.4f}" data-wbestmatch="{best_match_w:.4f}" data-diffsharpe="{sharpe_w - curr_w:.4f}" data-diffsortino="{sortino_w - curr_w:.4f}" data-diffir="{ir_w - curr_w:.4f}" data-diffdrawdown="{drawdown_w - curr_w:.4f}" data-diffbestmatch="{best_match_w - curr_w:.4f}">
             <td><strong>{t}</strong></td>
+            <td>{name}</td>
             <td>{sector}</td>
-            <td><span class="badge badge-{typ}">{typ.capitalize()}</span></td>
             <td class="opt-cell">
                 <div class="opt-view-percentage"><strong>{curr_w:.2f}%</strong></div>
                 <div class="opt-view-quantity"><strong>{format_qty(curr_q)}</strong></div>

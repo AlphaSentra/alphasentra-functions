@@ -301,7 +301,8 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
         tabs_content += '<div class="sub-tab-nav">'
         for sub in stats_sub_tab_names:
             active_class = ' active' if sub == 'correlation' else ''
-            tabs_content += f'<button class="sub-tab-button{active_class}" onclick="openSubTab(event, \'{sub.capitalize()}\')">{sub.capitalize()}</button>'
+            display_name = "Monte Carlo" if sub == "monte_carlo" else sub.capitalize()
+            tabs_content += f'<button class="sub-tab-button{active_class}" onclick="openSubTab(event, \'{sub.capitalize()}\')">{display_name}</button>'
         tabs_content += '</div>'
 
         for sub in stats_sub_tab_names:

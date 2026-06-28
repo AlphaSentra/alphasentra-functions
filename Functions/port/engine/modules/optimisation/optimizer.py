@@ -51,6 +51,7 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     
     # Get sector grouping
     sector_series = sector_industry_df.loc[portfolio_tickers, 'sector'].fillna('Others')
+    name_series = sector_industry_df.loc[portfolio_tickers, 'name'].fillna('')
     unique_sectors = sector_series.unique()
     sector_groups = {sector: np.array([sector_series.iloc[i] == sector for i in range(num_assets)]) for sector in unique_sectors}
 
@@ -303,7 +304,7 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         'tickers': portfolio_tickers,
         'solutions': optimized_solutions,
         'sectors': sector_series.tolist(),
-        'types': ['active'] * len(portfolio_tickers),
+        'names': name_series.tolist(),
         'dates': dates_str,
         'benchmark_cum_wealth': bench_cum_wealth
     }

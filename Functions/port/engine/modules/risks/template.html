@@ -1,0 +1,153 @@
+<div id="Risks" class="tab-content">
+  <!-- Header strip: key risk metrics -->
+  {{ charts.risk_metrics_strip | safe }}
+
+    {% if charts.shock_curve_20 is defined %}
+<div class="chart-container">
+    <h2>Portfolio Tail Risk: Stress Scenario Analysis (Shock Curve)</h2>
+    <p>
+        The <strong>Shock Curve</strong> is a stress-testing tool that illustrates how the total portfolio is expected to respond to progressively severe market downturns. Unlike standard volatility measures, it provides a direct look at the "tail risk"—the potential for significant losses during extreme market events.
+    </p>
+    <div class="bg-info-box">
+        <h4 class="m-t-0">How to interpret this:</h4>
+        <ul class="m-b-0">
+            <li><strong>X-Axis (Market Shock):</strong> Represents a hypothetical decline in the broad market index (e.g., -5% to selected shock level).</li>
+            <li><strong>Y-Axis (Portfolio Return):</strong> Shows the estimated impact on the specific portfolio.</li>
+            <li><strong>Overlays:</strong>
+                <ul class="m-t-6">
+                    <li><strong>Current Portfolio (Red):</strong> Represents current positioning and its sensitivity.</li>
+                    <li><strong>Previous Period Est. (Gray):</strong> Estimates sensitivity based on the first half of the dataset, providing a look at how the risk profile has evolved.</li>
+                    <li><strong>Benchmark (Black):</strong> Represents the broad market (Beta = 1.0) as a reference point.</li>
+                </ul>
+            </li>
+            <li><strong>The Slope:</strong> A steeper curve indicates higher sensitivity (Beta) to market crashes, while a flatter curve suggests lower risk.</li>
+        </ul>
+    </div>
+    <p class="font-sm-gray-m-b-20">
+        <strong>Calculation Methodology:</strong> This model uses a <em>Weighted Beta Sensitivity Analysis</em>. We calculate the historical Beta for each individual asset relative to a market proxy. The portfolio's total response is the sum of each asset's weight multiplied by its respective Beta and the magnitude of the market shock. The "Previous Period" estimate uses historical betas from the early part of the data to show drift in the risk profile.
+    </p>
+
+    <!-- Shock Level Selector -->
+    <div class="u-align-center m-b-25">
+        <span class="u-bold m-r-10">Select Shock Level:</span>
+        <button class="shock-btn {% if shock_level_pct == 20 %}active{% endif %}" data-shock="20" onclick="switchShockLevel(20)">20%</button>
+        <button class="shock-btn {% if shock_level_pct == 30 %}active{% endif %}" data-shock="30" onclick="switchShockLevel(30)">30%</button>
+        <button class="shock-btn {% if shock_level_pct == 50 %}active{% endif %}" data-shock="50" onclick="switchShockLevel(50)">50%</button>
+    </div>
+
+    <!-- Shock Curve Charts -->
+    <div id="shock-20-container" class="shock-chart-container {% if shock_level_pct != 20 %}display-none{% endif %}">
+        <div class="w-100 overflow-hidden">
+            {{ charts.shock_curve_20 | safe }}
+        </div>
+    </div>
+    <div id="shock-30-container" class="shock-chart-container {% if shock_level_pct != 30 %}display-none{% endif %}">
+        <div class="w-100 overflow-hidden">
+            {{ charts.shock_curve_30 | safe }}
+        </div>
+    </div>
+    <div id="shock-50-container" class="shock-chart-container {% if shock_level_pct != 50 %}display-none{% endif %}">
+        <div class="w-100 overflow-hidden">
+            {{ charts.shock_curve_50 | safe }}
+        </div>
+    </div>
+
+
+    <!-- Contribution Tables -->
+    <div class="shock-contribution-section m-t-25">
+        <!-- 20% Shock -->
+        <div id="shock-contrib-20" {% if shock_level_pct != 20 %}class="display-none"{% endif %}>
+            <h3>Security Impact Contribution Analysis (-20% Market Shock)</h3>
+            <p>The following table ranks each security by its estimated contribution to the portfolio's overall decline during a severe -20% market event. This identifies specific positions that drive the highest tail risk based on weight and market sensitivity.</p>
+            <div class="bg-info-box">
+                <h4 class="m-t-0">How to interpret this:</h4>
+                <ul class="m-b-0">
+                    <li><strong>Weight (%):</strong> The portfolio's current allocation to the security. Higher weight increases impact, but is not the sole determinant of tail risk.</li>
+                    <li><strong>Estimated Beta:</strong> A measure of the security's historical sensitivity to market movements. Beta &gt; 1.0 means the security amplifies market moves; Beta &lt; 1.0 means it dampens them. A high-Beta security can drive large losses even with a small weight.</li>
+                    <li><strong>Impact at -20% Shock:</strong> The estimated contribution (in percentage points) of this security to the portfolio's return if the market drops 20%. Calculated as Weight &times; Beta &times; (-0.20). More negative values indicate larger expected losses.</li>
+                    <li><strong>% of Total Loss:</strong> The proportion of the portfolio's overall expected loss that is attributable to this security. A security with a high percentage is a primary driver of tail risk.</li>
+                    <li><strong>Ranking Order:</strong> Securities are sorted by Contribution (most negative first). Those at the top are the largest contributors to portfolio decline in a crash scenario and represent the most concentrated tail-risk exposures.</li>
+                </ul>
+            </div>
+            {{ charts.shock_contrib_20 | safe }}
+        </div>
+        <!-- 30% Shock -->
+        <div id="shock-contrib-30" class="display-none">
+            <h3>Security Impact Contribution Analysis (-30% Market Shock)</h3>
+            <p>The following table ranks each security by its estimated contribution to the portfolio's overall decline during a severe -30% market event. This identifies specific positions that drive the highest tail risk based on weight and market sensitivity.</p>
+            <div class="bg-info-box">
+                <h4 class="m-t-0">How to interpret this:</h4>
+                <ul class="m-b-0">
+                    <li><strong>Weight (%):</strong> The portfolio's current allocation to the security. Higher weight increases impact, but is not the sole determinant of tail risk.</li>
+                    <li><strong>Estimated Beta:</strong> A measure of the security's historical sensitivity to market movements. Beta &gt; 1.0 means the security amplifies market moves; Beta &lt; 1.0 means it dampens them. A high-Beta security can drive large losses even with a small weight.</li>
+                    <li><strong>Impact at -30% Shock:</strong> The estimated contribution (in percentage points) of this security to the portfolio's return if the market drops 30%. Calculated as Weight &times; Beta &times; (-0.30). More negative values indicate larger expected losses.</li>
+                    <li><strong>% of Total Loss:</strong> The proportion of the portfolio's overall expected loss that is attributable to this security. A security with a high percentage is a primary driver of tail risk.</li>
+                    <li><strong>Ranking Order:</strong> Securities are sorted by Contribution (most negative first). Those at the top are the largest contributors to portfolio decline in a crash scenario and represent the most concentrated tail-risk exposures.</li>
+                </ul>
+            </div>
+            {{ charts.shock_contrib_30 | safe }}
+        </div>
+        <!-- 50% Shock -->
+        <div id="shock-contrib-50" class="display-none">
+            <h3>Security Impact Contribution Analysis (-50% Market Shock)</h3>
+            <p>The following table ranks each security by its estimated contribution to the portfolio's overall decline during a severe -50% market event. This identifies specific positions that drive the highest tail risk based on weight and market sensitivity.</p>
+            <div class="bg-info-box">
+                <h4 class="m-t-0">How to interpret this:</h4>
+                <ul class="m-b-0">
+                    <li><strong>Weight (%):</strong> The portfolio's current allocation to the security. Higher weight increases impact, but is not the sole determinant of tail risk.</li>
+                    <li><strong>Estimated Beta:</strong> A measure of the security's historical sensitivity to market movements. Beta &gt; 1.0 means the security amplifies market moves; Beta &lt; 1.0 means it dampens them. A high-Beta security can drive large losses even with a small weight.</li>
+                    <li><strong>Impact at -50% Shock:</strong> The estimated contribution (in percentage points) of this security to the portfolio's return if the market drops 50%. Calculated as Weight &times; Beta &times; (-0.50). More negative values indicate larger expected losses.</li>
+                    <li><strong>% of Total Loss:</strong> The proportion of the portfolio's overall expected loss that is attributable to this security. A security with a high percentage is a primary driver of tail risk.</li>
+                    <li><strong>Ranking Order:</strong> Securities are sorted by Contribution (most negative first). Those at the top are the largest contributors to portfolio decline in a crash scenario and represent the most concentrated tail-risk exposures.</li>
+                </ul>
+            </div>
+            {{ charts.shock_contrib_50 | safe }}
+        </div>
+    </div>
+</div>
+{% endif %}
+
+{% if charts["var_es_analysis"] is defined %}
+<div class="chart-container">
+    <h2>Value at Risk (VaR) &amp; Expected Shortfall (ES) Analysis</h2>
+    <p>Detailed breakdown of the portfolio's historical distribution of returns, highlighting the "tail risk" threshold (VaR) and the average severity of losses beyond that point (Expected Shortfall).</p>
+    <div class="bg-info-box">
+        <h4 class="m-t-0">How to interpret this:</h4>
+        <ul class="m-b-0">
+            <li><strong>Histogram:</strong> Shows the frequency distribution of historical daily portfolio returns. The x-axis represents return ranges; the y-axis shows how often returns fell within each range. The red shaded area represents the tail region beyond the VaR threshold.</li>
+            <li><strong>VaR (Value at Risk):</strong> The threshold loss that will not be exceeded with a given confidence level (e.g., 95% or 99%). For a 95% VaR of -2.5%, it means there is a 5% historical probability of losing more than 2.5% in a single day. VaR measures "how bad can it get?" at a specified confidence level.</li>
+            <li><strong>ES (Expected Shortfall / CVaR):</strong> The average loss when the VaR threshold is breached. If 95% VaR is -2.5% and ES is -4.2%, it means that on the worst 5% of days, the average loss was 4.2%. ES measures the severity of tail losses, not just the cutoff.</li>
+            <li><strong>Confidence Level Selection:</strong> 95% VaR is standard for daily risk reporting; 99% VaR is used for extreme tail risk assessment. Higher confidence levels produce more conservative (larger) loss estimates.</li>
+            <li><strong>Limitations:</strong> VaR and ES are backward-looking and assume stationarity. They do not account for extreme events outside the historical sample and can underestimate risk during periods of low volatility.</li>
+        </ul>
+    </div>
+    {{ charts.var_es_analysis | safe }}
+</div>
+{% endif %}
+
+{% if charts["zscore_scatter"] is defined %}
+<div class="chart-container">
+     <h2>Z-Score Analysis Scatter Plot</h2>
+     <p>Insights into the risk-weighting of each position relative to its statistical Z-score (1-year historical mean). Bubble size represents the percentage risk contribution to the total portfolio volatility.</p>
+     <div class="bg-info-box">
+         <h4 class="m-t-0">How to interpret this:</h4>
+         <ul class="m-b-0">
+             <li><strong>Z-Score (X-Axis):</strong> Measures how many standard deviations the current price is from its 1-year historical mean. Z-Score &gt; 2.0 indicates statistically overbought/expensive territory; Z-Score &lt; -2.0 indicates statistically oversold/cheap territory. Values between -2 and +2 are within normal historical ranges.</li>
+             <li><strong>Bubble Size:</strong> Represents each position's contribution to overall portfolio volatility. Larger bubbles indicate the position contributes more to total portfolio risk. A large bubble at an extreme Z-Score signals a large, statistically atypical position that may warrant rebalancing.</li>
+             <li><strong>Quadrant Analysis:</strong>
+                 <ul class="m-t-6">
+                     <li><strong>Top-Right (High Z, Large Bubble):</strong> Overbought large-risk positions — candidates for profit-taking or hedging.</li>
+                     <li><strong>Top-Left (High Z, Small Bubble):</strong> Overbought but low-risk — minor concern, may hold for momentum.</li>
+                     <li><strong>Bottom-Left (Low Z, Small Bubble):</strong> Oversold low-risk — potential small add opportunities if fundamentals are sound.</li>
+                     <li><strong>Bottom-Right (Low Z, Large Bubble):</strong> Oversold high-risk — potential value opportunity if risk is acceptable, or avoid if fundamental deterioration is suspected.</li>
+                 </ul>
+             </li>
+             <li><strong>Outlier Detection:</strong> Positions far from the origin (0,0) are statistical outliers. Those with both extreme Z-Scores and large bubble sizes represent concentrated, atypical risk exposures that diverge significantly from historical norms.</li>
+         </ul>
+     </div>
+     <div class="w-100 overflow-hidden">
+         {{ charts.zscore_scatter | safe }}
+     </div>
+</div>
+{% endif %}
+</div>

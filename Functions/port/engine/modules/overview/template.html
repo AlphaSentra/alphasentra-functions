@@ -1,0 +1,294 @@
+<script>
+    function exportTableToExcel(button, filename) {
+        var originalText = button.innerHTML;
+        button.innerHTML = '<span class="exporting-span">⏳</span> Exporting...';
+
+        function styleTable(table) {
+            var clone = table.cloneNode(true);
+            var origCells = table.querySelectorAll('td, th');
+            var cloneCells = clone.querySelectorAll('td, th');
+            cloneCells.forEach(function(cell, i) {
+                cell.style.fontSize = '12pt';
+                cell.style.padding = '12px';
+                cell.style.fontFamily = {{ FONT_PRIMARY|tojson }};
+                var orig = origCells[i];
+                if (orig) {
+                    var cs = window.getComputedStyle(orig);
+                    cell.style.border = cs.border;
+                    cell.style.borderColor = cs.borderColor;
+                    cell.style.borderStyle = cs.borderStyle;
+                    cell.style.borderWidth = cs.borderWidth;
+                }
+            });
+            return clone;
+        }
+
+        function findTableByMarker(container, text) {
+            var children = container.children;
+            for (var i = 0; i < children.length; i++) {
+                var el = children[i];
+                if (el.innerText && el.innerText.includes(text)) {
+                    var table = el.querySelector && el.querySelector('table');
+                    if (table) return table;
+                    var next = el.nextElementSibling;
+                    while (next) {
+                        if (next.tagName === 'TABLE') return next;
+                        if (next.querySelector && next.querySelector('table')) return next.querySelector('table');
+                        next = next.nextElementSibling;
+                    }
+                }
+            }
+            return null;
+        }
+
+        var overviewClone = null;
+        var actionClone = null;
+        var efficiencyClone = null;
+
+        var overviewEl = document.getElementById('commentary-content');
+        if (overviewEl) {
+            var overviewTable = overviewEl.querySelector('table');
+            if (overviewTable) overviewClone = styleTable(overviewTable);
+        }
+
+        var holdingsContent = document.getElementById('holdings-commentary-content');
+        if (holdingsContent) {
+            var actionAlertsTable = findTableByMarker(holdingsContent, 'Action Alerts');
+            if (actionAlertsTable) actionClone = styleTable(actionAlertsTable);
+        }
+
+        var efficiencyEl = document.getElementById('efficiency-commentary-content');
+        if (efficiencyEl) {
+            var efficiencyTable = efficiencyEl.querySelector('table');
+            if (efficiencyTable) efficiencyClone = styleTable(efficiencyTable);
+        }
+
+        if (!overviewClone && !actionClone && !efficiencyClone) {
+            var intelColumn = document.querySelector('.intel-attention-column');
+            if (intelColumn) {
+                var attentionTable = findTableByMarker(intelColumn, 'Need Attention Today');
+                if (attentionTable) overviewClone = styleTable(attentionTable);
+
+                var actionAlertsTable = intelColumn.querySelector('#action-alerts-table');
+                if (!actionAlertsTable) actionAlertsTable = findTableByMarker(intelColumn, 'Action Alerts');
+                if (actionAlertsTable) actionClone = styleTable(actionAlertsTable);
+
+                var securitiesTable = findTableByMarker(intelColumn, 'Securities Requiring Attention');
+                if (securitiesTable) efficiencyClone = styleTable(securitiesTable);
+            }
+        }
+
+        var container = document.createElement('div');
+        if (overviewClone) {
+            container.appendChild(document.createElement('h2')).innerText = "Need Attention Today";
+            container.appendChild(overviewClone);
+        }
+        if (actionClone) {
+            container.appendChild(document.createElement('h2')).innerText = "Positions to Review";
+            container.appendChild(actionClone);
+        }
+        if (efficiencyClone) {
+            container.appendChild(document.createElement('h2')).innerText = "Positions Weighing on Portfolio Efficiency";
+            container.appendChild(efficiencyClone);
+        }
+
+        // Style headers and conditional colors
+        var allTables = container.querySelectorAll('table');
+        allTables.forEach(function(table) {
+            var rows = table.querySelectorAll('tr');
+            rows.forEach(function(row, index) {
+                if (index === 0) { // Header
+                    row.querySelectorAll('th').forEach(function(th) {
+                        th.style.backgroundColor = '#808080';
+                        th.style.color = 'white';
+                        th.style.fontWeight = 'bold';
+                    });
+                } else {
+                    var cells = row.querySelectorAll('td');
+                    cells.forEach(function(cell) {
+                        var headerRow = row.closest('table').querySelector('thead tr') || row.closest('table').querySelector('tr');
+                        var headerCell = headerRow ? headerRow.children[cell.cellIndex] : null;
+                        if (headerCell && headerCell.innerText.trim().startsWith('Weight')) return;
+                        var text = cell.innerText.trim();
+                        if (text.includes('%')) {
+                            var val = parseFloat(text.replace(/[^0-9.\-+]/g, ''));
+                            if (!isNaN(val)) {
+                                 cell.style.backgroundColor = val > 0 ? '{{ POSITIVE_RETURN_CARD }}' : (val < 0 ? '{{ NEGATIVE_RETURN_CARD }}' : '{{ ZERO_RETURN_CELL_BG }}');
+                                 cell.style.color = val === 0 ? '{{ ZERO_RETURN_CELL_TEXT }}' : '{{ NONZERO_RETURN_CELL_TEXT }}';
+                                 cell.style.fontWeight = 'bold';
+                            }
+                        }
+                    });
+                }
+            });
+        });
+
+        var html = container.outerHTML;
+        var blob = new Blob(['\ufeff', html], {
+            type: 'application/vnd.ms-excel;charset=utf-8'
+        });
+        
+        var link = document.createElement("a");
+        link.href = URL.createObjectURL(blob);
+        link.download = filename + ".xls";
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        
+        setTimeout(function() {
+            button.innerHTML = originalText;
+        }, 1000);
+    }
+</script>
+
+<div id="Overview" class="tab-content active">
+
+
+
+  <div class="chart-container">
+      {{ charts.overview_metrics_strip | safe }}
+  </div>
+  <div class="chart-container">
+      {{ charts.value | safe }}
+  </div>
+
+  <div class="side-by-side-container">
+<div class="metrics-column">
+           <div class="chart-container">
+               <h2>Metrics</h2>
+                <!-- Time Horizon Selector -->
+               <div class="metrics-filter-wrapper">
+                   <div class="metrics-filter-label-wrapper">
+                       <span class="metrics-filter-label">Time Horizon:</span>
+                        <div id="metrics-filter-container" class="metrics-filter-container">
+                            <button class="metrics-filter-btn" data-layer="3M" onclick="switchMetricsLayer('3M')">3M</button>
+                            <button class="metrics-filter-btn active" data-layer="1Y" onclick="switchMetricsLayer('1Y')">1Y</button>
+                            <button class="metrics-filter-btn" data-layer="5Y" onclick="switchMetricsLayer('5Y')">5Y</button>
+                            <button class="metrics-filter-btn" data-layer="All" onclick="switchMetricsLayer('All')">All</button>
+                        </div>
+                   </div>
+               </div>
+
+                <!-- Combined Metrics Table -->
+                <table class="metrics-table">
+                   <thead>
+                        <tr>
+                            <th>Metric</th>
+                            <th class="metric-header">
+                                <div>Portfolio</div>
+                            </th>
+                            <th class="metric-header">
+                                <div>Benchmark</div>
+                            </th>
+                            <th>Difference</th>
+                        </tr>
+                    </thead>
+
+                   {% for horizon in ['3M', '1Y', '5Y', 'All'] %}
+                    {% if horizon in metrics and metrics[horizon] %}
+                    <tbody id="metrics-{{ horizon }}" class="{{ 'd-table-row-group' if horizon == '1Y' else 'hidden' }}">
+
+                        {% set data = metrics[horizon] %}
+                        {% for metric, value in data.items() %}
+                          {% if metric != 'benchmark' %}
+                          {# Exclude simulation/shock metrics #}
+                          {% if metric not in ['MC_Mean_Final_Return', 'MC_Expected_Drawdown_Pct', 'MC_VaR_99_Pct', 'MC_VaR_95_Pct', 'MC_Expected_Upside_95_Pct', 'Shock_Beta', 'Max Drawdown 1M', 'Max Drawdown 1Y', 'Max Drawdown 5Y', 'Market Exposure Effect (Cum.)'] %}
+                            {% if not (not include_yield and metric == "Estimated Yield") %}
+                              {% set is_bold = metric in ["Volatility", "Sharpe Ratio", "Sortino Ratio", "Beta", "Information Ratio", "Estimated Yield"] %}
+                              {% set weight_style = 'bold' if is_bold else 'normal' %}
+                                <tr class="tr-border-eee">
+                                   <td class="metrics-td-sm fw-{{ weight_style }}">
+                                       {% if metric == "Sharpe Ratio" %}Sharpe Ratio
+                                       {% elif metric == "Sortino Ratio" %}Sortino Ratio
+                                       {% elif metric == "Information Ratio" %}Information Ratio
+                                       {% else %}{{ metric }}{% endif %}
+                                   </td>
+                                   
+                                   {# Portfolio Value #}
+                                   <td class="metrics-td metrics-td-right fw-{{ weight_style }}">
+                                       {% if metric in ["Annualized Return", "Cumulative Return", "Volatility", "Max Drawdown", "VaR (95%, 1-Year)", "CVaR (95%, 1-Year)", "Estimated Yield", "Market Exposure Effect (Cum.)", "Alpha (Risk-Adj) Annualized", "Alpha (Risk-Adj) Cumulative", "Outperformance Annualized", "Outperformance Cumulative"] %}
+                                           {{ "%.2f%%" | format(value * 100) if value is number else value }}
+                                       {% elif metric in ["Sharpe Ratio", "Sortino Ratio", "Beta", "Information Ratio"] %}
+                                           {{ "%.2f" | format(value) if value is number else value }}
+                                       {% else %}
+                                           {{ "%.4f" | format(value) if value is number else value }}
+                                       {% endif %}
+                                   </td>
+
+                                    {# Benchmark Value #}
+                                    {% if metric in ["Beta", "Alpha (Risk-Adj) Annualized", "Alpha (Risk-Adj) Cumulative", "Outperformance Annualized", "Outperformance Cumulative", "Information Ratio"] %}
+                                        {% set b_val = None %}
+                                    {% else %}
+                                        {% set b_val = metrics[horizon].benchmark[metric] if 'benchmark' in metrics[horizon] and metric in metrics[horizon].benchmark else None %}
+                                    {% endif %}
+
+                                    {% if b_val is not none %}
+                                        <td class="metrics-td metrics-td-right fw-{{ weight_style }}">
+                                            {% if metric in ["Annualized Return", "Cumulative Return", "Volatility", "Max Drawdown", "VaR (95%, 1-Year)", "CVaR (95%, 1-Year)", "Estimated Yield"] %}
+                                                {{ "%.2f%%" | format(b_val * 100) if b_val is number else b_val }}
+                                            {% elif metric in ["Sharpe Ratio", "Sortino Ratio", "Beta", "Information Ratio"] %}
+                                                {{ "%.2f" | format(b_val) if b_val is number else b_val }}
+                                            {% else %}
+                                                {{ "%.4f" | format(b_val) if b_val is number else b_val }}
+                                            {% endif %}
+                                        </td>
+
+
+                                        {# Difference #}
+                                        <td class="diff-cell">
+                                            {% if value is number and b_val is number %}
+                                                {% set diff = value - b_val %}
+                                            {% set diff_class = 'positive' if diff > 0 else 'negative' if diff < 0 else 'neutral' %}
+                                                 <span class="diff-pill {{ diff_class }}">
+                                                  {% if metric in ["Annualized Return", "Cumulative Return", "Volatility", "Max Drawdown", "VaR (95%, 1-Year)", "CVaR (95%, 1-Year)", "Estimated Yield"] %}
+                                                      {{ "%s%+.2f%%" | format("▲ " if diff > 0 else "▼ " if diff < 0 else "", diff * 100) }}
+                                                  {% else %}
+                                                      {{ "%s%+.2f" | format("▲ " if diff > 0 else "▼ " if diff < 0 else "", diff) }}
+                                                  {% endif %}
+                                                 </span>
+                                            {% else %}
+                                                -
+                                            {% endif %}
+                                        </td>
+                                    {% else %}
+                                        <td class="metrics-td metrics-td-center text-color-999">-</td>
+                                        <td class="metrics-td metrics-td-right text-color-999">-</td>
+                                    {% endif %}
+                                </tr>
+                            {% endif %}
+                          {% endif %}
+                          {% endif %}
+                        {% endfor %}
+                    </tbody>
+                    {% endif %}
+                  {% endfor %}
+                </table>
+
+           </div>
+       </div>
+
+        <div class="charts-column">
+            <div class="chart-container">
+                <h2>Performance</h2>
+                {{ charts.performance_barchart | safe }}
+            </div>
+        </div>
+     </div>
+
+    <!-- Advances & Declines Section -->
+    <div class="m-t-20">
+        <div class="chart-container">
+            <h2>Advances &amp; Declines</h2>
+            {{ charts.advances_declines | safe }}
+        </div>
+    </div>
+
+    <!-- Sector Performance Breakdown Section -->
+    <div class="m-t-20">
+        <div class="chart-container">
+            <h2>Performance Breakdown</h2>
+            <p>Click on any sector or segment in the sunburst chart to drill down through industries to individual securities. Use the table on the left to explore the hierarchy — click a sector to expand its industries, then click an industry to reveal its securities. Switch between time horizons using the buttons above to see performance across different periods.</p>
+            {{ charts.sector_sunburst | safe }}
+        </div>
+    </div>
+</div>

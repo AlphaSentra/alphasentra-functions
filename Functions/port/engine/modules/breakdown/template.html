@@ -1,0 +1,27 @@
+<!-- BREAKDOWN TAB -->
+<div id="Breakdown" class="tab-content">
+
+    <!-- Header strip: key breakdown metrics -->
+    <div class="chart-container m-b-10">
+        {{ charts.breakdown_metrics_strip | safe }}
+    </div>
+
+    <div class="chart-container">
+        <h2>Sector &amp; Industry Allocation</h2>
+        <p>Insights on portfolio weighting per sector and industry to identify concentration risks and diversification levels.</p>
+        <div class="side-by-side-container">
+            <div class="flex-1">
+                {{ sector_analysis.table_html | safe }}
+            </div>
+            <div class="flex-1">
+                {{ sector_analysis.pie_chart_html | safe }}
+            </div>
+        </div>
+    </div>
+
+    <div class="chart-container">
+        <h2>Sector Performance Breakdown</h2>
+        <p>Table showing securities grouped by sector, with their portfolio weight and recent performance over 3 months and 1 month.</p>
+        {{ sector_perf_table | safe }}
+    </div>
+</div>

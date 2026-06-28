@@ -1,0 +1,6 @@
+<div style="background-color: var(--color-bg-card); border-left: 5px solid var(--color-accent); padding: 15px; border-radius: 4px; font-size: 0.9em; color: var(--color-text-primary); line-height: 1.6;">
+  <strong>Intel</strong> provides AI-driven portfolio intelligence. Metrics are summarized across multiple horizons.
+  {% if holdings_df is not none and not holdings_df.empty %}
+    <br>Portfolio currently holds {{ holdings_df.shape[0] }} active position{{ 's' if holdings_df.shape[0] != 1 else '' }}.
+  {% endif %}
+</div>

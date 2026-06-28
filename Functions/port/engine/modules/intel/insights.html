@@ -1,0 +1,11 @@
+<h3 style="margin-bottom: 10px; color: var(--color-heading-h3);">Key Insights</h3>
+<ul style="color: var(--color-text-primary); line-height: 1.8;">
+  {% if holdings_df is not none and not holdings_df.empty %}
+    {% set top = holdings_df.head(3) %}
+    {% for ticker, row in top.iterrows() %}
+      <li><strong>{{ ticker }}</strong> — Weight: {{ "%.2f%%" | format(row.get('Weight', 0) * 100) }}</li>
+    {% endfor %}
+  {% else %}
+    <li style="color: var(--color-text-muted);">No holdings data available at this time.</li>
+  {% endif %}
+</ul>

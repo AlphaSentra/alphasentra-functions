@@ -1,0 +1,61 @@
+<!-- HOLDINGS TAB -->
+    <!-- ========================================================================= -->
+    <div id="Holdings" class="tab-content">
+    <!-- Header strip: key holdings metrics -->
+    <div class="chart-container-compact">
+        {{ charts.holdings_metrics_strip | safe }}
+    </div>
+
+
+    <script>
+    function switchHoldingsView(view) {
+        // Hide all views
+        var views = ['components', 'fundamentals', 'technicals', 'insights'];
+        views.forEach(function(v) {
+            var div = document.getElementById('holdings-view-' + v);
+            if (div) div.style.display = 'none';
+        });
+        // Show selected view
+        var selected = document.getElementById('holdings-view-' + view);
+        if (selected) selected.style.display = 'block';
+
+        // Update button styles
+        var container = document.getElementById('holdings-filter-container');
+        if (!container) return;
+        var buttons = container.querySelectorAll('.holdings-filter-btn');
+        buttons.forEach(function(btn) {
+            if (btn.dataset.view === view) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+    }
+    </script>
+    <script>
+        var chartData = {{ charts.chart_data | safe }};
+    </script>
+    <div class="chart-container">
+        <h2 class="holdings-title">Portfolio Detailed Holdings</h2>
+        <p class="holdings-description">Breakdown of portfolio assets. Click any row to expand charts and metrics, or hover over headers for metric descriptions.</p>
+
+        <!-- View Selector -->
+        <div class="holdings-view-selector-wrapper">
+            <div class="holdings-view-selector">
+                <span class="holdings-view-selector-label">Analysis View:</span>
+                <div id="holdings-filter-container" class="holdings-view-selector-container">
+                    <button class="holdings-filter-btn active" data-view="components" onclick="switchHoldingsView('components')">Overview</button>
+                    <button class="holdings-filter-btn" data-view="fundamentals" onclick="switchHoldingsView('fundamentals')">Fundamentals</button>
+                    <button class="holdings-filter-btn" data-view="technicals" onclick="switchHoldingsView('technicals')">Technicals</button>
+                    <button class="holdings-filter-btn" data-view="insights" onclick="switchHoldingsView('insights')">Insights</button>
+                </div>
+            </div>
+        </div>
+
+        <div id="holdings-view-container">
+            {{ charts.holdings_table | safe }}
+        </div>
+    </div>
+    </div>
+
+   <!-- ========================================================================= -->

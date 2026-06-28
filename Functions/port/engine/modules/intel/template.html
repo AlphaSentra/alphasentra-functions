@@ -1,0 +1,18 @@
+<div id="Intel" class="tab-content">
+  <div class="intel-two-column-container">
+    <div class="intel-commentary-column">
+      {{ intel_commentary | safe }}
+    </div>
+    <div class="intel-attention-column">
+      {{ attention_table | safe }}
+      <div style="height:20px"></div>
+      {{ action_alerts_table | safe }}
+      <div style="height:20px"></div>
+      {{ securities_attention_table | safe }}
+      <div style="height:20px"></div>
+      {{ top_performers_table | safe }}
+      <div style="height:20px"></div>
+      {{ lagging_positions_table | safe }}
+    </div>
+  </div>
+</div>

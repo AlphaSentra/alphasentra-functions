@@ -1,0 +1,16 @@
+<div id="intel-chart-container" style="width:100%; height:400px;"></div>
+<script>
+  var intelData = {{ ts.total.to_json() | safe }};
+  var chart = LightweightCharts.createChart(document.getElementById('intel-chart-container'), {
+    width: document.getElementById('intel-chart-container').offsetWidth,
+    height: 400,
+    layout: { background: { type: 'solid', color: 'transparent' }, textColor: 'var(--color-text-muted)' },
+    grid: { vertLines: { color: 'var(--color-border-light)' }, horzLines: { color: 'var(--color-border-light)' } },
+  });
+  chart.addAreaSeries({
+    topColor: 'rgba(37, 99, 235, 0.4)',
+    bottomColor: 'rgba(37, 99, 235, 0.0)',
+    lineColor: 'rgba(37, 99, 235, 1)',
+    lineWidth: 2,
+  }).setData(Object.entries(intelData).map(([time, value]) => ({ time: parseInt(time), value: value })));
+</script>

@@ -1,0 +1,375 @@
+<div id="Optimisation" class="tab-content">
+    <!-- Header Grid showing metrics -->
+    <div class="opt-grid">
+        <!-- Current -->
+        <div class="opt-card opt-card-current">
+            <h3>Current Portfolio</h3>
+            <div class="opt-card-val">{{ "%.3f"|format(solutions.Current.metrics['Sharpe Ratio']) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions.Current.metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions.Current.metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions.Current.metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions.Current.metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions.Current.metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+
+        <!-- Max Sharpe -->
+        <div class="opt-card opt-card-sharpe">
+            <h3>Max Sharpe</h3>
+            <div class="opt-card-val text-max-sharpe">{{ "%.3f"|format(solutions['Max Sharpe'].metrics['Sharpe Ratio']) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions['Max Sharpe'].metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions['Max Sharpe'].metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions['Max Sharpe'].metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions['Max Sharpe'].metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions['Max Sharpe'].metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+
+        <!-- Max Sortino -->
+        <div class="opt-card opt-card-sortino">
+            <h3>Max Sortino</h3>
+            <div class="opt-card-val text-max-sortino">{{ "%.3f"|format(solutions['Max Sortino'].metrics['Sortino Ratio']) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions['Max Sortino'].metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions['Max Sortino'].metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions['Max Sortino'].metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions['Max Sortino'].metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions['Max Sortino'].metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+
+        <!-- Max IR -->
+        <div class="opt-card opt-card-ir">
+            <h3>Max Info Ratio</h3>
+            <div class="opt-card-val text-max-ir">{{ "%.3f"|format(solutions['Max IR'].metrics['Information Ratio']) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions['Max IR'].metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions['Max IR'].metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions['Max IR'].metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions['Max IR'].metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions['Max IR'].metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+
+        <!-- Min Drawdown -->
+        <div class="opt-card opt-card-drawdown">
+            <h3>Min Drawdown</h3>
+            <div class="opt-card-val text-min-drawdown">{{ "%.2f%%"|format(solutions['Min Drawdown'].metrics['Max Drawdown']*100) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions['Min Drawdown'].metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions['Min Drawdown'].metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions['Min Drawdown'].metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions['Min Drawdown'].metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions['Min Drawdown'].metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+
+        <!-- Best Match -->
+        <div class="opt-card opt-card-balanced">
+            <h3>Best Match</h3>
+            <div class="opt-card-val text-best-match">{{ "%.3f"|format(solutions['Best Match'].metrics['Sharpe Ratio']) }}</div>
+            <div class="opt-card-metrics">
+                <div><span class="label">Sharpe:</span><span class="val">{{ "%.3f"|format(solutions['Best Match'].metrics['Sharpe Ratio']) }}</span></div>
+                <div><span class="label">Sortino:</span><span class="val">{{ "%.3f"|format(solutions['Best Match'].metrics['Sortino Ratio']) }}</span></div>
+                <div><span class="label">Info Ratio:</span><span class="val">{{ "%.3f"|format(solutions['Best Match'].metrics['Information Ratio']) }}</span></div>
+                <div><span class="label">Max DD:</span><span class="val text-min-drawdown">{{ "%.2f%%"|format(solutions['Best Match'].metrics['Max Drawdown']*100) }}</span></div>
+                <div><span class="label">Ann. Return:</span><span class="val text-ann-return">{{ "%.2f%%"|format(solutions['Best Match'].metrics['Annualized Return']*100) }}</span></div>
+            </div>
+        </div>
+    </div>
+
+
+
+
+
+    <!-- Historical Performance Comparison Chart -->
+    <div class="chart-container">
+        <h2>Historical Performance Comparison</h2>
+        <div class="opt-chart-wrapper">
+            {{ ts_chart_html | safe }}
+        </div>
+    </div>
+
+    <!-- Optimization Weights Table -->
+    <div class="chart-container pos-relative overflow-hidden">
+        <h2>Optimal Portfolio Weight Distributions</h2>
+        <button class="export-btn" onclick="exportOptTableToCSV(this, 'optimal_portfolio_weights')">
+            <span class="btn-export-icon">&#128196;</span> Export Excel
+        </button>
+        <p>The table below lists the weight allocations for each ticker across all five solutions compared to the
+            current portfolio. Weight constraints are applied as follows:</p>
+            
+        <div class="info-box">
+            <h4>Active Optimization Constraints:</h4>
+             <ul>
+                <li><strong>Maximum position size constraint:</strong> {{ config.max_position_size }}% per position</li>
+                <li><strong>Minimum position size constraint:</strong> {{ config.min_position_size }}% per position</li>
+                <li><strong>Maximum sector size constraint:</strong> {{ config.max_sector_size }}% per sector</li>
+                <li><strong>Lookback period for optimization metrics:</strong> Trailing 1-Year (last 252 trading days)
+                </li>
+            </ul>
+        </div>
+             
+        <!-- View Selector -->
+        <div class="m-b-20">
+            <div class="opt-view-selector-wrapper">
+                <span class="opt-view-selector-label">Layout View:</span>
+                <div id="opt-layout-container" class="opt-layout-container">
+                    <button class="opt-layout-btn opt-layout-btn-active" data-view="percentage" onclick="switchOptLayout('percentage')">Percentage</button>
+                    <button class="opt-layout-btn" data-view="quantity" onclick="switchOptLayout('quantity')">Quantity</button>
+                </div>
+            </div>
+        </div>
+            
+        <!-- Capital Input for Quantity View -->
+        <div id="opt-capital-container" class="opt-view-quantity m-b-15px">
+            <div class="flex-container">
+                <span class="capital-label">Portfolio Capital:</span>
+                <div class="input-group">
+                    <span class="opt-capital-symbol">$</span>
+                    <input type="number" id="opt-capital-input" value="{{ total_portfolio_value | int }}" min="0" step="1000" class="capital-input">
+                </div>
+                <button onclick="recalcOptQuantities()" class="btn-small">Update</button>
+                <button onclick="resetOptCapital()" class="btn-secondary">Reset</button>
+                <span class="opt-capital-hint">Enter total portfolio value to recalculate share quantities.</span>
+            </div>
+        </div>
+        
+        <div class="opt-weights-table-wrapper">
+            <table id="opt-weights-table">
+                <thead>
+                    <tr class="opt-table-header-row">
+                        <th onclick="sortOptTable(0)">Ticker</th>
+                        <th onclick="sortOptTable(1)">Sector</th>
+                        <th onclick="sortOptTable(2)">Component</th>
+                        <th class="opt-th-align-right" onclick="sortOptTable(3)"><span id="opt-current-header-text">Current Weight</span> <span
+                                class="sort-indicator">▼</span></th>
+                        <th class="opt-th-align-right opt-th-color-sharpe" onclick="sortOptTable(4)">Max Sharpe</th>
+                        <th class="opt-th-align-right opt-th-color-sortino" onclick="sortOptTable(5)">Max Sortino</th>
+                        <th class="opt-th-align-right opt-th-color-ir" onclick="sortOptTable(6)">Max Info Ratio</th>
+                        <th class="opt-th-align-right opt-th-color-drawdown" onclick="sortOptTable(7)">Min Drawdown</th>
+                        <th class="opt-th-align-right opt-th-color-best-match" onclick="sortOptTable(8)">Best Match</th>
+                    </tr>
+                </thead>
+
+                <tbody>
+                    {{ weights_table_rows_html | safe }}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</div>
+
+<script>
+    let optSortDirections = { 3: 'desc' }; // default sort is desc on current weight
+
+    function sortOptTable(colIndex) {
+        const table = document.getElementById("opt-weights-table");
+        const tbody = table.querySelector("tbody");
+        const rows = Array.from(tbody.querySelectorAll("tr"));
+
+        // Check for totals row
+        let totalsRow = null;
+        if (rows.length > 0 && rows[rows.length - 1].cells[0].innerText.includes("TOTAL")) {
+            totalsRow = rows.pop();
+        }
+
+        // Toggle direction
+        const currentDir = optSortDirections[colIndex] || 'desc';
+        const nextDir = currentDir === 'asc' ? 'desc' : 'asc';
+        optSortDirections[colIndex] = nextDir;
+
+        // Update header indicators
+        const headers = table.querySelectorAll("thead th");
+        headers.forEach((th, idx) => {
+            let indicator = th.querySelector(".sort-indicator");
+            if (indicator) {
+                indicator.remove();
+            }
+            if (idx === colIndex) {
+                const span = document.createElement("span");
+                span.className = "sort-indicator";
+                span.innerHTML = nextDir === 'asc' ? ' ▲' : ' ▼';
+                th.appendChild(span);
+            }
+        });
+
+        // Sort rows
+        rows.sort((rowA, rowB) => {
+            const cellA = rowA.cells[colIndex];
+            const cellB = rowB.cells[colIndex];
+
+            const isNumeric = colIndex >= 3;
+
+            if (isNumeric) {
+                const txtA = cellA.innerText || cellA.textContent;
+                const txtB = cellB.innerText || cellB.textContent;
+                const valA = parseFloat(txtA.trim()) || 0;
+                const valB = parseFloat(txtB.trim()) || 0;
+                return nextDir === 'asc' ? valA - valB : valB - valA;
+            } else {
+                const valA = (cellA.innerText || cellA.textContent).trim();
+                const valB = (cellB.innerText || cellB.textContent).trim();
+                return nextDir === 'asc' ? valA.localeCompare(valB) : valB.localeCompare(valA);
+            }
+        });
+
+        // Clear and re-populate
+        tbody.innerHTML = "";
+        rows.forEach(row => tbody.appendChild(row));
+        if (totalsRow) {
+            tbody.appendChild(totalsRow);
+        }
+    }
+
+    function switchOptLayout(layout) {
+        var pctDivs = document.querySelectorAll('.opt-view-percentage');
+        var qtyDivs = document.querySelectorAll('.opt-view-quantity');
+        
+        if (layout === 'percentage') {
+            pctDivs.forEach(div => div.style.display = 'block');
+            qtyDivs.forEach(div => div.style.display = 'none');
+            var currentHeader = document.getElementById('opt-current-header-text');
+            if (currentHeader) currentHeader.innerText = 'Current Weight';
+        } else {
+            pctDivs.forEach(div => div.style.display = 'none');
+            qtyDivs.forEach(div => div.style.display = 'block');
+            var currentHeader = document.getElementById('opt-current-header-text');
+            if (currentHeader) currentHeader.innerText = 'Current Quantity';
+            recalcOptQuantities();
+        }
+
+        var container = document.getElementById('opt-layout-container');
+        if (container) {
+            var buttons = container.querySelectorAll('.opt-layout-btn');
+            buttons.forEach(function(btn) {
+                if (btn.dataset.view === layout) {
+                    btn.classList.add('opt-layout-btn-active');
+                } else {
+                    btn.classList.remove('opt-layout-btn-active');
+                }
+            });
+        }
+    }
+
+    function recalcOptQuantities() {
+        var capital = parseFloat(document.getElementById('opt-capital-input').value) || 0;
+        var rows = document.querySelectorAll('#opt-weights-table tbody tr');
+        
+        rows.forEach(function(row) {
+            var price = parseFloat(row.dataset.price);
+            if (price <= 0) return;
+            
+            var weights = [
+                'wcurr', 'wsharpe', 'wsortino', 'wir', 'wdrawdown', 'wbestmatch'
+            ];
+            var diffs = [
+                null, 'diffsharpe', 'diffsortino', 'diffir', 'diffdrawdown', 'diffbestmatch'
+            ];
+            
+            for (var i = 0; i < weights.length; i++) {
+                var weight = parseFloat(row.dataset[weights[i]]);
+                if (!isNaN(weight)) {
+                    var qty = (weight / 100.0 * capital) / price;
+                    var cell = row.querySelectorAll('td')[i + 3];
+                    if (cell) {
+                        var qtyDiv = cell.querySelector('.opt-view-quantity');
+                        if (qtyDiv) {
+                            var valueEl = qtyDiv.querySelector('strong') || qtyDiv.children[0];
+                            if (valueEl) {
+                                valueEl.innerText = qty.toLocaleString('en-US', {maximumFractionDigits: 0});
+                            }
+                        }
+                    }
+                }
+            }
+            
+            for (var i = 1; i < diffs.length; i++) {
+                var diffWeight = parseFloat(row.dataset[diffs[i]]);
+                if (!isNaN(diffWeight)) {
+                    var qtyDiff = (diffWeight / 100.0 * capital) / price;
+                    var cell = row.querySelectorAll('td')[i + 3];
+                    if (cell) {
+                        var qtyDiv = cell.querySelector('.opt-view-quantity');
+                        if (qtyDiv) {
+                            var pill = qtyDiv.querySelector('.pill');
+                            if (pill) {
+                                var pillSpans = pill.querySelectorAll('span');
+                                if (pillSpans.length >= 2) {
+                                    pillSpans[0].innerText = qtyDiff >= 0 ? '▲' : '▼';
+                                    pillSpans[1].innerText = qtyDiff >= 0 ? '+' + Math.round(qtyDiff).toLocaleString('en-US') : Math.round(qtyDiff).toLocaleString('en-US');
+                                    pill.style.backgroundColor = qtyDiff >= 0 ? 'rgba(39, 174, 96, 0.12)' : 'rgba(235, 87, 87, 0.12)';
+                                    pill.style.color = qtyDiff >= 0 ? '#219653' : '#eb5757';
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        });
+    }
+
+    function resetOptCapital() {
+        var input = document.getElementById('opt-capital-input');
+        input.value = input.defaultValue;
+        recalcOptQuantities();
+    }
+
+    function exportOptTableToCSV(btn, filename) {
+        var originalText = btn.innerHTML;
+        btn.innerHTML = '<span class="exporting-span">⏳</span> Exporting...';
+        
+        var table = document.getElementById("opt-weights-table");
+        var csv = [];
+        var rows = table.querySelectorAll('tr');
+        
+        for (var i = 0; i < rows.length; i++) {
+            var row = [], cols = rows[i].querySelectorAll('td, th');
+            
+            for (var j = 0; j < cols.length; j++) {
+                var cellText = "";
+                var valDivs = cols[j].querySelectorAll('div.opt-view-percentage, div.opt-view-quantity');
+                var visibleDiv = null;
+                if (valDivs.length > 0) {
+                    for (var k = 0; k < valDivs.length; k++) {
+                        if (window.getComputedStyle(valDivs[k]).display !== 'none') {
+                            visibleDiv = valDivs[k];
+                            break;
+                        }
+                    }
+                } else {
+                    visibleDiv = cols[j].querySelector('div');
+                }
+                
+                if (visibleDiv) {
+                    var clone = visibleDiv.cloneNode(true);
+                    var pill = clone.querySelector('.pill');
+                    if (pill) clone.removeChild(pill);
+                    cellText = clone.innerText.replace(/"/g, '""').trim();
+                } else {
+                    var clone = cols[j].cloneNode(true);
+                    var sortInd = clone.querySelector('.sort-indicator');
+                    if (sortInd) clone.removeChild(sortInd);
+                    cellText = clone.innerText.replace(/"/g, '""').trim();
+                }
+                row.push('"' + cellText + '"');
+            }
+            csv.push(row.join(','));
+        }
+        
+        var csvFile = new Blob([csv.join('\n')], {type: 'text/csv'});
+        var downloadLink = document.createElement("a");
+        downloadLink.download = filename + ".csv";
+        downloadLink.href = window.URL.createObjectURL(csvFile);
+        downloadLink.style.display = "none";
+        document.body.appendChild(downloadLink);
+        downloadLink.click();
+        document.body.removeChild(downloadLink);
+        
+        setTimeout(function() {
+            btn.innerHTML = originalText;
+        }, 1000);
+    }
+</script>

@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AlphaSentra Functions</title>
+    <style>
+        :root {
+            --brand-primary: {{ theme._BRAND_PRIMARY }};
+            --neutral-0: {{ theme._NEUTRAL_0 }};
+            --text-primary: {{ theme._TEXT_PRIMARY }};
+            --semantic-positive: {{ theme._SEMANTIC_POSITIVE }};
+            --semantic-warning: {{ theme._SEMANTIC_WARNING }};
+            --text-muted: {{ theme._TEXT_MUTED }};
+            --border-default: {{ theme._BORDER_DEFAULT }};
+            --bg-subtle: {{ theme._BG_SUBTLE }};
+            --text-heading: {{ theme._TEXT_HEADING }};
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: {{ font.FONT_PRIMARY }}; background: var(--neutral-0); color: var(--text-primary); min-height: 100vh; margin: 20px auto; padding: 0; max-width: 1380px; }
+
+        .main-menu { padding: 20px; }
+        .wide-caret { caret-color: cyan; caret-shape: block; }
+        .search-box { width: 100%; padding: 8px; margin-bottom: 16px; background: var(--bg-subtle); border: 1px solid var(--border-default); color: var(--brand-primary); font-family: {{ font.FONT_PRIMARY }}; font-size: 16px; line-height: 24px; outline: none; }
+        .search-box:focus { border-color: var(--brand-primary); }
+        .search-box { text-transform: uppercase; }
+        .panel-title { color: var(--text-heading); font-size: 20px; font-weight: bold; margin-bottom: 16px; border-bottom: 1px solid var(--border-default); padding-bottom: 6px; }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px; }
+        .menu-item { display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; border: 1px solid transparent; }
+        .menu-item:hover { background: var(--bg-subtle); border-color: var(--border-default); }
+        .menu-item .fn { color: var(--semantic-warning); font-weight: bold; min-width: 70px; }
+        .menu-item .desc { color: var(--text-muted); flex: 1; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+        ::-webkit-scrollbar-thumb { background: var(--border-default); }
+    </style>
+</head>
+<body>
+    <div class="main-menu">
+        <div class="panel-title">Function Index</div>
+        <input type="text" class="search-box wide-caret" id="searchBox" placeholder="SEARCH FUNCTIONS..." autocomplete="off" autofocus>
+        <div class="menu-grid" id="menuGrid">
+            {% for route in routes %}
+            <div class="menu-item" onclick="window.location.href='{{ route[0] }}'">
+                <span class="fn">&lt;{{ route[0].split('/')[-1].upper() or 'INDEX' }}&gt;</span>
+                <span class="desc">{{ route[1] }}</span>
+            </div>
+            {% endfor %}
+        </div>
+    </div>
+    <script>
+        const searchBox = document.getElementById('searchBox');
+        const menuGrid = document.getElementById('menuGrid');
+        searchBox.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            const q = this.value.toLowerCase();
+            Array.from(menuGrid.children).forEach(item => {
+                const desc = item.querySelector('.desc').textContent.toLowerCase();
+                const fn = item.querySelector('.fn').textContent.toLowerCase();
+                item.style.display = desc.includes(q) || fn.includes(q) ? '' : 'none';
+            });
+        });
+        searchBox.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const visible = Array.from(menuGrid.children).filter(item => item.style.display !== 'none');
+                if (visible.length === 1) visible[0].click();
+            }
+        });
+
+    </script>
+</body>
+</html>

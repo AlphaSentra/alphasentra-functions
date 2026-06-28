@@ -1,0 +1,18 @@
+<div class="metrics-container">
+  {% for horizon in ['1W', '1M', '3M', '1Y', '5Y', 'All'] %}
+    {% if horizon in metrics and metrics[horizon] %}
+      {% set data = metrics[horizon] %}
+      <div class="metrics-card">
+        <p class="metrics-card-label">{{ horizon }}</p>
+        <p class="metrics-card-value">{{ "%.2f%%" | format(data.get('Cumulative Return', 0) * 100) }}</p>
+        <p class="metrics-card-label">Cumulative Return</p>
+        <div class="metric-chart-container">
+          {% if horizon == '1Y' %}
+            <p style="color: var(--color-text-muted);">Sharpe: {{ "%.2f" | format(data.get('Sharpe Ratio', 0)) }}</p>
+            <p style="color: var(--color-text-muted);">Max DD: {{ "%.2f%%" | format(data.get('Max Drawdown', 0) * 100) }}</p>
+          {% endif %}
+        </div>
+      </div>
+    {% endif %}
+  {% endfor %}
+</div>

@@ -1,0 +1,120 @@
+<div id="Efficiency" class="tab-content">
+
+    <div class="chart-container">
+        {{ charts.efficiency_metrics_strip | safe }}
+    </div>
+
+    <div class="chart-container chart-container-min-height">
+        <h2>Efficiency Ratios Over Time (1Y Rolling)</h2>
+        {{ charts.rolling_metrics_line | safe }}
+    </div>
+
+    <div class="chart-container chart-container-min-height chart-container-relative">
+        <h2>Security Efficiency Metrics (1Y Rolling)</h2>
+        <button onclick="exportEfficiencyToCSV(this, 'security_efficiency_metrics')" class="btn-export-absolute">
+            <span class="export-icon-em">&#128196;</span> Export Excel
+        </button>
+        <p>
+            Risk-adjusted performance, volatility, and diversification metrics for each individual holding calculated
+            over the trailing 1-year window (252 trading days).
+        </p>
+
+        <div class="bg-info-box">
+            <h4 class="m-t-0">How to interpret this:</h4>
+            <ul class="m-b-0">
+                <li><strong>Expected Return [ER] (1Y):</strong> A price-only expected-return estimate combining
+                    trend, momentum, mean-reversion, and ARIMA forecast components. A positive value signals
+                    upside momentum; negative signals downside pressure or mean-reversion drag.
+                </li>
+                <li><strong>Volatility (1Y):</strong> Annualised standard deviation of daily returns over the past year
+                    <code>(σ × √252)</code>. Measures how much the security's price fluctuated. Lower volatility is
+                    generally preferred for a given level of return.
+                </li>
+                <li><strong>Correlation to Portfolio (1Y):</strong> Pearson correlation of the security's daily returns
+                    against the
+                    total portfolio's daily returns over the past year. Values close to <strong>0</strong> indicate a
+                    strong diversification benefit; values close to <strong>1</strong> indicate high co-movement with
+                    the overall portfolio (less diversification).</li>
+                <li><strong>Composite Score (0–100):</strong> A weighted efficiency score combining all three metrics:
+                    <ul class="m-t-6">
+                        <li><strong>Expected Return</strong> (40% weight) — scaled from 0% (score 0) to ≥ 20% (score
+                            1.0)</li>
+                        <li><strong>Volatility</strong> (30% weight) — scaled from ≥ 40% (score 0, high risk) to ≤ 5%
+                            (score 1.0, low risk)</li>
+                        <li><strong>Correlation</strong> (30% weight) — scaled from ≥ 0.8 (score 0, low diversification)
+                            to ≤ 0 (score 1.0, high diversification)</li>
+                    </ul>
+                    <div class="flex-row-gap-20 m-t-8">
+                        <span><span class="inline-box-12 bg-danger"></span>
+                            <strong class="color-danger">0–39</strong> — Poor efficiency</span>
+                        <span>
+                            <span class="inline-box-36 bg-neutral-gradient"></span>
+                            <strong>40–59</strong> — Neutral
+                            <span class="font-sm-gray">
+                                (warm gray at 40 → cool gray at 59)
+                            </span>
+                        </span>
+                        <span><span class="inline-box-12 bg-success"></span>
+                            <strong class="color-success">60–100</strong> — Good efficiency</span>
+                    </div>
+                </li>
+            </ul>
+        </div>
+
+        <p class="font-sm-gray-m-b-20">
+            <strong>Calculation Methodology:</strong> This model uses a <em>Price-Action Expected Return</em>.
+            It combines four price-derived signals: 12-month trend (current price vs. price 12 months ago),
+            3-month momentum (current price vs. price 3 months ago), a mean-reversion adjustment (deviation
+            from the 200-day moving average), and a 1-step-ahead ARIMA(1,1,1) forecast. Each signal is
+            weighted and summed to produce the expected return.
+        </p>
+
+        <div class="w-100">
+            {{ charts.security_efficiency_table | safe }}
+        </div>
+    </div>
+
+    <div class="chart-container chart-container-min-height">
+        <h2>3D Rolling Portfolio Dynamics</h2>
+        <p>
+            This 3D trajectory visualizes the portfolio's evolving risk-return profile by plotting Beta, Correlation,
+            and Alpha across 1-year rolling windows. Each data point represents a specific 1-year period, with the
+            chronological progression indicated by a color gradient. Rotate the chart to explore how these dynamics
+            shift over time.
+        </p>
+
+        <div class="bg-info-box">
+            <h4 class="m-t-0">How to interpret this:</h4>
+            <ul class="m-b-0">
+                <li><strong>Trajectory points:</strong> Each point represents the portfolio's beta, correlation, and
+                    alpha over a 1‑year rolling window. The color gradient shows chronological progression (earlier =
+                    cooler, later = warmer).</li>
+                <li><strong>Start marker:</strong> The first point indicates the earliest window in the analysis, useful
+                    for baseline comparison.</li>
+                <li><strong>Current marker:</strong> The highlighted diamond marks the most recent 1‑year window,
+                    showing today's risk‑return profile.</li>
+                <li><strong>Alpha = 0 plane:</strong> The translucent surface where alpha equals zero helps separate
+                    periods of outperformance (above) from under‑performance (below).</li>
+                <li><strong>Beta axis:</strong> Higher beta values imply greater market sensitivity; observe how beta
+                    moves together with correlation.</li>
+                <li><strong>Correlation axis:</strong> Shows how portfolio returns co‑move with the benchmark; a rising
+                    correlation suggests convergence with market movements.</li>
+            </ul>
+        </div>
+
+        <div class="w-100">
+            {{ charts.risk_trajectory_3d | safe }}
+        </div>
+    </div>
+
+    <div class="chart-container chart-container-min-height">
+        <h2>Rolling Metrics History</h2>
+        <p>
+            Historical rolling 1-year metrics across Sharpe, Sortino, Information Ratio, Alpha, Beta, and Correlation.
+        </p>
+        <div class="w-100">
+            {{ charts.rolling_metrics_table | safe }}
+        </div>
+    </div>
+
+</div>

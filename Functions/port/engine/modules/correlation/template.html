@@ -1,0 +1,151 @@
+<div id="Correlation" class="tab-content">
+  <div class="chart-container m-b-10">
+      {{ charts.correlation_metrics_strip | safe }}
+  </div>
+
+   <div class="chart-container">
+       <h2>Rolling Correlation &amp; Timeframe Analysis</h2>
+       <p>The anchor chart showing rolling correlations between portfolio and benchmark, alongside timeframe-specific correlation metrics.</p>
+
+       <div class="info-box">
+           <h4>How to interpret this:</h4>
+           <ul class="m-b-0">
+               <li><strong>Rolling Correlation to Benchmark:</strong> Measures how closely the portfolio's returns track the benchmark over moving time windows. Higher correlations (closer to 1.0) indicate the portfolio moves similarly to the benchmark; lower correlations (closer to 0 or negative) suggest divergence and potentially better diversification.</li>
+               <li><strong>Correlation Term Structure:</strong> Shows correlation levels across different time horizons. A declining term structure (higher short-term correlations than long-term) may indicate temporary market dislocations, while stable correlations across timeframes suggest consistent market relationships.</li>
+           </ul>
+       </div>
+
+       <div class="flex-row-wrap-gap-20">
+           <!-- Rolling correlation - flex: 7 -->
+           <div class="corr-flex-7">
+               <div class="w-100 min-h-300">
+                   {{ charts.rolling_correlation | safe }}
+               </div>
+           </div>
+
+           <!-- Timeframe correlations - flex: 3 -->
+           <div class="corr-flex-3">
+               <div class="corr-flex-col-center">
+                   {{ charts.timeframe_correlation | safe }}
+               </div>
+
+               <!-- Stability Score and Current Regime at bottom -->
+               <div class="m-t-15">
+                   <div class="flex-gap-10">
+                       <div class="corr-stat-box">
+                           <div class="corr-stat-label">Stability</div>
+                            <div class="corr-stat-value stability-{{ charts.stability_score | lower }}">{{ charts.stability_score }}</div>
+                       </div>
+
+                       <div class="corr-stat-box">
+                           <div class="corr-stat-label">Regime</div>
+                            <div class="corr-stat-value regime-{{ charts.regime_indicator | lower }}">{{ charts.regime_indicator }}</div>
+                       </div>
+                   </div>
+               </div>
+           </div>
+       </div>
+   </div>
+
+<!-- Bottom: distribution -->
+  <div class="m-t-20">
+      <div class="chart-container">
+          <h2>Correlation Distribution</h2>
+           <p>Monochrome histogram showing the distribution of 1-year rolling correlations against the benchmark, with current correlation marked.</p>
+
+       <div class="info-box">
+           <h4>How to interpret this:</h4>
+           <ul class="m-b-0">
+               <li><strong>Histogram Bars:</strong> Each bar represents the frequency of correlation values within a specific range over the historical period. Taller bars indicate more common correlation levels.</li>
+               <li><strong>Red Line:</strong> The vertical red line marks the current 1-year rolling correlation, showing where the portfolio sits relative to historical norms.</li>
+               <li><strong>Distribution Shape:</strong> A wide distribution suggests volatile correlations, while a narrow one indicates more stable relationships with the benchmark.</li>
+               <li><strong>Current Position:</strong> If the red line is in the tails (left or right), it suggests unusually weak or strong correlation compared to history.</li>
+           </ul>
+       </div>
+
+          {{ charts.correlation_distribution | safe }}
+      </div>
+  </div>
+
+   <!-- Original correlation matrix and cluster analysis -->
+  <div class="chart-container">
+      <h2>Portfolio Correlation Matrix</h2>
+      <p>Full correlation matrix showing the pairwise correlations between all portfolio holdings. Values range from -1 (perfect negative correlation) to +1 (perfect positive correlation). Correlation is calculated based on daily returns of each asset.</p>
+
+       <!-- Filter Controls -->
+       <div class="corr-matrix-filter-bar">
+           <span class="metrics-filter-label">Filter Matrix:</span>
+           <div id="corr-filter-container" class="flex-gap-5">
+               <button class="metrics-filter-btn" data-value="10">Top 10</button>
+               <button class="metrics-filter-btn" data-value="20">Top 20</button>
+               <button class="metrics-filter-btn" data-value="50">Top 50</button>
+               <button class="metrics-filter-btn" data-value="all">All</button>
+           </div>
+       </div>
+
+       <div class="w-100 scroll-x-auto-ov">
+           {{ charts.corr_matrix_full | safe }}
+       </div>
+   </div>
+
+
+   <script>
+   document.addEventListener('DOMContentLoaded', function() {
+       const filterContainer = document.getElementById('corr-filter-container');
+       if (!filterContainer) return;
+       const chartContainer = filterContainer.closest('.chart-container');
+       const plotDiv = chartContainer.querySelector('.js-plotly-plot');
+       if (!plotDiv || !plotDiv._fullData || !plotDiv._fullData[0]) return;
+       const originalData = {
+           z: plotDiv._fullData[0].z.map(row => row.slice()),
+           x: plotDiv._fullData[0].x.slice(),
+           y: plotDiv._fullData[0].y.slice(),
+           text: plotDiv._fullData[0].text ? plotDiv._fullData[0].text.map(row => row.slice()) : null
+       };
+       function applyFilter(value, clickedButton) {
+           const buttons = filterContainer.querySelectorAll('.metrics-filter-btn');
+           buttons.forEach(btn => { btn.classList.remove('active'); });
+           clickedButton.classList.add('active');
+           let filteredAssets = originalData.x.slice();
+           if (value !== 'all') {
+               const n = parseInt(value);
+               const avgCorrelations = originalData.x.map((asset, i) => {
+                   let sum = 0, count = 0;
+                   for (let j = 0; j < originalData.x.length; j++) {
+                       if (i !== j) { sum += Math.abs(originalData.z[i][j]); count++; }
+                   }
+                   return { asset: asset, avgCorr: sum / count, index: i };
+               });
+               avgCorrelations.sort((a, b) => b.avgCorr - a.avgCorr);
+               filteredAssets = avgCorrelations.slice(0, n).map(item => item.asset);
+           }
+           const assetIndices = filteredAssets.map(asset => originalData.x.indexOf(asset));
+           const filteredZ = assetIndices.map(i => assetIndices.map(j => originalData.z[i][j]));
+           const filteredText = originalData.text ? assetIndices.map(i => assetIndices.map(j => originalData.text[i][j])) : null;
+           Plotly.update(plotDiv, { z: [filteredZ], x: [filteredAssets], y: [filteredAssets], text: [filteredText] }, {}, [0]);
+       }
+       const buttons = filterContainer.querySelectorAll('.metrics-filter-btn');
+       buttons.forEach(button => {
+           button.addEventListener('click', function() { applyFilter(this.getAttribute('data-value'), this); });
+       });
+       const defaultButton = filterContainer.querySelector('[data-value="10"]');
+       applyFilter('10', defaultButton);
+   });
+   </script>
+
+  <div class="chart-container">
+      <h2>Correlation Cluster Analysis</h2>
+      <p>This scatter plot visualizes asset similarities using dimensionality reduction (PCA). Assets sharing the same color belong to the same cluster, meaning they exhibit similar correlation patterns and tend to move together. Positions reflect implicit groupings such as cyclicals, rate-sensitive sectors, or other return drivers.</p>
+       <div class="info-box">
+           <h4>How to interpret this:</h4>
+           <ul>
+               <li><strong>Clustered Groups:</strong> Assets sharing the same color are highly correlated; they are likely driven by the same economic factors or sectors.</li>
+               <li><strong>Proximity:</strong> Assets appearing closer together on the plot share stronger similarities in their return behavior.</li>
+               <li><strong>Connections:</strong> Light grey lines represent strong pairwise correlations (&gt; 0.5), highlighting secondary links between assets.</li>
+           </ul>
+       </div>
+       <div class="w-100-auto">
+           {{ charts.corr_cluster_network | safe }}
+       </div>
+   </div>
+</div>

@@ -644,7 +644,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 </colgroup>
                 <thead>
                     <tr>
-                        {"".join([f'<th data-tooltip="{tooltips.get(c, c)}" onclick="sortHoldingsTable(\'{view_name}\', this)">{c} <span class="sort-icon"></span></th>' for c in cols])}
+                        {"".join([f'<th class="{"desc" if c == "Weight (%)" else ""}" data-tooltip="{tooltips.get(c, c)}" onclick="sortHoldingsTable(\'{view_name}\', this)">{c} <span class="sort-icon"></span></th>' for c in cols])}
                     </tr>
                 </thead>
                 <tbody>
@@ -1124,6 +1124,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
     """
     
     # Generate all four tables
+    holdings = holdings.sort_values('Weight', ascending=False)
     for view_name, config in VIEW_CONFIGS.items():
         table_html += render_view_table(view_name, config)
         

@@ -343,7 +343,6 @@
             --color-bg-subtab-active: {{ BG_BUTTON_SECONDARY }};
             --color-border-subtab: {{ BORDER_MEDIUM }};
             --color-subtab-active-text: {{ WHITE_ELEMENT }};
-            --color-text-offline-hint: {{ TEXT_OFFLINE_HINT }};
             --color-text-marker-dark: {{ TEXT_MARKER_DARK }};
             --color-text-label-gauge: {{ TEXT_LABEL_GAUGE }};
             --color-err-dark: {{ ERR_DARK }};
@@ -514,61 +513,8 @@
         .eps-low { background-color: var(--color-eps-low-bg); color: var(--color-eps-low-text); }
         .metric-chip-dynamic { font-family: var(--font-mono); font-weight: bold; font-size: 1.1em; padding: 4px 8px; border-radius: 4px; display: inline-block; color: var(--text-color); background-color: var(--bg-color); }
 
-        /* ============================================
-        OFFLINE DETECTION BANNER
-        ============================================ */
-
-        #offline-banner {
-            display: none;
-            /* Hidden by default, shown via JS when offline */
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            background-color: var(--color-danger-dark);
-            color: var(--color-text-on-dark);
-            text-align: center;
-            padding: 12px 20px;
-            font-weight: bold;
-            font-size: 1.1em;
-            z-index: 9999;
-            box-shadow: 0 2px 8px var(--shadow-medium);
-            animation: slideDown 0.3s ease-out;
-            border-bottom: 3px solid var(--color-err-dark);
-        }
-
-        #offline-banner .offline-icon {
-            font-size: 1.2em;
-            margin-right: 8px;
-        }
-
-        #offline-banner .offline-message {
-            display: inline;
-        }
-
-        #offline-banner .reconnect-hint {
-            display: block;
-            font-size: 0.85em;
-            font-weight: normal;
-            margin-top: 5px;
-            color: var(--color-text-offline-hint);
-        }
-
-        @keyframes slideDown {
-            from {
-                transform: translateY(-100%);
-            }
-
-            to {
-                transform: translateY(0);
-            }
-        }
-
-        .online #offline-banner {
-            display: none !important;
-        }
-
-        /* Floating panel styles for commentary */
+        /* Efficiency Chart Classes */
+        .traj-horizon-wrapper { margin-bottom: 12px; }
         .floating-panel {
             position: fixed;
             top: 20px;
@@ -1759,43 +1705,6 @@
 
     </style>
     <script>
-        // Offline detection: Monitor browser online/offline status
-        (function () {
-            'use strict';
-
-            function updateOnlineStatus() {
-                const offlineBanner = document.getElementById('offline-banner');
-                if (!offlineBanner) return; // Element not yet available
-
-                const isOnline = navigator.onLine;
-                if (isOnline) {
-                    offlineBanner.style.display = 'none';
-                    document.body.classList.remove('offline-mode');
-                    document.body.classList.add('online');
-                } else {
-                    offlineBanner.style.display = 'block';
-                    document.body.classList.add('offline-mode');
-                    document.body.classList.remove('online');
-                }
-            }
-
-            // Wait for DOM to be fully loaded before accessing elements
-            if (document.readyState === 'loading') {
-                document.addEventListener('DOMContentLoaded', function () {
-                    updateOnlineStatus();
-                    // Listen for online/offline events after DOM is ready
-                    window.addEventListener('online', updateOnlineStatus);
-                    window.addEventListener('offline', updateOnlineStatus);
-                });
-            } else {
-                // DOM already loaded
-                updateOnlineStatus();
-                window.addEventListener('online', updateOnlineStatus);
-                window.addEventListener('offline', updateOnlineStatus);
-            }
-        })();
-    </script>
-    <script>
         function openTab(evt, tabName) {
             window.scrollTo(0, 0);
 
@@ -2225,18 +2134,6 @@
 </head>
 
 <body>
-    <!-- ============================================
-      OFFLINE DETECTION BANNER
-      Shows when user opens the report without internet
-      ============================================ -->
-    <div id="offline-banner" class="display-none">
-        <span class="offline-icon">⚠️</span>
-        <span class="offline-message"><strong>You are currently offline.</strong> Some interactive features and external
-            resources may not be available.</span>
-        <span class="reconnect-hint">Please check your internet connection to view live market data and interactive
-            charts.</span>
-    </div>
-
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;">
         <img src="{{ REPORT_LOGO_SRC }}" height="40" style="flex-shrink:0;" alt="Logo">
         <h1 style="margin-bottom:0;">{{ report_title }}</h1>

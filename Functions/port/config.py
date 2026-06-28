@@ -2,8 +2,7 @@
 """
 Global configuration constants for the portfolio function.
 """
-from engine.output.themes.font import *
-from engine.output.themes.theme import *
+from Functions.themes import *
 
 REPORT_LOGO_SRC = "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850"
 

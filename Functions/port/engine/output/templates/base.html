@@ -166,13 +166,8 @@
         .tab-nav {
             display: flex;
             gap: 5px;
-            margin-bottom: 20px;
-            border-bottom: 2px solid var(--color-border);
+            border-bottom: none;
             padding-bottom: 0;
-            position: sticky;
-            top: 0;
-            z-index: 9999;
-            background-color: var(--color-bg-main);
         }
 
         .tab-button {
@@ -2134,27 +2129,26 @@
 </head>
 
 <body>
-    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;">
+    <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;position:sticky;top:0;z-index:9999;background-color:var(--color-bg-main);">
         <img src="{{ REPORT_LOGO_SRC }}" height="40" style="flex-shrink:0;" alt="Logo">
-        <h1 style="margin-bottom:0;">{{ report_title }}</h1>
-    </div>
-
-    <div class="tab-nav">
-        {% if ENABLED_MODULES.overview %}
-        <button class="tab-button active" onclick="openTab(event, 'Overview')">Overview</button>
-        {% endif %}
-        {% if ENABLED_MODULES.portfolio %}
-        <button class="tab-button" onclick="openTab(event, 'Portfolio')">Portfolio</button>
-        {% endif %}
-        {% if ENABLED_MODULES.stats and (ENABLED_MODULES.correlation or ENABLED_MODULES.monte_carlo or ENABLED_MODULES.risks or ENABLED_MODULES.efficiency) %}
-        <button class="tab-button" onclick="openTab(event, 'Stats')">Stats</button>
-        {% endif %}
-        {% if ENABLED_MODULES.history and trades_table %}
-        <button class="tab-button" onclick="openTab(event, 'History')">History</button>
-        {% endif %}
-        {% if ENABLED_MODULES.intel %}
-        <button class="tab-button" onclick="openTab(event, 'Intel')">Intel</button>
-        {% endif %}
+        <h1 style="margin-bottom:0;flex-shrink:0;">{{ report_title }}</h1>
+        <div class="tab-nav" style="margin-left:auto;margin-bottom:0;border-bottom:none;padding-bottom:0;background-color:transparent;">
+            {% if ENABLED_MODULES.overview %}
+            <button class="tab-button active" onclick="openTab(event, 'Overview')">Overview</button>
+            {% endif %}
+            {% if ENABLED_MODULES.portfolio %}
+            <button class="tab-button" onclick="openTab(event, 'Portfolio')">Portfolio</button>
+            {% endif %}
+            {% if ENABLED_MODULES.stats and (ENABLED_MODULES.correlation or ENABLED_MODULES.monte_carlo or ENABLED_MODULES.risks or ENABLED_MODULES.efficiency) %}
+            <button class="tab-button" onclick="openTab(event, 'Stats')">Stats</button>
+            {% endif %}
+            {% if ENABLED_MODULES.history and trades_table %}
+            <button class="tab-button" onclick="openTab(event, 'History')">History</button>
+            {% endif %}
+            {% if ENABLED_MODULES.intel %}
+            <button class="tab-button" onclick="openTab(event, 'Intel')">Intel</button>
+            {% endif %}
+        </div>
     </div>
 
     <!-- ========================================================================= -->

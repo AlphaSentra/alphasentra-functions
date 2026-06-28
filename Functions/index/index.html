@@ -37,7 +37,7 @@
 <body>
     <div class="main-menu">
         <div class="panel-title">Function Index</div>
-        <input type="text" class="search-box wide-caret" id="searchBox" placeholder="SEARCH FUNCTIONS..." autocomplete="off" autofocus>
+        <input type="text" class="search-box wide-caret" id="searchBox" placeholder="TYPE A FUNCTION..." autocomplete="off" autofocus>
         <div class="menu-grid" id="menuGrid">
             {% for route in routes %}
             <div class="menu-item" onclick="window.location.href='{{ route[0] }}'">
@@ -62,7 +62,7 @@
         searchBox.addEventListener('keydown', function(e) {
             if (e.key === 'Enter') {
                 const visible = Array.from(menuGrid.children).filter(item => item.style.display !== 'none');
-                if (visible.length === 1) visible[0].click();
+                if (visible.length > 0) visible[0].click();
             }
         });
 

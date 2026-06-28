@@ -91,6 +91,32 @@ def wcr():
     return html
 
 
+def ana():
+    url = "https://app.alphasentra.com/search"
+    html = f"""
+    <html>
+    <head>
+        <title>Analyse</title>
+        <script>
+            if (window.top !== window.self) {{
+                window.top.location.href = "{url}";
+            }} else {{
+                window.location.href = "{url}";
+            }}
+        </script>
+    </head>
+    <body>
+        <p>Redirecting to Analyse...</p>
+        <noscript>
+            <meta http-equiv="refresh" content="0;url={url}">
+            <a href="{url}">Click here if not redirected</a>
+        </noscript>
+    </body>
+    </html>
+    """
+    return html
+
+
 def cryp():
     url = "https://app.alphasentra.com/screener?asset_class=CR"
     html = f"""

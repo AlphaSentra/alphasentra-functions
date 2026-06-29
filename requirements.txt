@@ -12,3 +12,4 @@ statsmodels
 pymongo
 python-dotenv
 cryptography
+google-genai

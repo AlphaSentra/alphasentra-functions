@@ -31,6 +31,9 @@ BENCHMARK_NAMES = {
     "ES=F": "S&P 500 Futures",
 }
 
+# AI Prompt
+PORT_INTEL_REPORT_PROMPT = """X"""
+
 def get_benchmark_name(ticker):
     return BENCHMARK_NAMES.get(ticker, ticker)
 

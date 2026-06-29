@@ -9,3 +9,6 @@ plotly
 jinja2
 openpyxl
 statsmodels
+pymongo
+python-dotenv
+cryptography

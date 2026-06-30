@@ -72,14 +72,12 @@ def _show_progress(stop_flag, batch_mode=False):
         print("\rAI response generated.     ", end="", flush=True)
         print()  # Move to next line
 
-def get_gen_ai_response(tickers, model_strategy, prompt=None, gemini_model=None, batch_mode=False):
+def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
     """
     Description:
     This function generates a response from the Gemini generative AI model based on the provided parameters.
 
     Parameters:
-    - tickers (list): A list of stock tickers to be included in the AI prompt.
-    - model_strategy (str): The strategy to be used for the AI model (e.g., "Flash" or "Pro").
     - prompt (str, optional): A custom prompt string to override the default. Defaults to None.
     - gemini_model (str, optional): The specific Gemini model to use. Defaults to None, which means the default model based on the strategy will be used.
     - batch_mode (bool, optional): A flag indicating whether the function is running in batch mode. Defaults to False.
@@ -130,9 +128,6 @@ def get_gen_ai_response(tickers, model_strategy, prompt=None, gemini_model=None,
 
     if gemini_model is None:
         gemini_model = os.getenv("GEMINI_DEFAULT", "gemini-2.5-flash-lite")
-    
-    tickers_str = tickers if isinstance(tickers, str) else ', '.join([str(t) for t in tickers])
-    print(f"\033[94m\n=== Model: {model_strategy} using {gemini_model} === ticker: {tickers_str} ===\033[0m")
 
     client = None
     progress_thread = None
@@ -152,7 +147,7 @@ def get_gen_ai_response(tickers, model_strategy, prompt=None, gemini_model=None,
             config={
                 "tools": [{"google_search": {}}],
                 "temperature": 0.1,
-                "thinking_config": {"thinking_budget": 0},
+                "thinking_config": {"thinking_budget": 1024},
                 "safety_settings": [
                     {"category": "HARM_CATEGORY_HARASSMENT", "threshold": "BLOCK_NONE"},
                     {"category": "HARM_CATEGORY_HATE_SPEECH", "threshold": "BLOCK_NONE"},

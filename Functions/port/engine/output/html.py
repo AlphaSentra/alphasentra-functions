@@ -2,6 +2,7 @@
 HTML report generation: assembles per-tab content into the base template.
 """
 
+from datetime import datetime
 import html
 import os
 import re
@@ -10,6 +11,7 @@ from jinja2 import Template
 from config import (
     DEFAULT_CAPITAL,
     ENABLED_MODULES,
+    PORT_INTEL_REPORT_PROMPT,
     REPORT_LOGO_SRC,
     PRIMARY_TEXT,
     HEADING_TEXT,
@@ -127,6 +129,9 @@ from config import (
     PILL_NEUTRAL_TEXT,
 )
 
+from Functions.crypt import decrypt_string
+from Functions.genAI.ai_prompt import get_gen_ai_response
+
 
 def _get_neutral_gradients():
     try:
@@ -134,6 +139,46 @@ def _get_neutral_gradients():
         return NEUTRAL_GRADIENT_1, NEUTRAL_GRADIENT_2, NEUTRAL_GRADIENT_3
     except ImportError:
         return NEUTRAL_GRAY, NEUTRAL_GRAY, NEUTRAL_GRAY
+
+
+def _md_to_html(text):
+    if not text:
+        return ""
+    text = html.escape(text)
+    text = re.sub(r'^### (.+)$', r'<h4>\1</h4>', text, flags=re.MULTILINE)
+    text = re.sub(r'^## (.+)$', r'<h3>\1</h3>', text, flags=re.MULTILINE)
+    text = re.sub(r'^# (.+)$', r'<h2>\1</h2>', text, flags=re.MULTILINE)
+    text = re.sub(r'\*\*(.+?)\*\*', r'<strong>\1</strong>', text)
+    text = re.sub(r'__(.+?)__', r'<strong>\1</strong>', text)
+    text = re.sub(r'\*(.+?)\*', r'<em>\1</em>', text)
+    text = re.sub(r'_(.+?)_', r'<em>\1</em>', text)
+    lines = text.split('\n')
+    in_list = False
+    new_lines = []
+    for line in lines:
+        stripped = line.lstrip()
+        if stripped.startswith('- ') or stripped.startswith('* '):
+            content = stripped[2:]
+            if not in_list:
+                new_lines.append('<ul>')
+                in_list = True
+            new_lines.append(f'<li>{content}</li>')
+        else:
+            if in_list and line.strip():
+                new_lines.append('</ul>')
+                in_list = False
+            new_lines.append(line)
+    if in_list:
+        new_lines.append('</ul>')
+    text = '\n'.join(new_lines)
+    parts = text.split('\n\n')
+    result = ""
+    for part in parts:
+        part = part.strip()
+        if part:
+            part = part.replace('\n', '<br>')
+            result += f'<p style="margin:0 0 0.8em 0;line-height:1.6;">{part}</p>'
+    return result
 
 
 def _strip_html(text):
@@ -366,7 +411,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
         from engine.modules.intel.renderer import render_intel_tab
         from engine.modules.intel.commentary import _build_overview_underperforming_table
 
-        intel_commentary_text = generate_portfolio_ai_commentary(
+        current_commentary = generate_portfolio_ai_commentary(
             metrics,
             charts,
             title,
@@ -377,13 +422,14 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
             price_data=price_data,
         )
 
-        paragraphs = intel_commentary_text.split('\n\n')
-        formatted_commentary = ""
-        for para in paragraphs:
-            para = para.strip()
-            if para:
-                para = para.replace('\n', '<br>')
-                formatted_commentary += f'<p style="margin:0 0 0.8em 0;line-height:1.6;">{para}</p>'
+        decrypted_prompt = decrypt_string(PORT_INTEL_REPORT_PROMPT)
+        current_date = datetime.now().strftime("%b %d, %Y")
+        decrypted_prompt = decrypted_prompt.replace("{current_date}", current_date)
+        combined_prompt = f"{decrypted_prompt}\n\n{current_commentary}" if decrypted_prompt else current_commentary
+
+        intel_commentary_text = get_gen_ai_response(prompt=combined_prompt)
+
+        formatted_commentary = _md_to_html(intel_commentary_text)
 
         attention_table = ""
         if ENABLED_MODULES.get("overview", True) and holdings_df is not None:

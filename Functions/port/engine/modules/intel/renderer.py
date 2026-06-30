@@ -6,7 +6,7 @@ from jinja2 import Template
 import os
 
 
-def render_intel_tab(metrics, charts, holdings_df=None, intel_commentary="", attention_table="", action_alerts_table="", securities_attention_table="", top_performers_table="", lagging_positions_table="", **kwargs) -> str:
+def render_intel_tab(metrics, charts, holdings_df=None, intel_commentary="", attention_table="", action_alerts_table="", securities_attention_table="", top_performers_table="", lagging_positions_table="", overview_ai_interpretation="", **kwargs) -> str:
     """
     Renders the Intel tab HTML block.
     """
@@ -25,4 +25,5 @@ def render_intel_tab(metrics, charts, holdings_df=None, intel_commentary="", att
         securities_attention_table=securities_attention_table,
         top_performers_table=top_performers_table,
         lagging_positions_table=lagging_positions_table,
+        overview_ai_interpretation=overview_ai_interpretation,
     )

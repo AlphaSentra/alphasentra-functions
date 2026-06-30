@@ -484,6 +484,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
             securities_attention_table=securities_attention_table,
             top_performers_table=top_performers_table,
             lagging_positions_table=lagging_positions_table,
+            overview_ai_interpretation=overview_ai_interpretation,
         )
     else:
         tabs_content += '<div id="Intel" class="tab-content"></div>'

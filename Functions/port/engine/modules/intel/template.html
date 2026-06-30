@@ -1,6 +1,18 @@
 <div id="Intel" class="tab-content">
   <div class="intel-two-column-container">
     <div class="intel-commentary-column">
+      <div class="chart-container">
+          <div class="bg-info-box">
+              <h4 class="m-t-0">Key Takeaway</h4>
+              {% if overview_ai_interpretation %}
+                <p>{{ overview_ai_interpretation }}</p>
+              {% else %}
+                <p>
+                    The portfolio requires immediate attention to address concentrated sector exposures and the material single-asset exposure to ROYL.AX, which significantly impacts portfolio-level risk. Reviewing underperforming securities such as Whitehaven Coal, New Hope, and AGL Energy is crucial, as these are currently weighing on returns and efficiency. To improve the poor Sortino ratio, positions with high downside semivariance should be trimmed, and for the moderate Information Ratio, top-weighted holdings with high benchmark correlation should be re-evaluated, concentrating active bets on securities with higher expected returns and lower correlation.
+                </p>
+              {% endif %}
+          </div>
+      </div>
       {{ intel_commentary | safe }}
     </div>
     <div class="intel-attention-column">

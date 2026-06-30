@@ -12,6 +12,7 @@ from config import (
     DEFAULT_CAPITAL,
     ENABLED_MODULES,
     PORT_INTEL_REPORT_PROMPT,
+    PORT_INTEL_SUMMARY_PROMPT,
     REPORT_LOGO_SRC,
     PRIMARY_TEXT,
     HEADING_TEXT,
@@ -240,14 +241,38 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     tabs_content = ""
 
     # Overview
+    overview_ai_interpretation = ""
     if ENABLED_MODULES.get("overview", True):
         from engine.modules.overview.renderer import render_overview_tab
+
+        try:
+            overview_commentary = generate_portfolio_ai_commentary(
+                metrics,
+                charts,
+                title,
+                start,
+                holdings_df=holdings_df,
+                returns_series=returns_series,
+                benchmark_ticker=benchmark_ticker,
+                price_data=price_data,
+            )
+            decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
+            current_date = datetime.now().strftime("%b %d, %Y")
+            decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
+            combined_summary = f"{decrypted_summary_prompt}\n\n{overview_commentary}" if decrypted_summary_prompt else overview_commentary
+            overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
+            if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
+                overview_ai_interpretation = ""
+        except Exception as e:
+            overview_ai_interpretation = ""
+
         tabs_content += render_overview_tab(
             metrics=metrics,
             charts=charts,
             holdings_df=holdings_df,
             inception_date=start,
             include_yield=include_yield,
+            overview_ai_interpretation=overview_ai_interpretation,
         )
     else:
         tabs_content += '<div id="Overview" class="tab-content"></div>'

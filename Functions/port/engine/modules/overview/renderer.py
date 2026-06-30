@@ -16,7 +16,7 @@ from config import (
 
 
 
-def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, include_yield=True) -> str:
+def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, include_yield=True, overview_ai_interpretation="") -> str:
     """
     Renders the Overview tab HTML block.
     """
@@ -33,6 +33,7 @@ def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, 
         metrics=metrics,
         inception_date=inception_date,
         include_yield=include_yield,
+        overview_ai_interpretation=overview_ai_interpretation,
         POSITIVE_RETURN_CARD=POSITIVE_RETURN_CARD,
         NEGATIVE_RETURN_CARD=NEGATIVE_RETURN_CARD,
         BUTTON_TEXT=BUTTON_TEXT,

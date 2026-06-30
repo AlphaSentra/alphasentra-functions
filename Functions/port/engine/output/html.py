@@ -234,38 +234,51 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     risk_df = kwargs.get('risk_df')
     sector_industry_df = kwargs.get('sector_industry_df')
     portfolio_df = kwargs.get('portfolio_df')
-    config = kwargs.get('config', {})
     returns_series = kwargs.get('returns_series')
     benchmark_ticker = kwargs.get('benchmark_ticker')
+    config = kwargs.get('config', {})
+
+    # Generate intel commentary first (used by both intel tab and overview summary)
+    current_commentary = ""
+    intel_commentary_text = ""
+    if ENABLED_MODULES.get("intel", True):
+        current_commentary = generate_portfolio_ai_commentary(
+            metrics,
+            charts,
+            title,
+            start,
+            holdings_df=holdings_df,
+            returns_series=returns_series,
+            benchmark_ticker=benchmark_ticker,
+            price_data=price_data,
+        )
+        decrypted_prompt = decrypt_string(PORT_INTEL_REPORT_PROMPT)
+        current_date = datetime.now().strftime("%b %d, %Y")
+        decrypted_prompt = decrypted_prompt.replace("{current_date}", current_date)
+        combined_prompt = f"{decrypted_prompt}\n\n{current_commentary}" if decrypted_prompt else current_commentary
+        intel_commentary_text = get_gen_ai_response(prompt=combined_prompt)
+        if not intel_commentary_text or intel_commentary_text.startswith("Error generating content") or intel_commentary_text.startswith("Daily AI prompt limit"):
+            intel_commentary_text = ""
+
+    # Generate overview AI interpretation from intel commentary text
+    overview_ai_interpretation = ""
+    if intel_commentary_text:
+        try:
+            decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
+            current_date = datetime.now().strftime("%b %d, %Y")
+            decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
+            combined_summary = f"{decrypted_summary_prompt}\n\n{intel_commentary_text}" if decrypted_summary_prompt else intel_commentary_text
+            overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
+            if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
+                overview_ai_interpretation = ""
+        except Exception:
+            overview_ai_interpretation = ""
 
     tabs_content = ""
 
     # Overview
-    overview_ai_interpretation = ""
     if ENABLED_MODULES.get("overview", True):
         from engine.modules.overview.renderer import render_overview_tab
-
-        try:
-            overview_commentary = generate_portfolio_ai_commentary(
-                metrics,
-                charts,
-                title,
-                start,
-                holdings_df=holdings_df,
-                returns_series=returns_series,
-                benchmark_ticker=benchmark_ticker,
-                price_data=price_data,
-            )
-            decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
-            current_date = datetime.now().strftime("%b %d, %Y")
-            decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
-            combined_summary = f"{decrypted_summary_prompt}\n\n{overview_commentary}" if decrypted_summary_prompt else overview_commentary
-            overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
-            if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
-                overview_ai_interpretation = ""
-        except Exception as e:
-            overview_ai_interpretation = ""
-
         tabs_content += render_overview_tab(
             metrics=metrics,
             charts=charts,
@@ -435,24 +448,6 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     if ENABLED_MODULES.get("intel", True):
         from engine.modules.intel.renderer import render_intel_tab
         from engine.modules.intel.commentary import _build_overview_underperforming_table
-
-        current_commentary = generate_portfolio_ai_commentary(
-            metrics,
-            charts,
-            title,
-            start,
-            holdings_df=holdings_df,
-            returns_series=returns_series,
-            benchmark_ticker=benchmark_ticker,
-            price_data=price_data,
-        )
-
-        decrypted_prompt = decrypt_string(PORT_INTEL_REPORT_PROMPT)
-        current_date = datetime.now().strftime("%b %d, %Y")
-        decrypted_prompt = decrypted_prompt.replace("{current_date}", current_date)
-        combined_prompt = f"{decrypted_prompt}\n\n{current_commentary}" if decrypted_prompt else current_commentary
-
-        intel_commentary_text = get_gen_ai_response(prompt=combined_prompt)
 
         formatted_commentary = _md_to_html(intel_commentary_text)
 

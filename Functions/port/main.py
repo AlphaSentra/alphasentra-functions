@@ -75,12 +75,13 @@ No command-line arguments are required; all main inputs are collected via prompt
     """.strip())
 
 
-def get_interactive_input(no_browser: bool) -> dict:
+def get_interactive_input(no_browser: bool, etoro_username: str = "") -> dict:
     """
     Collect all inputs interactively from the user.
 
     Args:
         no_browser: Whether to suppress browser opening.
+        etoro_username: Optional eToro username for report title customization.
 
     Returns:
         Dictionary containing all configuration options.
@@ -89,7 +90,7 @@ def get_interactive_input(no_browser: bool) -> dict:
     print("PORTFOLIO FUNCTION")
     print("=" * 60)
 
-    report_title = "Portfolio Report"
+    report_title = f"Portfolio Report - {etoro_username}" if etoro_username else "Portfolio Report"
 
     include_yield = True
 
@@ -118,15 +119,18 @@ def get_interactive_input(no_browser: bool) -> dict:
     }
 
 
-def generate_portfolio_html() -> str:
+def generate_portfolio_html(etoro_username: str = "") -> str:
     """
     Generate portfolio HTML report and return it as a string.
     This function is used by the Flask web application.
 
+    Args:
+        etoro_username: Optional eToro username for report title customization.
+
     Returns:
         HTML string of the portfolio report.
     """
-    config = get_interactive_input(no_browser=True)
+    config = get_interactive_input(no_browser=True, etoro_username=etoro_username)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
 
@@ -162,14 +166,17 @@ def generate_portfolio_html() -> str:
     return html
 
 
-def generate_ai_commentary_text() -> str:
+def generate_ai_commentary_text(etoro_username: str = "") -> str:
     """
     Generate combined plain-text commentary from overview, holdings and efficiency modules.
+
+    Args:
+        etoro_username: Optional eToro username for report title customization.
 
     Returns:
         str: Combined commentary text suitable for sending to an AI prompt.
     """
-    config = get_interactive_input(no_browser=True)
+    config = get_interactive_input(no_browser=True, etoro_username=etoro_username)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
 

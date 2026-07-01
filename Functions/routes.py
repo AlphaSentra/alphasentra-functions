@@ -27,12 +27,15 @@ with open(index_template_path, 'r') as f:
 
 
 
+from Functions.port.input import handle_portfolio_input
+
+
 def index():
     return render_template_string(_INDEX_HTML, routes=ROUTES, theme=theme, font=font)
 
 
 def port():
-    return main.generate_portfolio_html()
+    return handle_portfolio_input()
 
 
 def eqs():
@@ -140,6 +143,6 @@ def cryp():
 
 
 
-def register_route(app, path, description, handler):
+def register_route(app, path, description, handler, methods=None):
     ROUTES.append((path, description))
-    app.route(path)(handler)
+    app.route(path, methods=methods)(handler)

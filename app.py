@@ -5,7 +5,7 @@ app = Flask(__name__)
 
 register_route(app, '/', 'Function Index', index)
 register_route(app, '/ana', 'Analyse', ana)
-register_route(app, '/port', 'Portfolio & Risk Analytics', port)
+register_route(app, '/port', 'Portfolio & Risk Analytics', port, methods=['GET', 'POST'])
 register_route(app, '/eqs', 'Stocks AI Screener', eqs)
 register_route(app, '/wcr', 'Forex AI Screener', wcr)
 register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)

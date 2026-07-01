@@ -35,10 +35,6 @@ def port():
     return main.generate_portfolio_html()
 
 
-def port_commentary():
-    return main.generate_ai_commentary_text()
-
-
 def eqs():
     url = "https://app.alphasentra.com/screener?asset_class=EQ"
     html = f"""

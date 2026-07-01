@@ -116,6 +116,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "") -> dict:
         'opt_lookback': opt_lookback,
         'initial_investment': initial_investment,
         'no_browser': no_browser,
+        'etoro_username': etoro_username,
     }
 
 

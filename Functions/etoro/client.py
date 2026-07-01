@@ -1,4 +1,5 @@
 import os
+import logging
 from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 
@@ -16,6 +17,8 @@ from .models import (
     EToroUser,
     EToroUserLookupResult,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class EToroClientError(Exception):
@@ -41,36 +44,40 @@ class ETPublicClient:
         """
         Fetch public gain time-series for an investor.
 
-        GET https://public-api.etoro.com/api/v2/portfolios/{username}/gain/{granularity}
+        GET https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain
 
         Args:
             username: eToro username to query.
-            granularity: One of ``daily``, ``monthly``, or ``yearly``.
+            granularity: ``Daily`` or ``Period``. Daily returns individual data points;
+                Period returns aggregated period statistics.
             min_date: Optional inclusive start date filter (``YYYY-MM-DD``).
             max_date: Optional inclusive end date filter (``YYYY-MM-DD``).
-            count: Optional maximum number of data points to return.
+            count: Ignored when ``granularity`` is ``Daily``.
 
         Returns:
             EToroGainHistory containing ``username``, ``granularity``,
             ``total_gain`` (decimal fraction), and a list of ``EToroGainPoint``
-            with ``date``/``gain`` pairs.
+            with ``timestamp``/``gain`` pairs.
 
         Raises:
             EToroClientError: If the request fails or returns a non-2xx status.
         """
-        if granularity not in {"daily", "monthly", "yearly"}:
-            raise ValueError("granularity must be one of: daily, monthly, yearly")
+        granularity = granularity.capitalize()
+        if granularity not in {"Daily", "Period"}:
+            raise ValueError("granularity must be one of: Daily, Period")
 
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        url = f"https://public-api.etoro.com/api/v2/portfolios/{username}/gain/{granularity}"
+        url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
 
-        params = {}
+        params: Dict[str, Any] = {"type": granularity}
         if min_date:
             params["minDate"] = min_date
         if max_date:
             params["maxDate"] = max_date
-        if count is not None:
-            params["count"] = count
+
+        req = requests.Request("GET", url, params=params)
+        prepared = session.prepare_request(req)
+        logger.info("EToro request URL: %s", prepared.url)
 
         try:
             resp = session.get(url, params=params, timeout=self._timeout)
@@ -79,15 +86,31 @@ class ETPublicClient:
         except requests.RequestException as exc:
             raise EToroClientError(f"GET gain time-series failed: {exc}") from exc
 
-        gains = [
-            EToroGainPoint(date=_parse_date(point.get("date")), gain=float(point.get("gain", 0.0)))
-            for point in data.get("gains", [])
-        ]
+        if not isinstance(data, list):
+            if isinstance(data, dict):
+                data = data.get("dailyExample", data.get("daily", []))
+            else:
+                data = []
+
+        gains = []
+        for point in data:
+            if not isinstance(point, dict):
+                continue
+            raw_timestamp = point.get("timestamp") or point.get("date")
+            raw_gain = point.get("gain")
+            if raw_timestamp is None or raw_gain is None:
+                continue
+            parsed_date = _parse_date(raw_timestamp)
+            if parsed_date is None:
+                continue
+            gains.append(EToroGainPoint(date=parsed_date, gain=float(raw_gain)))
+
+        total_gain = gains[-1].gain if gains else None
 
         return EToroGainHistory(
-            username=data.get("username", username),
-            granularity=data.get("granularity", granularity),
-            total_gain=data.get("totalGain"),
+            username=username,
+            granularity=granularity,
+            total_gain=total_gain,
             gains=gains,
         )
 
@@ -337,6 +360,11 @@ class ETPublicClient:
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:
     api_key = os.getenv("ETORO_PUBLIC_KEY")
     user_key = os.getenv("ETORO_PRIVATE_KEY")
+    logger.info(
+        "EToro public client init: api_key=%s, user_key=%s",
+        "present" if api_key else "missing",
+        "present" if user_key else "missing",
+    )
     if not api_key or not user_key:
         raise EToroClientError(
             "ETORO_PUBLIC_KEY and ETORO_PRIVATE_KEY environment variables are required."

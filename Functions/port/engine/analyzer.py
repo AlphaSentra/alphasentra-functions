@@ -3,18 +3,14 @@ Core portfolio functions engine.
 """
 
 
-import pandas as pd
-import numpy as np
-from datetime import datetime, timedelta
-from typing import Dict, Any, Optional, Tuple
 import logging
+from datetime import datetime, timedelta
 from pathlib import Path
+from typing import Any, Dict, Optional, Tuple
+
+import numpy as np
+import pandas as pd
 from scipy.stats import linregress
-
-class PortfolioFunctionsError(Exception):
-    """Custom exception for portfolio functions errors."""
-    pass
-
 
 from data.loader import load_transactions_from_csv
 from data.market import detect_relisted_stocks
@@ -32,6 +28,11 @@ from engine.modeling.risk import (
 from config import BENCHMARK_CANDIDATES, ENABLED_MODULES
 
 logger = logging.getLogger(__name__)
+
+
+class PortfolioFunctionsError(Exception):
+    """Custom exception for portfolio functions errors."""
+    pass
 
 
 class PortfolioAnalyzer:
@@ -58,6 +59,8 @@ class PortfolioAnalyzer:
         self.positions = pd.DataFrame()
         self.market_data_provider = market_data_provider
         self._provider_instance = self.market_data_provider or _get_provider()
+        self.etoro_username = config.get('etoro_username') or None
+        self._etoro_returns_loaded = False
 
     # ----------------------------------------------------------------------
     # Input Handling & Data Loading
@@ -73,8 +76,12 @@ class PortfolioAnalyzer:
         logger.info(f"Loaded {len(self.transactions_df)} transactions.")
         logger.info("Portfolio/transactions loaded successfully.")
 
-    def parse_inception_date(self) -> datetime:
-        """Determine inception date from earliest transaction date."""
+    def parse_inception_date(self) -> Optional[datetime]:
+        """Determine inception date. When eToro is active, defer to the API timeseries."""
+        if self.etoro_username:
+            logger.info("Deferring inception date to eToro timeseries.")
+            return None
+
         if self.transaction_mode and not self.transactions_df.empty:
             start = self.transactions_df["Date"].min()
             logger.info(f"Using earliest transaction date {start.strftime('%Y-%m-%d')} as inception date.")
@@ -117,8 +124,14 @@ class PortfolioAnalyzer:
         tickers = self._prepare_tickers(tickers)
 
         provider = self.market_data_provider or _get_provider()
-        self.prices_full = provider.download_price_data(tickers, self.start, self.end)
-        
+
+        effective_start = self.start
+        if effective_start is None:
+            logger.info("No inception date yet; fetching full available price history for benchmark/indices.")
+            effective_start = self.end - timedelta(days=365 * 25)
+
+        self.prices_full = provider.download_price_data(tickers, effective_start, self.end)
+
         # Extract closing prices for analysis
         if isinstance(self.prices_full.columns, pd.MultiIndex):
             self.prices = self.prices_full["Close"]
@@ -131,20 +144,6 @@ class PortfolioAnalyzer:
             self.prices = self.prices.drop(columns=relisted_tickers, errors='ignore')
             self.transactions_df = self.transactions_df[~self.transactions_df['Ticker'].isin(relisted_tickers)]
             logger.info(f"Removed {len(relisted_tickers)} tickers from transaction records.")
-
-        self._select_benchmark()
-
-        # Validate benchmark availability
-        if self.benchmark_ticker not in self.prices.columns:
-            fallback = "ES=F" if "ES=F" in self.prices.columns else None
-            if fallback:
-                logger.warning(f"Benchmark {self.benchmark_ticker} not found, using {fallback}.")
-                self.benchmark_ticker = fallback
-            else:
-                raise PortfolioFunctionsError(
-                    f"Benchmark {self.benchmark_ticker} not found. "
-                    f"Available columns: {self.prices.columns.tolist()}"
-                )
 
     def _select_benchmark(self) -> None:
         """
@@ -170,45 +169,174 @@ class PortfolioAnalyzer:
         if self.benchmark_ticker not in candidates:
             candidates.append(self.benchmark_ticker)
 
+        etoro_total_returns = None
+        etoro_path = False
+        if self._etoro_returns_loaded:
+            etoro_total_returns = self.returns["total"]
+            etoro_path = True
+            logger.info(
+                "Benchmark selection using eToro total-return series (%d points)",
+                len(etoro_total_returns),
+            )
+        elif self.etoro_username:
+            logger.info(
+                "Benchmark selection: eToro username present but eToro returns failed; using per-stock R²"
+            )
+
+        benchmark_returns_lookup = {}
         for candidate in candidates:
             if candidate not in self.prices.columns:
                 continue
+            benchmark_returns_lookup[candidate] = self.prices[candidate].pct_change().dropna()
 
-            benchmark_returns = self.prices[candidate].pct_change().dropna()
-            if benchmark_returns.empty or benchmark_returns.std() == 0:
-                continue
-
-            r2_scores = []
-            for ticker in portfolio_returns.columns:
-                aligned = pd.concat([portfolio_returns[ticker], benchmark_returns], axis=1).dropna()
+        if etoro_path and etoro_total_returns is not None:
+            for candidate, benchmark_returns in benchmark_returns_lookup.items():
+                if benchmark_returns.empty or benchmark_returns.std() == 0:
+                    continue
+                aligned = pd.concat([etoro_total_returns, benchmark_returns], axis=1).dropna()
                 if len(aligned) < 20:
                     continue
-
                 x = aligned.iloc[:, 1].values
                 y = aligned.iloc[:, 0].values
-
                 if np.std(x) == 0 or np.std(y) == 0:
                     continue
-
                 corr = np.corrcoef(x, y)[0, 1]
                 if not np.isnan(corr):
-                    r2_scores.append(corr ** 2)
-
-            if r2_scores:
-                avg_r2 = float(np.mean(r2_scores))
-                if avg_r2 > best_score:
-                    best_score = avg_r2
-                    best_benchmark = candidate
+                    score = corr ** 2
+                    logger.info("Benchmark candidate %s R² vs eToro total: %.4f", candidate, score)
+                    if score > best_score:
+                        best_score = score
+                        best_benchmark = candidate
+        else:
+            portfolio_tickers = [t for t in self._get_tickers() if t in self.prices.columns]
+            if portfolio_tickers and not self.prices.empty:
+                portfolio_returns = self.prices[portfolio_tickers].pct_change().dropna()
+                if not portfolio_returns.empty:
+                    for candidate in candidates:
+                        if candidate not in self.prices.columns:
+                            continue
+                        benchmark_returns = self.prices[candidate].pct_change().dropna()
+                        if benchmark_returns.empty or benchmark_returns.std() == 0:
+                            continue
+                        r2_scores = []
+                        for ticker in portfolio_returns.columns:
+                            aligned = pd.concat([portfolio_returns[ticker], benchmark_returns], axis=1).dropna()
+                            if len(aligned) < 20:
+                                continue
+                            x = aligned.iloc[:, 1].values
+                            y = aligned.iloc[:, 0].values
+                            if np.std(x) == 0 or np.std(y) == 0:
+                                continue
+                            corr = np.corrcoef(x, y)[0, 1]
+                            if not np.isnan(corr):
+                                r2_scores.append(corr ** 2)
+                        if r2_scores:
+                            score = float(np.mean(r2_scores))
+                            if score > best_score:
+                                best_score = score
+                                best_benchmark = candidate
 
         if best_benchmark:
             self.benchmark_ticker = best_benchmark
-            logger.info(f"Selected benchmark {best_benchmark} (avg R² = {best_score:.3f})")
+            logger.info(f"Selected benchmark {best_benchmark} (score={best_score:.3f})")
         else:
             for candidate in candidates:
                 if candidate in self.prices.columns:
                     self.benchmark_ticker = candidate
                     logger.warning(f"No R² data available, falling back to {candidate}")
                     break
+
+    def _load_etoro_gain_timeseries(self) -> tuple[pd.Series, pd.Series]:
+        """
+        Fetch eToro daily gain timeseries and convert to daily returns.
+
+        Returns:
+            Tuple of (daily_returns, cumulative_value_series).
+
+        Raises:
+            PortfolioFunctionsError: If the eToro API returns no usable data.
+        """
+        from Functions.etoro.client import get_public_client_from_env, EToroClientError
+
+        client = get_public_client_from_env()
+        max_date = self.end.strftime("%Y-%m-%d") if self.end else None
+        min_date = "2000-01-01"
+        history = client.get_investor_gain_timeseries(
+            self.etoro_username,
+            granularity="daily",
+            min_date=min_date,
+            max_date=max_date,
+        )
+
+        if not history.gains:
+            raise PortfolioFunctionsError(f"No gain data returned from eToro for {self.etoro_username}")
+
+        logger.info(
+            "eToro API returned %d raw gain points for %s (first=%s, last=%s)",
+            len(history.gains),
+            self.etoro_username,
+            history.gains[0].date if history.gains else None,
+            history.gains[-1].date if history.gains else None,
+        )
+
+        gains_df = pd.DataFrame([
+            {"date": p.date, "gain": float(p.gain)}
+            for p in history.gains
+            if p.date is not None
+        ])
+        gains_df = gains_df.sort_values("date").drop_duplicates(subset=["date"]).set_index("date")
+
+        if len(gains_df) < 2:
+            raise PortfolioFunctionsError(f"Insufficient eToro gain data for {self.etoro_username}")
+
+        if hasattr(self, "prices") and not self.prices.empty and isinstance(self.prices.index, pd.DatetimeIndex):
+            trading_index = self.prices.index
+        else:
+            trading_index = pd.bdate_range(start=gains_df.index.min(), end=gains_df.index.max())
+
+        gains_df = gains_df.reindex(trading_index).ffill()
+        gains_df = gains_df.dropna(subset=["gain"])
+
+        logger.info(
+            "eToro gains after alignment: %d points, index %s to %s",
+            len(gains_df),
+            gains_df.index[0] if len(gains_df) else None,
+            gains_df.index[-1] if len(gains_df) else None,
+        )
+
+        if len(gains_df) < 2:
+            raise PortfolioFunctionsError(f"Insufficient eToro gain data for {self.etoro_username}")
+
+        cumulative_values = self.initial_investment * (1 + gains_df["gain"] / 100).cumprod()
+        cumulative_values = cumulative_values[cumulative_values > 0]
+
+        if len(cumulative_values) < 2:
+            raise PortfolioFunctionsError(f"Insufficient positive eToro cumulative values for {self.etoro_username}")
+
+        cumulative_values = cumulative_values.reindex(gains_df.index).ffill().dropna()
+        daily_returns = cumulative_values.pct_change().dropna()
+
+        logger.info(
+            "eToro cumulative values: first=%.4f, last=%.4f",
+            cumulative_values.iloc[0],
+            cumulative_values.iloc[-1],
+        )
+
+        return daily_returns, cumulative_values
+
+    def _calculate_etoro_gain_error(self, error: Exception) -> tuple[pd.Series, pd.Series]:
+        """
+        Produce a zero-return fallback when the eToro gain API is unavailable.
+
+        Args:
+            error: The original exception raised by the eToro client.
+
+        Returns:
+            Tuple of (empty daily_returns, empty cumulative_value_series).
+        """
+        logger.warning("Falling back to empty eToro gain series after error: %s", error)
+        empty = pd.Series(dtype="float64")
+        return empty, empty
 
     # ----------------------------------------------------------------------
     # Timeseries & Returns
@@ -228,7 +356,25 @@ class PortfolioAnalyzer:
 
     def calculate_returns(self) -> None:
         """Calculate daily returns for portfolio and benchmark."""
-        self.returns = calculate_returns(self.ts)
+        self._etoro_returns_loaded = False
+        if self.etoro_username:
+            try:
+                self.returns["total"], self.ts["total"] = self._load_etoro_gain_timeseries()
+                self._etoro_returns_loaded = True
+                logger.info(
+                    "Using eToro gain timeseries for portfolio returns (%d points)",
+                    len(self.ts["total"]),
+                )
+                etoro_start = self.ts["total"].index[0]
+                if self.start is None or etoro_start < self.start:
+                    self.start = etoro_start
+                    logger.info("Updated inception date to eToro start: %s", self.start.strftime("%Y-%m-%d"))
+            except Exception as exc:
+                logger.warning("eToro gain fetch failed (%s). Falling back to local transaction timeseries.", exc)
+                self.returns = calculate_returns(self.ts)
+        else:
+            self.returns = calculate_returns(self.ts)
+
         self.benchmark = self.prices[self.benchmark_ticker].pct_change().dropna()
 
         # Align benchmark to portfolio total index
@@ -712,6 +858,20 @@ class PortfolioAnalyzer:
 
         self.build_timeseries()
         self.calculate_returns()
+
+        self._select_benchmark()
+
+        # Validate benchmark availability after selection
+        if self.benchmark_ticker not in self.prices.columns:
+            fallback = "ES=F" if "ES=F" in self.prices.columns else None
+            if fallback:
+                logger.warning(f"Benchmark {self.benchmark_ticker} not found, using {fallback}.")
+                self.benchmark_ticker = fallback
+            else:
+                raise PortfolioFunctionsError(
+                    f"Benchmark {self.benchmark_ticker} not found. "
+                    f"Available columns: {self.prices.columns.tolist()}"
+                )
 
         self.load_sector_industry_data()
         self.calculate_risk_contribution()

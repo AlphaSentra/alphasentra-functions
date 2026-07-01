@@ -85,7 +85,7 @@ def build_portfolio_timeseries(price_data, portfolio_df=None, transactions_df=No
         last_processed_idx = 0
 
         for i, current_date in enumerate(price_data.index):
-            if current_date < start_date:
+            if start_date is not None and current_date < start_date:
                 continue
 
             pre_trans_pos_value = 0.0
@@ -149,7 +149,10 @@ def build_portfolio_timeseries(price_data, portfolio_df=None, transactions_df=No
             prev_total_eod = post_trans_pos_value + cash_balance
 
         perf_adjusted_total = pd.Series(0.0, index=price_data.index)
-        start_idx_pos = price_data.index.get_loc(price_data.index[price_data.index >= start_date][0])
+        if start_date is not None:
+            start_idx_pos = price_data.index.get_loc(price_data.index[price_data.index >= start_date][0])
+        else:
+            start_idx_pos = 0
         initial_val = total_investment if total_investment is not None else DEFAULT_CAPITAL
         perf_adjusted_total.iloc[start_idx_pos] = initial_val
 

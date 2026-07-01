@@ -13,3 +13,4 @@ pymongo
 python-dotenv
 cryptography
 google-genai
+requests

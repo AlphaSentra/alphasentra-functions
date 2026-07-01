@@ -90,7 +90,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "") -> dict:
     print("PORTFOLIO FUNCTION")
     print("=" * 60)
 
-    report_title = f"Portfolio Report - {etoro_username}" if etoro_username else "Portfolio Report"
+    report_title = f"{etoro_username}" if etoro_username else "PORT"
 
     include_yield = True
 

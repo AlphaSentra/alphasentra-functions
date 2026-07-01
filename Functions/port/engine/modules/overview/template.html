@@ -148,7 +148,7 @@
   <div class="chart-container">
       {{ charts.overview_metrics_strip | safe }}
       <div class="bg-info-box">
-          <h4 class="m-t-0">Intel Report</h4>
+          <h4 class="m-t-0">Intel Report - {{ now_gmt }}</h4>
           {% if overview_ai_interpretation %}
             <p>{{ overview_ai_interpretation }}</p>
           {% else %}

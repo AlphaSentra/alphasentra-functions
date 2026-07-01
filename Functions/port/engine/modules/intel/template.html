@@ -12,8 +12,9 @@
                 </p>
               {% endif %}
           </div>
-      </div>
-      {{ intel_commentary | safe }}
+        </div>
+        <p class="m-t-0"><strong>Intel Report - {{ now_gmt }}</strong></p>
+        {{ intel_commentary | safe }}
     </div>
     <div class="intel-attention-column">
       {{ attention_table | safe }}

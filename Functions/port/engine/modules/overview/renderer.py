@@ -4,6 +4,7 @@ Overview tab renderer: generates the Overview tab HTML block.
 
 from jinja2 import Template
 import os
+from datetime import datetime, timezone
 from config import (
     POSITIVE_RETURN_CARD,
     NEGATIVE_RETURN_CARD,
@@ -28,12 +29,14 @@ def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, 
         template_src = f.read()
 
     template = Template(template_src)
+    now_gmt = datetime.now(timezone.utc).strftime("%B %d, %Y %H:%M GMT")
     return template.render(
         charts=charts,
         metrics=metrics,
         inception_date=inception_date,
         include_yield=include_yield,
         overview_ai_interpretation=overview_ai_interpretation,
+        now_gmt=now_gmt,
         POSITIVE_RETURN_CARD=POSITIVE_RETURN_CARD,
         NEGATIVE_RETURN_CARD=NEGATIVE_RETURN_CARD,
         BUTTON_TEXT=BUTTON_TEXT,

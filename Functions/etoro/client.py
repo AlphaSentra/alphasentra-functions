@@ -1,9 +1,21 @@
 import os
+import sys
 import logging
 from datetime import datetime, timezone
+from pathlib import Path
 from typing import Any, Dict, List, Optional
 
 import requests
+
+_current_dir = Path(__file__).resolve().parent
+_parent_dir = _current_dir.parent
+if str(_parent_dir) not in sys.path:
+    sys.path.append(str(_parent_dir))
+
+try:
+    from helpers import DatabaseManager
+except ImportError:
+    DatabaseManager = None
 
 from .auth import public_api_session
 from .models import (
@@ -29,7 +41,6 @@ class ETPublicClient:
         self._api_key = api_key
         self._user_key = user_key
         self._timeout = timeout
-        self._symbol_cache: dict[str, tuple[Optional[str], Optional[str]]] = {}
 
     def get_investor_gain_timeseries(
         self,
@@ -124,8 +135,9 @@ class ETPublicClient:
 
         Returns:
             EToroInvestorPortfolio containing a list of ``EToroPortfolioPosition``.
-            Each position includes open rate, leverage, credited percentages,
-            net profit, and nested social copy relationships.
+            Each position includes position id, instrument id, symbol,
+            open timestamp, open rate, side, leverage, take profit/stop loss,
+            investment percentage, and net profit.
 
         Raises:
             EToroClientError: If the request fails or returns a non-2xx status.
@@ -142,7 +154,25 @@ class ETPublicClient:
 
         raw_positions = data.get("positions", [])
         instrument_ids = list({str(item.get("instrumentId", "")) for item in raw_positions if item.get("instrumentId")})
-        symbol_map = self._lookup_instruments(instrument_ids)
+        symbol_map: Dict[str, Optional[str]] = {}
+        if DatabaseManager is not None:
+            try:
+                db = DatabaseManager().get_client()
+                db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+                tickers_collection = db[db_name]["tickers"]
+                cursor = tickers_collection.find(
+                    {"ticker_etoro": {"$in": instrument_ids}},
+                    {"ticker_etoro": 1, "ticker": 1},
+                )
+                for doc in cursor:
+                    iid = str(doc.get("ticker_etoro", ""))
+                    ticker = doc.get("ticker")
+                    if iid and ticker is not None:
+                        symbol_map[iid] = str(ticker)
+            except Exception as exc:
+                logger.warning("Failed to lookup eToro instrument symbols from DB: %s", exc)
+        for iid in instrument_ids:
+            symbol_map.setdefault(iid, None)
 
         positions = [
             EToroPortfolioPosition(
@@ -308,39 +338,6 @@ class ETPublicClient:
                     by_cid[str(val)] = etoro_user
 
         return EToroUserLookupResult(by_cid=by_cid, requested=[str(c) for c in cids])
-
-    def _lookup_instruments(self, instrument_ids: List[str]) -> Dict[str, Optional[str]]:
-        result: Dict[str, Optional[str]] = {}
-        missing = []
-
-        for iid in instrument_ids:
-            if iid in self._symbol_cache:
-                result[iid] = self._symbol_cache[iid][0]
-            else:
-                missing.append(iid)
-
-        if not missing:
-            return result
-
-        session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        for iid in missing:
-            try:
-                resp = session.get(
-                    "https://public-api.etoro.com/api/v1/market-data/search",
-                    params={"fields": "instrumentId,internalSymbolFull", "instrumentId": iid},
-                    timeout=self._timeout,
-                )
-                resp.raise_for_status()
-                payload = resp.json()
-                items = payload.get("items", [])
-                symbol = next((i.get("internalSymbolFull") for i in items if str(i.get("instrumentId")) == iid), None)
-                self._symbol_cache[iid] = (symbol, None)
-                result[iid] = symbol
-            except requests.RequestException:
-                self._symbol_cache[iid] = (None, None)
-                result[iid] = None
-
-        return result
 
 
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:

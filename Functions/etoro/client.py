@@ -11,7 +11,6 @@ from .models import (
     EToroGainPoint,
     EToroInvestorPortfolio,
     EToroPortfolioPosition,
-    EToroSocialTrade,
     EToroTradeHistory,
     EToroTradeRecord,
     EToroUser,
@@ -159,19 +158,6 @@ class ETPublicClient:
                 stop_loss_rate=_safe_float(item.get("stopLossRate")),
                 investment_pct=_safe_float(item.get("investmentPct")),
                 net_profit=_safe_float(item.get("netProfit")),
-                realized_credit_pct=_safe_float(item.get("realizedCreditPct")),
-                unrealized_credit_pct=_safe_float(item.get("unrealizedCreditPct")),
-                social_trades=[
-                    EToroSocialTrade(
-                        investor_id=str(trade.get("investorId", "")),
-                        investor_name=trade.get("investorName", ""),
-                        leverage=_safe_float(trade.get("leverage"), default=1.0),
-                        is_sell=trade.get("isSell", False),
-                        position_id=str(trade.get("positionId", "")),
-                        copy_close_time=_parse_time(trade.get("copyCloseTime")),
-                    )
-                    for trade in item.get("socialTrades", [])
-                ],
             )
             for item in raw_positions
         ]

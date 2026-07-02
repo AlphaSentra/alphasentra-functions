@@ -1,4 +1,4 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from datetime import datetime
 from typing import Any, Dict, List, Optional
 
@@ -29,7 +29,7 @@ class EToroPortfolioPosition:
     net_profit: Optional[float]
     realized_credit_pct: Optional[float]
     unrealized_credit_pct: Optional[float]
-    social_trades: List[EToroSocialTrade]
+    social_trades: List[EToroSocialTrade] = field(default_factory=list)
 
 
 @dataclass

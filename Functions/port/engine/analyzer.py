@@ -61,6 +61,8 @@ class PortfolioAnalyzer:
         self._provider_instance = self.market_data_provider or _get_provider()
         self.etoro_username = config.get('etoro_username') or None
         self._etoro_returns_loaded = False
+        self._etoro_portfolio_mode = False
+        self._etoro_portfolio_raw = None
 
     # ----------------------------------------------------------------------
     # Input Handling & Data Loading
@@ -75,6 +77,64 @@ class PortfolioAnalyzer:
             raise PortfolioFunctionsError("No transactions loaded from CSV.")
         logger.info(f"Loaded {len(self.transactions_df)} transactions.")
         logger.info("Portfolio/transactions loaded successfully.")
+
+    def _load_etoro_portfolio_path(self) -> bool:
+        """
+        Attempt to build the analysis from the live eToro portfolio API
+        instead of running the full transaction-mode backtest.
+
+        Returns True if the fast-path was successfully loaded, False otherwise.
+        """
+        if not self.etoro_username:
+            return False
+
+        try:
+            from Functions.etoro.client import get_public_client_from_env
+            client = get_public_client_from_env()
+            portfolio = client.get_investor_portfolio(self.etoro_username)
+
+            agg_positions = [
+                pos for pos in portfolio.aggregated_positions
+                if pos.symbol and pos.symbol != "USD=X" and pos.weight > 0.0001
+            ]
+            if not agg_positions:
+                logger.warning("eToro portfolio returned no non-cash positions; falling back to transaction mode.")
+                return False
+
+            self.transaction_mode = False
+            self._etoro_portfolio_mode = True
+
+            self.portfolio = pd.DataFrame([
+                {
+                    "ticker": pos.symbol,
+                    "quantity": pos.weight / 100.0,
+                    "type": "active",
+                    "avg_price": pos.average_entry_price,
+                }
+                for pos in agg_positions
+            ])
+
+            self.start = self.parse_inception_date()
+            effective_start = self.start or (self.end - timedelta(days=365 * 5))
+
+            tickers = self.portfolio['ticker'].tolist()
+            tickers = self._prepare_tickers(tickers)
+
+            provider = self.market_data_provider or _get_provider()
+            self.prices_full = provider.download_price_data(tickers, effective_start, self.end)
+
+            if isinstance(self.prices_full.columns, pd.MultiIndex):
+                self.prices = self.prices_full["Close"]
+            else:
+                self.prices = self.prices_full[["Close"]]
+
+            self._etoro_portfolio_raw = portfolio
+            logger.info("eToro live portfolio fast-path loaded successfully (%d positions).", len(agg_positions))
+            return True
+
+        except Exception as exc:
+            logger.warning("eToro portfolio fast-path failed (%s); falling back to transaction mode.", exc)
+            return False
 
     def parse_inception_date(self) -> Optional[datetime]:
         """Determine inception date. When eToro is active, defer to the API timeseries."""
@@ -92,7 +152,9 @@ class PortfolioAnalyzer:
         return start
 
     def _get_tickers(self) -> list:
-        """Extract unique tickers from transactions."""
+        """Extract unique tickers from transactions or live eToro portfolio."""
+        if self._etoro_portfolio_mode and not self.portfolio.empty:
+            return self.portfolio['ticker'].astype(str).tolist()
         tickers = self.transactions_df["Ticker"].dropna().unique().astype(str).tolist()
         return tickers
 
@@ -142,8 +204,11 @@ class PortfolioAnalyzer:
         if relisted_tickers:
             logger.info(f"Excluding re-listed/crashed stocks: {relisted_tickers}")
             self.prices = self.prices.drop(columns=relisted_tickers, errors='ignore')
-            self.transactions_df = self.transactions_df[~self.transactions_df['Ticker'].isin(relisted_tickers)]
-            logger.info(f"Removed {len(relisted_tickers)} tickers from transaction records.")
+            if self.transaction_mode and not self.transactions_df.empty:
+                self.transactions_df = self.transactions_df[~self.transactions_df['Ticker'].isin(relisted_tickers)]
+            elif self._etoro_portfolio_mode and not self.portfolio.empty:
+                self.portfolio = self.portfolio.drop(index=relisted_tickers, errors='ignore')
+            logger.info(f"Removed {len(relisted_tickers)} tickers from records.")
 
     def _select_benchmark(self) -> None:
         """
@@ -343,16 +408,29 @@ class PortfolioAnalyzer:
     # ----------------------------------------------------------------------
 
     def build_timeseries(self) -> None:
-        """Build portfolio timeseries from transactions."""
-        self.ts = build_portfolio_timeseries(
-            self.prices,
-            portfolio_df=pd.DataFrame(),
-            transactions_df=self.transactions_df,
-            start_date=self.start,
-            total_investment=self.initial_investment
-        )
+        """Build portfolio timeseries from transactions or live eToro portfolio."""
+        if self._etoro_portfolio_mode and not self.portfolio.empty:
+            portfolio_for_ts = self.portfolio.copy()
+            self.ts = build_portfolio_timeseries(
+                self.prices,
+                portfolio_df=portfolio_for_ts,
+                transactions_df=None,
+                total_investment=self.initial_investment,
+            )
+            self.holdings_df = self.portfolio.copy()
+            self.holdings_df['quantity'] = self.portfolio['quantity']
+            self.holdings_df['avg_price'] = self.portfolio.get('avg_price', pd.Series(dtype=float))
+        else:
+            self.ts = build_portfolio_timeseries(
+                self.prices,
+                portfolio_df=pd.DataFrame(),
+                transactions_df=self.transactions_df,
+                start_date=self.start,
+                total_investment=self.initial_investment
+            )
         self.positions = self.ts["positions"]
-        self.holdings = self.ts["holdings"]
+        if not hasattr(self, 'holdings_df') or self.holdings_df is None:
+            self.holdings = self.ts["holdings"]
 
     def calculate_returns(self) -> None:
         """Calculate daily returns for portfolio and benchmark."""
@@ -393,7 +471,12 @@ class PortfolioAnalyzer:
 
     def load_sector_industry_data(self) -> None:
         """Fetch sector, industry, and dividend yield data."""
-        portfolio_tickers = self.transactions_df["Ticker"].dropna().unique().astype(str).tolist()
+        if not self.transactions_df.empty and "Ticker" in self.transactions_df.columns:
+            portfolio_tickers = self.transactions_df["Ticker"].dropna().unique().astype(str).tolist()
+        elif not self.portfolio.empty and "ticker" in self.portfolio.columns:
+            portfolio_tickers = self.portfolio['ticker'].astype(str).tolist()
+        else:
+            portfolio_tickers = []
 
         all_tickers = list(set(portfolio_tickers + [self.benchmark_ticker]))
         provider = self.market_data_provider or _get_provider()
@@ -742,8 +825,47 @@ class PortfolioAnalyzer:
         return pd.Series(avg_costs)
 
     def _generate_holdings_table(self) -> None:
-        """Generate the holdings table based on transaction mode."""
+        """Generate the holdings table based on transaction mode or eToro live portfolio."""
         from engine.modules.holdings.renderer import generate_portfolio_holdings_analysis
+
+        if self._etoro_portfolio_mode and not self.portfolio.empty:
+            portfolio_snapshot = self.portfolio.copy()
+
+            tickers_in_prices = [t for t in portfolio_snapshot['ticker'] if t in self.prices.columns]
+            if not tickers_in_prices:
+                logger.warning("No matching tickers found in price data for eToro portfolio holdings.")
+                self.holdings_table_html = "<p>No current holdings detected.</p>"
+                self.holdings_df = pd.DataFrame()
+                return
+
+            portfolio_snapshot = portfolio_snapshot[portfolio_snapshot['ticker'].isin(tickers_in_prices)].copy()
+            weight_sum = portfolio_snapshot['quantity'].sum()
+            portfolio_snapshot['norm_weight'] = portfolio_snapshot['quantity'] / weight_sum if weight_sum > 0 else 0.0
+
+            active_tickers_list = [t for t in tickers_in_prices if t in self.ts["positions"].columns]
+            if active_tickers_list:
+                temp_risk = calculate_risk_contribution(
+                    self.ts["positions"][active_tickers_list],
+                    self.ts["total"],
+                    asset_returns=self.prices[active_tickers_list].pct_change().dropna()
+                )
+                temp_risk = temp_risk.reindex(tickers_in_prices)
+                temp_risk['Weight'] = portfolio_snapshot.set_index('ticker').loc[tickers_in_prices, 'norm_weight']
+            else:
+                temp_risk = pd.DataFrame({"Weight": portfolio_snapshot.set_index('ticker').loc[tickers_in_prices, 'norm_weight'], "Risk Contribution": 0.0, "% Risk Contribution": 0.0}, index=tickers_in_prices)
+
+            temp_portfolio_df = portfolio_snapshot.copy()
+            temp_portfolio_df['quantity'] = temp_portfolio_df['ticker'].map(
+                portfolio_snapshot.set_index('ticker')['norm_weight']
+            )
+            temp_portfolio_df['type'] = 'active'
+
+            self.holdings_table_html, self.holdings_df, self.chart_data_json = generate_portfolio_holdings_analysis(
+                temp_risk, self.sector_industry_df, self.prices_full, temp_portfolio_df
+            )
+            self.charts['chart_data'] = self.chart_data_json
+            self._add_beta_to_holdings()
+            return
 
         if self.ts.get("holdings") is not None:
             latest_holdings_qty = self.ts.get("holdings").iloc[-1]
@@ -846,15 +968,28 @@ class PortfolioAnalyzer:
         """
         Execute the full analysis pipeline.
 
+        When an eToro username is configured, the live portfolio API is used
+        as the primary data source. The transaction-mode backtest is only
+        used as a fallback if the eToro portfolio path fails or returns no
+        positions.
+
         Returns:
             Tuple of (metrics dict, charts dict, start date).
         """
         # Step-by-step execution
-        self.load_data()
-        self.start = self.parse_inception_date()
+        if self.etoro_username:
+            portfolio_loaded = self._load_etoro_portfolio_path()
+            if not portfolio_loaded:
+                self.load_data()
+                self.start = self.parse_inception_date()
+                logger.info("Falling back to transaction-mode backtest.")
+        else:
+            self.load_data()
+            self.start = self.parse_inception_date()
 
         logger.info("Starting portfolio functions...")
-        self.download_and_process_prices()
+        if not self._etoro_portfolio_mode or self.prices.empty:
+            self.download_and_process_prices()
 
         self.build_timeseries()
         self.calculate_returns()

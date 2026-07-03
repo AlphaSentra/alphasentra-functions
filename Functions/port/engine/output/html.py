@@ -194,6 +194,7 @@ def _strip_html(text):
 
 
 def generate_portfolio_ai_commentary(metrics, charts, title, start, **kwargs):
+    portfolio_total_ts = kwargs.get('portfolio_total_ts')
     holdings_df = kwargs.get('holdings_df')
     returns_series = kwargs.get('returns_series')
     benchmark_ticker = kwargs.get('benchmark_ticker')
@@ -237,6 +238,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     returns_series = kwargs.get('returns_series')
     benchmark_ticker = kwargs.get('benchmark_ticker')
     config = kwargs.get('config', {})
+    portfolio_total_ts = kwargs.get('portfolio_total_ts')
 
     # Generate intel commentary first (used by both intel tab and overview summary)
     current_commentary = ""
@@ -355,6 +357,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
                     current_weights_dict=current_weights_dict,
                     actual_portfolio_metrics=metrics.get('total'),
                     total_portfolio_value=config.get('DEFAULT_CAPITAL', DEFAULT_CAPITAL),
+                    portfolio_total_ts=portfolio_total_ts,
                 )
             tabs_content += '</div>'
 

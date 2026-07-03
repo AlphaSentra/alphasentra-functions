@@ -24,12 +24,12 @@ from config import (
 )
 from .optimizer import optimize_portfolio
 
-def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_industry_df, config, current_weights_dict=None, actual_portfolio_metrics=None, total_portfolio_value=DEFAULT_CAPITAL) -> str:
+def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_industry_df, config, current_weights_dict=None, actual_portfolio_metrics=None, total_portfolio_value=DEFAULT_CAPITAL, portfolio_total_ts=None) -> str:
     """
     Renders the Optimisation tab HTML block.
     """
     # 1. Run optimization
-    opt_results = optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industry_df, config, current_weights_dict, actual_portfolio_metrics)
+    opt_results = optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industry_df, config, current_weights_dict, actual_portfolio_metrics, portfolio_total_ts=portfolio_total_ts)
     
     if not opt_results:
         # Optimization could not run

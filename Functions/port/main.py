@@ -162,6 +162,7 @@ def generate_portfolio_html(etoro_username: str = "") -> str:
         config=config,
         returns_series=analyzer.returns.get('total'),
         benchmark_ticker=analyzer.benchmark_ticker,
+        portfolio_total_ts=getattr(analyzer, 'ts', {}).get('total'),
     )
 
     return html
@@ -198,6 +199,7 @@ def generate_ai_commentary_text(etoro_username: str = "") -> str:
         price_data=prices,
         returns_series=analyzer.returns.get('total'),
         benchmark_ticker=analyzer.benchmark_ticker,
+        portfolio_total_ts=getattr(analyzer, 'ts', {}).get('total'),
     )
 
     return commentary
@@ -254,6 +256,7 @@ def main() -> int:
             config=config,
             returns_series=analyzer.returns.get('total'),
             benchmark_ticker=analyzer.benchmark_ticker,
+            portfolio_total_ts=getattr(analyzer, 'ts', {}).get('total'),
         )
 
         logger.info("Analysis complete.")

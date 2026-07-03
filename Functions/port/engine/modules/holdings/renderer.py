@@ -714,8 +714,9 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                     html += f'<td class="weight-cell">{row["Weight"]*100:.2f}%</td>'
                 elif col == 'PnL (%)':
                     pnl_val = row['pnl_pct']
-                    pnl_class = 'pnl-positive' if pnl_val > 0 else 'pnl-negative' if pnl_val < 0 else 'pnl-neutral'
-                    html += f'<td class="u-align-center u-valign-middle"><div class="metric-chip {pnl_class}">{pnl_val:+.2f}%</div></td>'
+                    pnl_display = "0%" if pd.isna(pnl_val) else f"{pnl_val:+.2f}%"
+                    pnl_class = 'pnl-positive' if pd.notna(pnl_val) and pnl_val > 0 else 'pnl-negative' if pd.notna(pnl_val) and pnl_val < 0 else 'pnl-neutral'
+                    html += f'<td class="u-align-center u-valign-middle"><div class="metric-chip {pnl_class}">{pnl_display}</div></td>'
                 elif col == 'Action Alert':
                     alert_map = {"Monitor": "watch", "Attention": "caution", "Caution": "critical", "Neutral": "neutral"}
                     alert_class = alert_map.get(row["alert"], "neutral")

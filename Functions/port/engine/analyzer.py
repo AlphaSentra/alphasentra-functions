@@ -724,7 +724,7 @@ class PortfolioAnalyzer:
             charts["sector_table"] = sector_analysis["table_html"]
             charts["sector_pie"] = sector_analysis["pie_chart_html"]
 
-            charts["sector_performance_table"] = generate_sector_performance_table(self.risk_df, self.sector_industry_df, self.prices)
+            charts["sector_performance_table"] = generate_sector_performance_table(self.risk_df, self.sector_industry_df, self.prices, self.holdings_df)
 
             if ENABLED_MODULES.get("holdings", True) or ENABLED_MODULES.get("breakdown", True):
                 logger.info("Generating portfolio holdings analysis...")
@@ -837,14 +837,16 @@ class PortfolioAnalyzer:
             tickers_all = portfolio_snapshot['ticker'].tolist()
             tickers_with_prices = [t for t in tickers_all if t in self.prices.columns]
 
-            # Use eToro weights verbatim (already percentage points, e.g. 25.0 = 25%).
-            # Do NOT recalculate / normalize — we want exactly what get_investor_portfolio returned.
+            # Use eToro weights verbatim from the API, but normalise from
+            # %-points to fractions so all downstream consumers (shock beta,
+            # sector breakdown, charts, etc.) see the same 0–1 scale.
+            # e.g. 25.0 → 0.25
             raw_weights = portfolio_snapshot.set_index('ticker')['quantity']
             raw_weights = raw_weights.reindex(tickers_all).fillna(0.0)
+            raw_weight_fractions = raw_weights / 100.0
 
-            # Build a minimal risk_df: Weight from eToro, risk metrics zeroed for non-stocks (USD=X etc.)
             temp_risk = pd.DataFrame({
-                "Weight": raw_weights,
+                "Weight": raw_weight_fractions,
                 "Risk Contribution": 0.0,
                 "% Risk Contribution": 0.0
             }, index=tickers_all)

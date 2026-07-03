@@ -113,7 +113,7 @@ def generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_
     return {'table_html': table_html, 'pie_chart_html': pie_chart_html}
 
 
-def generate_sector_performance_table(risk_contrib, sector_industry_df, price_data):
+def generate_sector_performance_table(risk_contrib, sector_industry_df, price_data, holdings_df=None):
     """
     Generates a table showing securities per sector with 3M and 1M performance.
 
@@ -121,6 +121,7 @@ def generate_sector_performance_table(risk_contrib, sector_industry_df, price_da
         risk_contrib (pd.DataFrame): DataFrame with "Weight" for each ticker.
         sector_industry_df (pd.DataFrame): DataFrame with 'sector' and 'industry' for each ticker.
         price_data (pd.DataFrame): DataFrame with historical prices.
+        holdings_df (pd.DataFrame, optional): DataFrame with holdings data, used to identify trade direction.
 
     Returns:
         str: HTML string for the performance table.
@@ -139,6 +140,11 @@ def generate_sector_performance_table(risk_contrib, sector_industry_df, price_da
     start_1m = end_date - pd.DateOffset(months=1)
     start_1y = end_date - pd.DateOffset(years=1)
 
+    # Build direction map: short positions get inverted returns
+    direction_map = {}
+    if holdings_df is not None and not holdings_df.empty and 'type' in holdings_df.columns:
+        direction_map = holdings_df['type'].to_dict()
+
     returns_3m = {}
     returns_1m = {}
     returns_1y = {}
@@ -152,6 +158,8 @@ def generate_sector_performance_table(risk_contrib, sector_industry_df, price_da
                 prices_3m = prices_3m[prices_3m.index >= start_3m]
                 if len(prices_3m) > 1:
                     ret_3m = (prices_3m.iloc[-1] / prices_3m.iloc[0] - 1) * 100
+                    if direction_map.get(ticker) == 'S':
+                        ret_3m = -ret_3m
                     returns_3m[ticker] = ret_3m
                 else:
                     returns_3m[ticker] = np.nan
@@ -161,6 +169,8 @@ def generate_sector_performance_table(risk_contrib, sector_industry_df, price_da
                 prices_1m = prices_1m[prices_1m.index >= start_1m]
                 if len(prices_1m) > 1:
                     ret_1m = (prices_1m.iloc[-1] / prices_1m.iloc[0] - 1) * 100
+                    if direction_map.get(ticker) == 'S':
+                        ret_1m = -ret_1m
                     returns_1m[ticker] = ret_1m
                 else:
                     returns_1m[ticker] = np.nan
@@ -170,6 +180,8 @@ def generate_sector_performance_table(risk_contrib, sector_industry_df, price_da
                 prices_1y = prices_1y[prices_1y.index >= start_1y]
                 if len(prices_1y) > 1:
                     ret_1y = (prices_1y.iloc[-1] / prices_1y.iloc[0] - 1) * 100
+                    if direction_map.get(ticker) == 'S':
+                        ret_1y = -ret_1y
                     returns_1y[ticker] = ret_1y
                 else:
                     returns_1y[ticker] = np.nan
@@ -291,7 +303,7 @@ def render_breakdown_tab(risk_contrib, sector_industry_df, price_data, holdings_
     Renders the Breakdown tab HTML block.
     """
     sector_analysis = generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_yield)
-    sector_perf_table = generate_sector_performance_table(risk_contrib, sector_industry_df, price_data)
+    sector_perf_table = generate_sector_performance_table(risk_contrib, sector_industry_df, price_data, holdings_df)
 
     template_path = os.path.join(os.path.dirname(__file__), "template.html")
     with open(template_path, "r", encoding="utf-8") as f:

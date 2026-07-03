@@ -141,6 +141,7 @@ def generate_breakdown_metrics_strip(holdings_df, price_data=None):
     pos_name, pos_return = "N/A", 0.0
     neg_name, neg_return = "N/A", 0.0
     sector_returns = {}  # Store 3M returns for all sectors
+    direction_map = holdings_df['type'].to_dict() if 'type' in holdings_df.columns else {}
     
     if price_data is not None and not price_data.empty:
         try:
@@ -160,9 +161,11 @@ def generate_breakdown_metrics_strip(holdings_df, price_data=None):
                         prices = price_data[ticker].dropna()
                         prices_3m = prices[(prices.index >= start_3m) & (prices.index <= end_date)]
                         if len(prices_3m) > 1:
-                            ret = (prices_3m.iloc[-1] / prices_3m.iloc[0]) - 1
-                            weight = df.loc[ticker, 'Weight'] if ticker in df.index else 0
-                            weighted_return += ret * weight
+                                ret = (prices_3m.iloc[-1] / prices_3m.iloc[0]) - 1
+                                if direction_map.get(ticker) == 'S':
+                                    ret = -ret
+                                weight = df.loc[ticker, 'Weight'] if ticker in df.index else 0
+                                weighted_return += ret * weight
 
                 if sector_weight_total > 0:
                     sector_returns[sector] = weighted_return / sector_weight_total
@@ -537,6 +540,12 @@ def generate_sector_sunburst_chart(holdings_df):
     df = holdings_df.copy()
     df['sector'] = df.get('sector', pd.Series(index=df.index)).fillna('Others').astype(str)
     df['industry'] = df.get('industry', pd.Series(index=df.index)).fillna('Others').astype(str)
+
+    if 'type' in df.columns:
+        mask_short = df['type'] == 'S'
+        for perf_col in ['ret_1w', 'ret_1m', 'ret_3m', 'ret_1y', 'ret_5y', 'ret_all']:
+            if perf_col in df.columns:
+                df.loc[mask_short, perf_col] = -df.loc[mask_short, perf_col]
 
     period_map = {'1W': 'ret_1w', '1M': 'ret_1m', '3M': 'ret_3m', '1Y': 'ret_1y', '5Y': 'ret_5y', 'All': 'ret_all'}
     available = {k: v for k, v in period_map.items() if v in df.columns}

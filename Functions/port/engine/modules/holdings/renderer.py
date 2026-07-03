@@ -711,7 +711,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Name':
                     html += f'<td class="u-sm">{row["name"]}</td>'
                 elif col == 'Weight (%)':
-                    html += f'<td class="weight-cell">{row["Weight"]:.2f}%</td>'
+                    html += f'<td class="weight-cell">{row["Weight"]*100:.2f}%</td>'
                 elif col == 'PnL (%)':
                     pnl_val = row['pnl_pct']
                     pnl_class = 'pnl-positive' if pnl_val > 0 else 'pnl-negative' if pnl_val < 0 else 'pnl-neutral'

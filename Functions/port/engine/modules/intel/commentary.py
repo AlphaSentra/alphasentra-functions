@@ -1504,6 +1504,9 @@ def _security_composite_flags(holdings_df, prices, returns_series, risk_free_rat
             except Exception:
                 pass
         expected_ret = w1 * ret_12m + w2 * ret_3m + w3 * mean_reversion + w4 * arima_contrib
+        direction = holdings_df.loc[ticker, 'type'] if 'type' in holdings_df.columns else 'L'
+        if direction == 'S':
+            expected_ret = -expected_ret
         std_ret = rets_1y.std()
         vol = std_ret * np.sqrt(252) if std_ret > 0 else np.nan
         common_idx = rets_1y.index.intersection(port_rets_1y.index)

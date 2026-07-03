@@ -165,6 +165,8 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                                            (w2 * ret_3m if pd.notna(ret_3m) else 0.0) + \
                                            (w3 * mean_reversion if pd.notna(mean_reversion) else 0.0) + \
                                            (w4 * arima_contrib if pd.notna(arima_contrib) else 0.0)
+                if direction == "S":
+                    expected_returns[ticker] = -expected_returns[ticker]
             else:
                 expected_returns[ticker] = np.nan
 

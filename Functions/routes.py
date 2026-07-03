@@ -79,6 +79,7 @@ def etoro_portfolio():
                     "positionId": pos.position_id,
                     "instrumentId": pos.instrument_id,
                     "symbol": pos.symbol,
+                    "symbolFull": pos.symbol_full,
                     "displayName": pos.display_name,
                     "openTimestamp": pos.open_timestamp.isoformat() if pos.open_timestamp else None,
                     "openRate": pos.open_rate,

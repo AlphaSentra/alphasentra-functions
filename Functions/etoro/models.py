@@ -19,16 +19,17 @@ class EToroPortfolioPosition:
     instrument_id: str
     symbol: Optional[str]
     display_name: Optional[str]
-    open_timestamp: datetime
-    open_rate: float
-    is_buy: bool
-    leverage: float
-    take_profit_rate: Optional[float]
-    stop_loss_rate: Optional[float]
-    investment_pct: Optional[float]
-    net_profit: Optional[float]
-    realized_credit_pct: Optional[float]
-    unrealized_credit_pct: Optional[float]
+    symbol_full: Optional[str]
+    open_timestamp: Optional[datetime] = None
+    open_rate: Optional[float] = None
+    is_buy: bool = False
+    leverage: float = 1.0
+    take_profit_rate: Optional[float] = None
+    stop_loss_rate: Optional[float] = None
+    investment_pct: Optional[float] = None
+    net_profit: Optional[float] = None
+    realized_credit_pct: Optional[float] = None
+    unrealized_credit_pct: Optional[float] = None
     social_trades: List[EToroSocialTrade] = field(default_factory=list)
 
 

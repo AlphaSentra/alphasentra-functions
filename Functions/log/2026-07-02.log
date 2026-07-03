@@ -1,0 +1,8 @@
+2026-07-02 23:21:45,273 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-02 23:22:23,149 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-02 23:32:56,485 - ERROR - [ERR-0001] - [25b5f9ab] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()
+2026-07-02 23:38:48,002 - ERROR - [ERR-0001] - [9564c3ed] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()
+2026-07-02 23:40:33,951 - ERROR - [ERR-0001] - [3ba6c56b] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()
+2026-07-02 23:43:12,400 - ERROR - [ERR-0001] - [57de090d] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()
+2026-07-02 23:49:12,858 - ERROR - [ERR-0001] - [72018d5c] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()
+2026-07-02 23:50:04,765 - ERROR - [ERR-0001] - [67a6b482] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()

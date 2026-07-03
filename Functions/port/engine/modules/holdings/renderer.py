@@ -92,7 +92,11 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
             avg_price = holdings.loc[ticker].get("avg_price", holdings.loc[ticker].get("average_cost", 0))
             
             if pd.notna(avg_price) and avg_price > 0:
-                pnl = (end_price - avg_price) / avg_price * 100
+                direction = holdings.loc[ticker].get("type", "active")
+                if direction == "S":
+                    pnl = (avg_price - end_price) / avg_price * 100
+                else:
+                    pnl = (end_price - avg_price) / avg_price * 100
             else:
                 pnl = 0.0
             pnl_pcts[ticker] = pnl
@@ -681,11 +685,18 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                         </a>
                     </td>'''
                 elif col == 'Direction':
+                    direction = row.get('type', '')
+                    if direction == 'L':
+                        badge_class, display = 'badge-long', 'L'
+                    elif direction == 'S':
+                        badge_class, display = 'badge-short', 'S'
+                    else:
+                        is_long = row.get('quantity', 0) >= 0
+                        badge_class = 'badge-long' if is_long else 'badge-short'
+                        display = 'L' if is_long else 'S'
                     html += f"""
                     <td class="u-align-center u-valign-middle">
-                        <div class="badge {'badge-long' if row['quantity'] >= 0 else 'badge-short'}">
-                            {'L' if row['quantity'] >= 0 else 'S'}
-                        </div>
+                        <div class="badge {badge_class}">{display}</div>
                     </td>"""
                 elif col == 'Avg Entry':
                     avg_val = row.get('avg_price', row.get('average_cost', 0))

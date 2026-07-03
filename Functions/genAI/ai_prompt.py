@@ -140,7 +140,10 @@ def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
         progress_thread = threading.Thread(target=lambda: _show_progress(stop_flag, batch_mode))
         
         progress_thread.start()
-        
+
+
+        response = ""
+        """
         response = client.models.generate_content(
             model=gemini_model,
             contents=prompt if prompt else "",
@@ -157,7 +160,7 @@ def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
                 ]
             },
         )
-        
+        """
         stop_flag.set()
         progress_thread.join()
         

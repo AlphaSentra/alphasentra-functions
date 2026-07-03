@@ -336,7 +336,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
             momentum_signals[ticker] = "N/A"
             rsis[ticker] = 50.0
             reversal_risks[ticker] = "N/A"
-            perf_metrics[ticker] = {'1w': 0, '1m': 0, '3m': 0}
+            perf_metrics[ticker] = {'1w': 0, '1m': 0, '3m': 0, '1y': 0, '5y': 0, 'all': 0}
             expected_returns[ticker] = np.nan
             z_scores[ticker] = 0.0
             z_score_max_5y[ticker] = np.nan
@@ -700,7 +700,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Name':
                     html += f'<td class="u-sm">{row["name"]}</td>'
                 elif col == 'Weight (%)':
-                    html += f'<td class="weight-cell">{row["Weight"]*100:.2f}%</td>'
+                    html += f'<td class="weight-cell">{row["Weight"]:.2f}%</td>'
                 elif col == 'PnL (%)':
                     pnl_val = row['pnl_pct']
                     pnl_class = 'pnl-positive' if pnl_val > 0 else 'pnl-negative' if pnl_val < 0 else 'pnl-neutral'

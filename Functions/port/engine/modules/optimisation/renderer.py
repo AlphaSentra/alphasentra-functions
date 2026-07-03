@@ -220,14 +220,17 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
     for t in tickers:
         if isinstance(prices_df.columns, pd.MultiIndex):
             if t in prices_df['Close'].columns:
-                latest_prices[t] = prices_df['Close'][t].dropna().iloc[-1]
+                s = prices_df['Close'][t].dropna()
+                latest_prices[t] = s.iloc[-1] if len(s) > 0 else 0.0
             else:
                 latest_prices[t] = 0.0
         elif 'Close' in prices_df.columns:
-            latest_prices[t] = prices_df['Close'].dropna().iloc[-1]
+            s = prices_df['Close'].dropna()
+            latest_prices[t] = s.iloc[-1] if len(s) > 0 else 0.0
         else:
             if t in prices_df.columns:
-                latest_prices[t] = prices_df[t].dropna().iloc[-1]
+                s = prices_df[t].dropna()
+                latest_prices[t] = s.iloc[-1] if len(s) > 0 else 0.0
             else:
                 latest_prices[t] = 0.0
 

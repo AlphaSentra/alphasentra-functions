@@ -95,10 +95,10 @@ class PortfolioAnalyzer:
 
             agg_positions = [
                 pos for pos in portfolio.aggregated_positions
-                if pos.symbol and pos.symbol != "USD=X" and pos.weight > 0.0001
+                if pos.symbol and pos.weight > 0.0001
             ]
             if not agg_positions:
-                logger.warning("eToro portfolio returned no non-cash positions; falling back to transaction mode.")
+                logger.warning("eToro portfolio returned no positions; falling back to transaction mode.")
                 return False
 
             self.transaction_mode = False
@@ -107,8 +107,8 @@ class PortfolioAnalyzer:
             self.portfolio = pd.DataFrame([
                 {
                     "ticker": pos.symbol,
-                    "quantity": pos.weight / 100.0,
-                    "type": "active",
+                    "quantity": pos.weight,            # eToro weight is already a %-point (e.g. 25.0 = 25%)
+                    "type": "L" if pos.trade_direction == "BUY" else "S" if pos.trade_direction == "SELL" else "MIXED",
                     "avg_price": pos.average_entry_price,
                 }
                 for pos in agg_positions
@@ -154,7 +154,7 @@ class PortfolioAnalyzer:
     def _get_tickers(self) -> list:
         """Extract unique tickers from transactions or live eToro portfolio."""
         if self._etoro_portfolio_mode and not self.portfolio.empty:
-            return self.portfolio['ticker'].astype(str).tolist()
+            return [t for t in self.portfolio['ticker'].astype(str).tolist() if t != "USD=X"]
         tickers = self.transactions_df["Ticker"].dropna().unique().astype(str).tolist()
         return tickers
 
@@ -498,12 +498,15 @@ class PortfolioAnalyzer:
             asset_returns=asset_returns
         )
 
-        # Normalize weights and risk contributions to sum to 1
-        weight_sum = self.risk_df['Weight'].sum()
-        if weight_sum > 0:
-            self.risk_df['Weight'] = self.risk_df['Weight'] / weight_sum
-            self.risk_df['Risk Contribution'] = self.risk_df['Risk Contribution'] / weight_sum
-            self.risk_df['% Risk Contribution'] = self.risk_df['% Risk Contribution'] / weight_sum
+        # Normalize weights to sum to 1 only in transaction mode (the computed backtest
+        # weights are fractions). In eToro mode, risk_df is populated verbatim from
+        # get_investor_portfolio which already sums to 100 — re-normalizing would change them.
+        if not self._etoro_portfolio_mode:
+            weight_sum = self.risk_df['Weight'].sum()
+            if weight_sum > 0:
+                self.risk_df['Weight'] = self.risk_df['Weight'] / weight_sum
+                self.risk_df['Risk Contribution'] = self.risk_df['Risk Contribution'] / weight_sum
+                self.risk_df['% Risk Contribution'] = self.risk_df['% Risk Contribution'] / weight_sum
 
     def _get_active_tickers(self) -> list:
         """Get tickers with non-trivial positions at end of period."""
@@ -831,39 +834,31 @@ class PortfolioAnalyzer:
         if self._etoro_portfolio_mode and not self.portfolio.empty:
             portfolio_snapshot = self.portfolio.copy()
 
-            tickers_in_prices = [t for t in portfolio_snapshot['ticker'] if t in self.prices.columns]
-            if not tickers_in_prices:
-                logger.warning("No matching tickers found in price data for eToro portfolio holdings.")
-                self.holdings_table_html = "<p>No current holdings detected.</p>"
-                self.holdings_df = pd.DataFrame()
-                return
+            tickers_all = portfolio_snapshot['ticker'].tolist()
+            tickers_with_prices = [t for t in tickers_all if t in self.prices.columns]
 
-            portfolio_snapshot = portfolio_snapshot[portfolio_snapshot['ticker'].isin(tickers_in_prices)].copy()
-            weight_sum = portfolio_snapshot['quantity'].sum()
-            portfolio_snapshot['norm_weight'] = portfolio_snapshot['quantity'] / weight_sum if weight_sum > 0 else 0.0
+            # Use eToro weights verbatim (already percentage points, e.g. 25.0 = 25%).
+            # Do NOT recalculate / normalize — we want exactly what get_investor_portfolio returned.
+            raw_weights = portfolio_snapshot.set_index('ticker')['quantity']
+            raw_weights = raw_weights.reindex(tickers_all).fillna(0.0)
 
-            active_tickers_list = [t for t in tickers_in_prices if t in self.ts["positions"].columns]
-            if active_tickers_list:
-                temp_risk = calculate_risk_contribution(
-                    self.ts["positions"][active_tickers_list],
-                    self.ts["total"],
-                    asset_returns=self.prices[active_tickers_list].pct_change().dropna()
-                )
-                temp_risk = temp_risk.reindex(tickers_in_prices)
-                temp_risk['Weight'] = portfolio_snapshot.set_index('ticker').loc[tickers_in_prices, 'norm_weight']
-            else:
-                temp_risk = pd.DataFrame({"Weight": portfolio_snapshot.set_index('ticker').loc[tickers_in_prices, 'norm_weight'], "Risk Contribution": 0.0, "% Risk Contribution": 0.0}, index=tickers_in_prices)
+            # Build a minimal risk_df: Weight from eToro, risk metrics zeroed for non-stocks (USD=X etc.)
+            temp_risk = pd.DataFrame({
+                "Weight": raw_weights,
+                "Risk Contribution": 0.0,
+                "% Risk Contribution": 0.0
+            }, index=tickers_all)
 
             temp_portfolio_df = portfolio_snapshot.copy()
-            temp_portfolio_df['quantity'] = temp_portfolio_df['ticker'].map(
-                portfolio_snapshot.set_index('ticker')['norm_weight']
-            )
-            temp_portfolio_df['type'] = 'active'
 
             self.holdings_table_html, self.holdings_df, self.chart_data_json = generate_portfolio_holdings_analysis(
                 temp_risk, self.sector_industry_df, self.prices_full, temp_portfolio_df
             )
             self.charts['chart_data'] = self.chart_data_json
+            # Authoritative source: override risk_df in eToro mode so all downstream
+            # consumers (yield, metrics, pie chart, alerts, sector tables) use the
+            # exact eToro-reported weights, not recomputed backtest weights.
+            self.risk_df = temp_risk.copy()
             self._add_beta_to_holdings()
             return
 

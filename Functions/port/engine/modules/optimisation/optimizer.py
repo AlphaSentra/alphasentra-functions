@@ -24,7 +24,11 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     - Weights sum to 1.0 and are non-negative.
     """
     # 1. Align tickers and data
-    portfolio_tickers = [t for t in portfolio_df['ticker'].tolist() if t in prices_df.columns]
+    # Exclude cash positions (e.g. USD=X) — they have no returns to optimize against.
+    portfolio_tickers = [
+        t for t in portfolio_df['ticker'].tolist()
+        if t in prices_df.columns and t != "USD=X"
+    ]
     if not portfolio_tickers:
         logger.error("No portfolio tickers found in price data. Optimization cannot run.")
         return None

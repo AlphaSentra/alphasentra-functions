@@ -105,6 +105,16 @@ def etoro_portfolio():
                 }
                 for pos in portfolio.positions
             ],
+            "aggregatedPositions": [
+                {
+                    "symbol": agg.symbol,
+                    "weight": agg.weight,
+                    "tradeDirection": agg.trade_direction,
+                    "averageEntryPrice": agg.average_entry_price,
+                    "positionCount": agg.position_count,
+                }
+                for agg in portfolio.aggregated_positions
+            ],
         })
     except Exception as exc:
         return jsonify({"error": str(exc)}), 500

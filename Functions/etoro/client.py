@@ -19,6 +19,7 @@ except ImportError:
 
 from .auth import public_api_session
 from .models import (
+    EToroAggregatedPosition,
     EToroGainHistory,
     EToroGainPoint,
     EToroInvestorPortfolio,
@@ -232,8 +233,55 @@ class ETPublicClient:
                     net_profit=_safe_float(item.get("netProfit")),
                 )
             )
-            
-        return EToroInvestorPortfolio(username=username, positions=positions)
+
+        aggregated: Dict[str, Dict[str, Any]] = {}
+        for pos in positions:
+            sym = pos.symbol or "UNKNOWN"
+            pct = pos.investment_pct or 0.0
+            rate = pos.open_rate or 0.0
+            if sym not in aggregated:
+                aggregated[sym] = {
+                    "weight": 0.0,
+                    "invested": 0.0,
+                    "buy_weight": 0.0,
+                    "sell_weight": 0.0,
+                    "position_count": 0,
+                }
+            entry = aggregated[sym]
+            entry["weight"] += abs(pct)
+            entry["invested"] += pct * rate
+            entry["position_count"] += 1
+            if pos.is_buy:
+                entry["buy_weight"] += abs(pct)
+            else:
+                entry["sell_weight"] += abs(pct)
+
+        aggregated_positions = []
+        for sym, entry in aggregated.items():
+            weight = entry["weight"]
+            buy_weight = entry["buy_weight"]
+            sell_weight = entry["sell_weight"]
+            direction = (
+                "BUY" if buy_weight > sell_weight
+                else "SELL" if sell_weight > buy_weight
+                else "MIXED"
+            )
+            avg_price = (entry["invested"] / weight) if weight else 0.0
+            aggregated_positions.append(
+                EToroAggregatedPosition(
+                    symbol=sym,
+                    weight=weight,
+                    trade_direction=direction,
+                    average_entry_price=avg_price,
+                    position_count=entry["position_count"],
+                )
+            )
+
+        return EToroInvestorPortfolio(
+            username=username,
+            positions=positions,
+            aggregated_positions=aggregated_positions,
+        )
     
     def get_trade_history(
         self,

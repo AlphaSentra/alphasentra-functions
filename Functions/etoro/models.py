@@ -34,9 +34,19 @@ class EToroPortfolioPosition:
 
 
 @dataclass
+class EToroAggregatedPosition:
+    symbol: Optional[str]
+    weight: float
+    trade_direction: str
+    average_entry_price: float
+    position_count: int
+
+
+@dataclass
 class EToroInvestorPortfolio:
     username: str
     positions: List[EToroPortfolioPosition]
+    aggregated_positions: List[EToroAggregatedPosition] = field(default_factory=list)
 
 
 @dataclass

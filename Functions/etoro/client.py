@@ -257,8 +257,10 @@ class ETPublicClient:
                 entry["sell_weight"] += abs(pct)
 
         aggregated_positions = []
+        total_weight = 0.0
         for sym, entry in aggregated.items():
             weight = entry["weight"]
+            total_weight += weight
             buy_weight = entry["buy_weight"]
             sell_weight = entry["sell_weight"]
             direction = (
@@ -274,6 +276,18 @@ class ETPublicClient:
                     trade_direction=direction,
                     average_entry_price=avg_price,
                     position_count=entry["position_count"],
+                )
+            )
+
+        remainder = max(0.0, 100.0 - total_weight)
+        if remainder > 0.0001:
+            aggregated_positions.append(
+                EToroAggregatedPosition(
+                    symbol="USD=X",
+                    weight=remainder,
+                    trade_direction="BUY",
+                    average_entry_price=1.0,
+                    position_count=0,
                 )
             )
 

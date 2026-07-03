@@ -302,6 +302,29 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     if ENABLED_MODULES.get("optimisation", True):
         sub_tab_names.append("optimisation")
 
+    optim_tab_html = None
+    if ENABLED_MODULES.get("optimisation", True):
+        from engine.modules.optimisation.renderer import render_optimisation_tab
+        _benchmark_series = None
+        if price_data is not None and benchmark_ticker:
+            _benchmark_series = price_data[benchmark_ticker]
+        _current_weights_dict = None
+        if holdings_df is not None and 'Weight' in holdings_df.columns:
+            _current_weights_dict = holdings_df['Weight'].to_dict()
+        optim_tab_html = render_optimisation_tab(
+            prices_df=price_data,
+            portfolio_df=portfolio_df,
+            benchmark_series=_benchmark_series,
+            sector_industry_df=sector_industry_df,
+            config=config,
+            current_weights_dict=_current_weights_dict,
+            actual_portfolio_metrics=metrics.get('total'),
+            total_portfolio_value=config.get('DEFAULT_CAPITAL', DEFAULT_CAPITAL),
+            portfolio_total_ts=portfolio_total_ts,
+        )
+        if not optim_tab_html:
+            sub_tab_names = [s for s in sub_tab_names if s != "optimisation"]
+
     if ENABLED_MODULES.get("portfolio", True) and sub_tab_names:
         from engine.modules.holdings.renderer import render_holdings_tab
         from engine.modules.breakdown.renderer import render_breakdown_tab
@@ -329,8 +352,8 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
                 else:
                     tabs_content += '<p>No holdings data available.</p>'
             elif sub == "breakdown":
-                if risk_df is not None and not risk_df.empty:
-                    tabs_content += render_breakdown_tab(
+                if sector_industry_df is not None and not sector_industry_df.empty:
+                    breakdown_html = render_breakdown_tab(
                         risk_contrib=risk_df,
                         sector_industry_df=sector_industry_df,
                         price_data=price_data,
@@ -339,26 +362,32 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
                         include_yield=include_yield,
                         charts=charts,
                     )
+                    if breakdown_html:
+                        tabs_content += breakdown_html
+                    else:
+                        tabs_content += '<p>No breakdown data available.</p>'
                 else:
                     tabs_content += '<p>No breakdown data available.</p>'
             elif sub == "optimisation":
-                benchmark_series = None
+                _benchmark_series = None
                 if price_data is not None and benchmark_ticker:
-                    benchmark_series = price_data[benchmark_ticker]
-                current_weights_dict = None
+                    _benchmark_series = price_data[benchmark_ticker]
+                _current_weights_dict = None
                 if holdings_df is not None and 'Weight' in holdings_df.columns:
-                    current_weights_dict = holdings_df['Weight'].to_dict()
-                tabs_content += render_optimisation_tab(
+                    _current_weights_dict = holdings_df['Weight'].to_dict()
+                rendered = render_optimisation_tab(
                     prices_df=price_data,
                     portfolio_df=portfolio_df,
-                    benchmark_series=benchmark_series,
+                    benchmark_series=_benchmark_series,
                     sector_industry_df=sector_industry_df,
                     config=config,
-                    current_weights_dict=current_weights_dict,
+                    current_weights_dict=_current_weights_dict,
                     actual_portfolio_metrics=metrics.get('total'),
                     total_portfolio_value=config.get('DEFAULT_CAPITAL', DEFAULT_CAPITAL),
                     portfolio_total_ts=portfolio_total_ts,
                 )
+                if rendered:
+                    tabs_content += rendered
             tabs_content += '</div>'
 
         tabs_content += '</div>'

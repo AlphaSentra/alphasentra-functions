@@ -32,17 +32,7 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
     opt_results = optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industry_df, config, current_weights_dict, actual_portfolio_metrics, portfolio_total_ts=portfolio_total_ts)
     
     if not opt_results:
-        # Optimization could not run
-        return """
-        <div id="Optimisation" class="tab-content">
-            <div class="chart-container">
-                <h2>Portfolio Optimisation</h2>
-                <p class="error-message">
-                    Error: Portfolio optimization could not be processed. Please check that you have sufficient historical price data and asset allocations.
-                </p>
-            </div>
-        </div>
-        """
+        return None
 
     tickers = opt_results['tickers']
     solutions = opt_results['solutions']

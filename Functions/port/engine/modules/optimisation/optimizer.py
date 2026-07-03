@@ -201,9 +201,8 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         logger.warning(f"Asset count too large. Reduced minimum position size constraint to {min_position_size:.4%} to ensure mathematical feasibility.")
 
     bounds = []
-    for i, t in enumerate(portfolio_tickers):
-        # Allow both long and short within position limit
-        bounds.append((-pos_limit, pos_limit))
+    for _ in range(num_assets):
+        bounds.append((min_position_size, pos_limit))
 
     relaxed_sector_limits = {}
     for sector, mask in sector_groups.items():
@@ -213,8 +212,10 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
             logger.warning(f"Relaxed sector limit for '{sector}' from {max_sector_size:.2%} to {relaxed_sector_limits[sector]:.2%} to allow optimization degrees of freedom.")
 
     sector_sum = sum(relaxed_sector_limits.values())
-    if sector_sum < 1.20:
-        scale_factor = 1.20 / max(1e-8, sector_sum)
+    has_shorts = bool(np.any(current_weights < 0))
+    required_sum = 1.20 if not has_shorts else max(2.0, abs(float(np.sum(current_weights))) * 2.0)
+    if sector_sum < required_sum:
+        scale_factor = required_sum / max(1e-8, sector_sum)
         for sector in list(relaxed_sector_limits.keys()):
             old_lim = relaxed_sector_limits[sector]
             new_lim = min(1.0, old_lim * scale_factor)
@@ -229,17 +230,12 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     })
 
     for sector, mask in sector_groups.items():
-        pos_mask = mask & (current_weights >= 0)
-        neg_mask = mask & (current_weights < 0)
-        if np.any(pos_mask):
+        has_long_room = bool(np.any(mask))
+        has_short_room = False
+        if has_long_room:
             constraints.append({
                 'type': 'ineq',
-                'fun': lambda w, m=pos_mask, lim=relaxed_sector_limits[sector]: lim - np.sum(w[m])
-            })
-        if np.any(neg_mask):
-            constraints.append({
-                'type': 'ineq',
-                'fun': lambda w, m=neg_mask, lim=relaxed_sector_limits[sector]: lim + np.sum(w[m])
+                'fun': lambda w, m=mask, lim=relaxed_sector_limits[sector]: lim - np.sum(w[m])
             })
 
     # 4. Define performance metrics calculation
@@ -313,14 +309,8 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         # Simultaneously maximize Sharpe, Sortino, and Information ratios (ignoring drawdown)
         return -(sharpe + sortino + ir)
 
-    # Initial guess: signed current weights if available, otherwise equal weighting
-    if np.any(current_weights != 0):
-        w0 = np.array(current_weights, dtype=float)
-        gross = float(np.sum(np.abs(w0)))
-        if gross > 1e-8:
-            w0 = w0 / gross
-    else:
-        w0 = np.ones(num_assets) / num_assets
+    # Initial guess: equal weighting to avoid infeasible signed starting point
+    w0 = np.ones(num_assets) / num_assets
 
     # 6. Run Optimizations
     objectives = {
@@ -351,12 +341,21 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         if not res.success:
             logger.warning(f"Optimization '{name}' did not converge successfully: {res.message}. Using best found.")
             
-        w_opt = res.x
-        w_opt_sum = float(np.sum(w_opt))
-        if w_opt_sum > 1e-8:
-            w_opt = w_opt / w_opt_sum
-        elif w_opt_sum < -1e-8:
-            w_opt = w_opt / abs(w_opt_sum)
+        w_opt = res.x.copy()
+        if not res.success or not np.all(np.isfinite(w_opt)):
+            fallback = current_weights.copy() if np.any(current_weights != 0) else np.ones(num_assets) / num_assets
+            gross = float(np.sum(np.abs(fallback)))
+            if gross > 1e-8:
+                fallback = fallback / gross
+            w_opt = fallback
+        w_opt = np.maximum(w_opt, 0)
+        w_sum = float(np.sum(w_opt))
+        if w_sum > 1e-8:
+            w_opt = w_opt / w_sum
+        elif w_sum < -1e-8:
+            w_opt = w_opt / abs(w_sum)
+        else:
+            w_opt = np.ones(num_assets) / num_assets
 
         # Calculate final metrics for the optimized weights
         sharpe, sortino, ir, max_dd, p_ret, p_std = get_portfolio_metrics(w_opt)
@@ -423,7 +422,7 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     dates_str = [d.strftime('%Y-%m-%d') for d in common_dates]
     bench_cum_wealth = (np.cumprod(1 + bench_rets) * 100.0).tolist()
 
-    return {
+    opt_results = {
         'tickers': portfolio_tickers,
         'solutions': optimized_solutions,
         'sectors': sector_series.tolist(),
@@ -431,3 +430,13 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         'dates': dates_str,
         'benchmark_cum_wealth': bench_cum_wealth
     }
+
+    all_nan = all(
+        not np.isfinite(sol.get('metrics', {}).get('Sharpe Ratio', np.nan))
+        for sol in opt_results['solutions'].values()
+    )
+    if all_nan:
+        logger.error("Optimisation produced no finite metrics; disabling tab.")
+        return None
+
+    return opt_results

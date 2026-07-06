@@ -698,6 +698,44 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         'Beta (1Y Rolling)': beta
     }
     
+    anchor = port.index.max()
+    start_1y = anchor - pd.DateOffset(years=1)
+    port_1y = port.loc[port.index >= start_1y]
+    bench_1y = bench.loc[bench.index >= start_1y]
+    common_1y = port_1y.index.intersection(bench_1y.index)
+    port_1y = port_1y.loc[common_1y]
+    bench_1y = bench_1y.loc[common_1y]
+
+    def _fixed_sharpe(p, b):
+        if len(p) < 2 or p.std() == 0:
+            return np.nan
+        return ((p.mean() - daily_rf) / p.std()) * np.sqrt(252)
+
+    def _fixed_sortino(p):
+        if len(p) < 2:
+            return np.nan
+        downside = p[p < 0]
+        if downside.empty or downside.std() == 0:
+            return np.nan
+        ann_ret = (1 + p).prod() - 1
+        n = len(p)
+        ann_ret = (1 + ann_ret) ** (252 / n) - 1
+        return (ann_ret - risk_free_rate) / (downside.std() * np.sqrt(252))
+
+    def _fixed_ir(p, b):
+        if len(p) < 2:
+            return np.nan
+        excess = p - b
+        if excess.std() == 0:
+            return np.nan
+        return (excess.mean() / excess.std()) * np.sqrt(252)
+
+    fixed_1y = {
+        'Sharpe Ratio': _fixed_sharpe(port_1y, bench_1y),
+        'Sortino Ratio': _fixed_sortino(port_1y),
+        'Information Ratio': _fixed_ir(port_1y, bench_1y),
+    }
+    
     def generate_gauge(series, val, color):
         """Render a Bloomberg-style linear gauge: track bar + zero tick + round marker."""
         try:
@@ -758,10 +796,14 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         except Exception:
             return ""
 
-    def card(label, series_name):
-        series = metrics[series_name]
-        clean = series.dropna()
-        val = clean.iloc[-1] if not clean.empty else np.nan
+    def card(label, series_name, fixed_1y_val=None):
+        if fixed_1y_val is not None and not pd.isna(fixed_1y_val):
+            val = fixed_1y_val
+            series = metrics[series_name]
+        else:
+            series = metrics[series_name]
+            clean = series.dropna()
+            val = clean.iloc[-1] if not clean.empty else np.nan
 
         if np.isnan(val):
             color = NEUTRAL_GRAY
@@ -770,7 +812,8 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         else:
             color = POSITIVE_RETURN_CARD if val >= 0 else NEGATIVE_RETURN_CARD
 
-        gauge_html = generate_gauge(series, val, color)
+        gauge_series = metrics[series_name] if fixed_1y_val is None else series
+        gauge_html = generate_gauge(gauge_series, val, color)
 
         if np.isnan(val):
             val_str = "N/A"
@@ -792,9 +835,9 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
 
     html = f'''
     <div style="display: flex; gap: 10px; margin: 12px 0; font-family: {FONT_PRIMARY};">
-        {card('Sharpe Ratio (1-Yr)', 'Sharpe Ratio')}
-        {card('Sortino Ratio (1-Yr)', 'Sortino Ratio')}
-        {card('Info Ratio (1-Yr)', 'Information Ratio')}
+        {card('Sharpe Ratio (1-Yr)', 'Sharpe Ratio', fixed_1y_val=fixed_1y.get('Sharpe Ratio'))}
+        {card('Sortino Ratio (1-Yr)', 'Sortino Ratio', fixed_1y_val=fixed_1y.get('Sortino Ratio'))}
+        {card('Info Ratio (1-Yr)', 'Information Ratio', fixed_1y_val=fixed_1y.get('Information Ratio'))}
         {card('Alpha (1-Yr)', 'Alpha (%)')}
         {card('Beta (1-Yr)', 'Beta (1Y Rolling)')}
     </div>

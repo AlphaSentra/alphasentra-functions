@@ -353,7 +353,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
                     sector_industry_df=sector_industry_df,
                     config=config,
                     current_weights_dict=current_weights_dict,
-                    actual_portfolio_metrics=metrics.get('total'),
+                    actual_portfolio_metrics=metrics.get('1Y'),
                     total_portfolio_value=config.get('DEFAULT_CAPITAL', DEFAULT_CAPITAL),
                 )
             tabs_content += '</div>'

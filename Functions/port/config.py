@@ -10,7 +10,10 @@ ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 
 # Optimisation default targets
 MAX_POSITION_SIZE = 30.0
+MAX_SHORT_SIZE = 30.0
 MIN_POSITION_SIZE = 0.50
+OPT_LONG_SHORT = False
+OPT_GROSS_EXPOSURE = 2.0
 
 # Default market data provider
 DATA_PROVIDER = "yfinance"

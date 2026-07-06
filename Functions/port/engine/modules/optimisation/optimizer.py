@@ -18,10 +18,7 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     4. Minimum Max Drawdown
     5. Balanced Multi-Objective Solution
 
-    Constraints:
-    - Maximum position size per asset
-    - Maximum sector size per sector
-    - Weights sum to 1.0 and are non-negative.
+    Supports long-only and long-short modes based on config flags.
     """
     # 1. Align tickers and data
     # Exclude cash positions (e.g. USD=X) — they have no returns to optimize against.
@@ -94,15 +91,29 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         min_position_size = max(0.0, max_feasible)
         logger.warning(f"Asset count too large. Reduced minimum position size constraint to {min_position_size:.4%} to ensure mathematical feasibility.")
 
+    long_short = config.get('opt_long_short', False)
+    max_short = config.get('max_short_size', 30.0) / 100.0
+    gross_target = config.get('opt_gross_exposure', 2.0)
+
     bounds = []
-    for _ in range(num_assets):
-        bounds.append((min_position_size, pos_limit))
+    if long_short:
+        for _ in range(num_assets):
+            bounds.append((-max_short, pos_limit))
+    else:
+        for _ in range(num_assets):
+            bounds.append((min_position_size, pos_limit))
 
     constraints = []
-    constraints.append({
-        'type': 'eq',
-        'fun': lambda w: np.sum(w) - 1.0
-    })
+    if long_short:
+        constraints.append({
+            'type': 'eq',
+            'fun': lambda w, gt=gross_target: np.sum(np.abs(w)) - gt
+        })
+    else:
+        constraints.append({
+            'type': 'eq',
+            'fun': lambda w: np.sum(w) - 1.0
+        })
 
     # 4. Define performance metrics calculation
     mean_rets = daily_returns.mean().values
@@ -180,8 +191,14 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         # Simultaneously maximize Sharpe, Sortino, and Information ratios (ignoring drawdown)
         return -(sharpe + sortino + ir)
 
-    # Initial guess: Equal weighting
-    w0 = np.ones(num_assets) / num_assets
+    # Initial guess
+    if long_short:
+        half = num_assets // 2
+        w0 = np.ones(num_assets) * (gross_target / num_assets)
+        if half > 0:
+            w0[half:] = -w0[half:]
+    else:
+        w0 = np.ones(num_assets) / num_assets
 
     # 6. Run Optimizations
     objectives = {
@@ -213,10 +230,18 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
             logger.warning(f"Optimization '{name}' did not converge successfully: {res.message}. Using best found.")
             
         w_opt = res.x
-        w_opt = np.maximum(w_opt, 0)
-        w_sum = np.sum(w_opt)
-        if w_sum > 0:
-            w_opt = w_opt / w_sum
+        if long_short:
+            w_opt = np.clip(w_opt, -max_short, pos_limit)
+            gross = np.sum(np.abs(w_opt))
+            if gross > 1e-8:
+                w_opt = w_opt * (gross_target / gross)
+        else:
+            w_opt = np.maximum(w_opt, 0)
+            w_sum = np.sum(w_opt)
+            if w_sum > 0:
+                w_opt = w_opt / w_sum
+            else:
+                w_opt = np.ones(num_assets) / num_assets
 
         # Calculate final metrics for the optimized weights
         sharpe, sortino, ir, max_dd, p_ret, p_std = get_portfolio_metrics(w_opt)
@@ -260,10 +285,20 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         current_weights[i] = w_dict.get(t, 0.0)
         
     c_sum = np.sum(current_weights)
-    if c_sum > 0:
-        current_weights = current_weights / c_sum
+    if not long_short:
+        if c_sum > 0:
+            current_weights = current_weights / c_sum
+        else:
+            current_weights = np.ones(num_assets) / num_assets
     else:
-        current_weights = np.ones(num_assets) / num_assets
+        gross = np.sum(np.abs(current_weights))
+        if gross > 1e-8:
+            current_weights = current_weights * (gross_target / gross)
+        else:
+            current_weights = np.ones(num_assets) * (gross_target / num_assets)
+            half = num_assets // 2
+            if half > 0:
+                current_weights[half:] = -current_weights[half:]
         
     c_sharpe, c_sortino, c_ir, c_max_dd, c_ret, c_std = get_portfolio_metrics(current_weights)
     c_daily_p_rets = asset_rets_matrix @ current_weights

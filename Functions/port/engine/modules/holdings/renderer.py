@@ -161,10 +161,14 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                     arima_contrib = np.nan
             er_vals = [v for v in [ret_12m, ret_3m, mean_reversion] if pd.notna(v)]
             if er_vals:
-                expected_returns[ticker] = (w1 * ret_12m if pd.notna(ret_12m) else 0.0) + \
-                                           (w2 * ret_3m if pd.notna(ret_3m) else 0.0) + \
-                                           (w3 * mean_reversion if pd.notna(mean_reversion) else 0.0) + \
-                                           (w4 * arima_contrib if pd.notna(arima_contrib) else 0.0)
+                expected_return = (w1 * ret_12m if pd.notna(ret_12m) else 0.0) + \
+                                  (w2 * ret_3m if pd.notna(ret_3m) else 0.0) + \
+                                  (w3 * mean_reversion if pd.notna(mean_reversion) else 0.0) + \
+                                  (w4 * arima_contrib if pd.notna(arima_contrib) else 0.0)
+                direction = holdings.loc[ticker].get("type", "active")
+                if direction == "S":
+                    expected_return = -expected_return
+                expected_returns[ticker] = expected_return
             else:
                 expected_returns[ticker] = np.nan
 

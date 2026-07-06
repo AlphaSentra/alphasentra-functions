@@ -19,12 +19,13 @@ OPT_GROSS_EXPOSURE = 2.0
 DATA_PROVIDER = "yfinance"
 
 # Candidate benchmarks for automatic selection (ordered by preference)
-BENCHMARK_CANDIDATES = ["^AXJO", "^GSPC", "^STOXX50E", "BTC-USD", "^990100-USD-STRD"]
+BENCHMARK_CANDIDATES = ["^AXJO", "^GSPC", "^STOXX50E", "^FTSE", "BTC-USD", "^990100-USD-STRD"]
 
 BENCHMARK_NAMES = {
     "^AXJO": "ASX 200",
     "^GSPC": "S&P 500",
     "^STOXX50E": "Euro Stoxx 50",
+    "^FTSE": "Footsie",
     "BTC-USD": "Bitcoin",
     "^990100-USD-STRD": "MSCI World",
     "ES=F": "S&P 500 Futures",
@@ -38,6 +39,7 @@ MARKET_SUFFIX_MAP = {
     ".F": "EU",
     ".PA": "EU",
     ".MI": "EU",
+    ".L": "UK",
 }
 
 CRYPTO_PREFIXES = ("BTC", "ETH", "BNB", "USDT", "SOL", "XRP")
@@ -46,6 +48,7 @@ MARKET_DEFAULT_BENCHMARK = {
     "AU": "^AXJO",
     "US": "^GSPC",
     "EU": "^STOXX50E",
+    "UK": "^FTSE",
     "CRYPTO": "BTC-USD",
     "OTHER": "^GSPC",
 }

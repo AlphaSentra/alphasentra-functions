@@ -898,6 +898,9 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
                 arima_contrib = np.nan
 
         expected_ret = w1 * ret_12m + w2 * ret_3m + w3 * mean_reversion + w4 * arima_contrib
+        direction = holdings_df.loc[ticker, 'type'] if 'type' in holdings_df.columns else 'active'
+        if direction == 'S':
+            expected_ret = -expected_ret
         std_ret = rets_1y.std()
         
         if std_ret > 0:

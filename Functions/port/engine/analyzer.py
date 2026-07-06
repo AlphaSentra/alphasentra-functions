@@ -860,6 +860,27 @@ class PortfolioAnalyzer:
         # Base charts (risk, correlation, etc.)
         active_tickers = self._get_active_tickers()
         asset_returns = self.prices[active_tickers].pct_change().dropna()
+
+        direction_map = {}
+        if self.holdings_df is not None and not self.holdings_df.empty and 'type' in self.holdings_df.columns:
+            direction_map = self.holdings_df['type'].to_dict()
+
+        direction_map = {t: ('L' if v == 'MIXED' else v) for t, v in direction_map.items()}
+
+        holdings_tickers = set(self.holdings_df.index.tolist()) if self.holdings_df is not None and not self.holdings_df.empty else set()
+        logger.info("Correlation holdings_df columns: %s", self.holdings_df.columns.tolist() if self.holdings_df is not None else None)
+        logger.info("Correlation holdings_df types (normalized): %s", {t: direction_map.get(t) for t in active_tickers if t in direction_map or t in self.prices.columns})
+
+        short_tickers = [t for t in active_tickers if direction_map.get(t) == 'S']
+        logger.info("Correlation short tickers: %s", short_tickers)
+
+        flipped = []
+        for ticker in active_tickers:
+            if ticker in asset_returns.columns and direction_map.get(ticker) == 'S':
+                asset_returns[ticker] = -asset_returns[ticker]
+                flipped.append(ticker)
+        logger.info("Correlation flipped tickers: %s", flipped)
+
         corr = asset_returns.corr()
         corr = corr.mask(np.eye(len(corr), dtype=bool), -2.0)
         base_charts = generate_charts(

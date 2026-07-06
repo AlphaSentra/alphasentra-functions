@@ -4,6 +4,7 @@ Core portfolio functions engine.
 
 
 import logging
+import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
@@ -78,15 +79,16 @@ class PortfolioAnalyzer:
         logger.info(f"Loaded {len(self.transactions_df)} transactions.")
         logger.info("Portfolio/transactions loaded successfully.")
 
-    def _load_etoro_portfolio_path(self) -> bool:
+    def _load_etoro_portfolio_path(self) -> Tuple[bool, Optional[str]]:
         """
         Attempt to build the analysis from the live eToro portfolio API
         instead of running the full transaction-mode backtest.
 
-        Returns True if the fast-path was successfully loaded, False otherwise.
+        Returns:
+            Tuple of (success, error_message). If success is True, error_message is None.
         """
         if not self.etoro_username:
-            return False
+            return False, "eToro username is not configured."
 
         try:
             from Functions.etoro.client import get_public_client_from_env
@@ -98,8 +100,7 @@ class PortfolioAnalyzer:
                 if pos.symbol and pos.weight > 0.0001
             ]
             if not agg_positions:
-                logger.warning("eToro portfolio returned no positions; falling back to transaction mode.")
-                return False
+                return False, "eToro portfolio returned no positions; falling back to transaction mode."
 
             self.transaction_mode = False
             self._etoro_portfolio_mode = True
@@ -107,7 +108,7 @@ class PortfolioAnalyzer:
             self.portfolio = pd.DataFrame([
                 {
                     "ticker": pos.symbol,
-                    "quantity": pos.weight,            # eToro weight is already a %-point (e.g. 25.0 = 25%)
+                    "quantity": pos.weight,
                     "type": "L" if pos.trade_direction == "BUY" else "S" if pos.trade_direction == "SELL" else "MIXED",
                     "avg_price": pos.average_entry_price,
                 }
@@ -136,11 +137,12 @@ class PortfolioAnalyzer:
                     self.benchmark_ticker = candidates[0]
                     logger.info("Default benchmark set to %s based on eToro portfolio market exposure.", self.benchmark_ticker)
             logger.info("eToro live portfolio fast-path loaded successfully (%d positions).", len(agg_positions))
-            return True
+            return True, None
 
         except Exception as exc:
+            error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
             logger.warning("eToro portfolio fast-path failed (%s); falling back to transaction mode.", exc)
-            return False
+            return False, error_msg
 
     def parse_inception_date(self) -> Optional[datetime]:
         """Determine inception date. When eToro is active, defer to the API timeseries."""
@@ -167,7 +169,10 @@ class PortfolioAnalyzer:
     def _infer_primary_market(self, tickers: list) -> str:
         """Infer the portfolio's primary market from weights and suffix rules.
 
-        Returns one of: 'AU', 'US', 'EU', 'CRYPTO', 'OTHER'.
+        Returns one of the keys from ``MARKET_SUFFIX_MAP`` values, ``CRYPTO``,
+        or ``OTHER`` when no region dominates. The vote buckets are derived
+        dynamically from ``MARKET_SUFFIX_MAP`` so adding new suffixes does
+        not require code changes here.
         """
         weights: dict[str, float] = {}
         total_weight = 0.0
@@ -194,7 +199,8 @@ class PortfolioAnalyzer:
         suffix_map = MARKET_SUFFIX_MAP
         crypto_prefixes = CRYPTO_PREFIXES
 
-        votes = {"AU": 0.0, "US": 0.0, "EU": 0.0, "CRYPTO": 0.0, "OTHER": 0.0}
+        vote_buckets = set(suffix_map.values()) | {"CRYPTO", "OTHER"}
+        votes = {market: 0.0 for market in vote_buckets}
         for ticker, w in weights.items():
             upper = ticker.upper()
             market = "OTHER"
@@ -1133,11 +1139,12 @@ class PortfolioAnalyzer:
         """
         # Step-by-step execution
         if self.etoro_username:
-            portfolio_loaded = self._load_etoro_portfolio_path()
+            portfolio_loaded, portfolio_error = self._load_etoro_portfolio_path()
             if not portfolio_loaded:
                 raise PortfolioFunctionsError(
                     "eToro portfolio failed to load and transaction mode is disabled. "
-                    "Check ETORO_PUBLIC_KEY/ETORO_PRIVATE_KEY env vars and the eToro username."
+                    "Check ETORO_PUBLIC_KEY/ETORO_PRIVATE_KEY env vars and the eToro username. "
+                    f"Details: {portfolio_error}"
                 )
 
             self.start = self.parse_inception_date()

@@ -25,7 +25,7 @@ BENCHMARK_NAMES = {
     "^AXJO": "ASX 200",
     "^GSPC": "S&P 500",
     "^STOXX50E": "Euro Stoxx 50",
-    "^FTSE": "Footsie",
+    "^FTSE": "FTSE 100",
     "BTC-USD": "Bitcoin",
     "^990100-USD-STRD": "MSCI World",
     "ES=F": "S&P 500 Futures",

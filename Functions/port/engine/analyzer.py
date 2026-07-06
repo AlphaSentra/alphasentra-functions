@@ -115,7 +115,7 @@ class PortfolioAnalyzer:
             ])
 
             self.start = self.parse_inception_date()
-            effective_start = self.start or (self.end - timedelta(days=365 * 5))
+            effective_start = self.start or datetime(2000, 1, 1)
 
             tickers = self.portfolio['ticker'].tolist()
             tickers = self._prepare_tickers(tickers)
@@ -147,8 +147,8 @@ class PortfolioAnalyzer:
             logger.info(f"Using earliest transaction date {start.strftime('%Y-%m-%d')} as inception date.")
             return start
 
-        start = self.end - timedelta(days=5*365)
-        logger.info(f"Using default inception date (5 years ago): {start.strftime('%Y-%m-%d')}")
+        start = datetime(2000, 1, 1)
+        logger.info(f"Using default inception date: {start.strftime('%Y-%m-%d')}")
         return start
 
     def _get_tickers(self) -> list:
@@ -355,12 +355,16 @@ class PortfolioAnalyzer:
             raise PortfolioFunctionsError(f"Insufficient eToro gain data for {self.etoro_username}")
 
         if hasattr(self, "prices") and not self.prices.empty and isinstance(self.prices.index, pd.DatetimeIndex):
-            trading_index = self.prices.index
+            mask = (self.prices.index >= gains_df.index.min()) & (self.prices.index <= gains_df.index.max())
+            trading_index = self.prices.index[mask]
         else:
             trading_index = pd.bdate_range(start=gains_df.index.min(), end=gains_df.index.max())
 
-        gains_df = gains_df.reindex(trading_index).ffill()
-        gains_df = gains_df.dropna(subset=["gain"])
+        if trading_index.empty:
+            trading_index = pd.bdate_range(start=gains_df.index.min(), end=gains_df.index.max())
+
+        gains_df = gains_df.reindex(trading_index)
+        gains_df["gain"] = gains_df["gain"].fillna(0).ffill()
 
         logger.info(
             "eToro gains after alignment: %d points, index %s to %s",
@@ -410,6 +414,7 @@ class PortfolioAnalyzer:
     def build_timeseries(self) -> None:
         """Build portfolio timeseries from transactions or live eToro portfolio."""
         if self._etoro_portfolio_mode and not self.portfolio.empty:
+            etoro_total = self.ts.get("total")
             portfolio_for_ts = self.portfolio.copy()
             self.ts = build_portfolio_timeseries(
                 self.prices,
@@ -417,6 +422,8 @@ class PortfolioAnalyzer:
                 transactions_df=None,
                 total_investment=self.initial_investment,
             )
+            if etoro_total is not None and not etoro_total.empty:
+                self.ts["total"] = etoro_total
             self.holdings_df = self.portfolio.copy()
             self.holdings_df['quantity'] = self.portfolio['quantity']
             self.holdings_df['avg_price'] = self.portfolio.get('avg_price', pd.Series(dtype=float))
@@ -455,14 +462,20 @@ class PortfolioAnalyzer:
 
         self.benchmark = self.prices[self.benchmark_ticker].pct_change().dropna()
 
-        # Align benchmark to portfolio total index
-        common_index = self.ts["total"].index.intersection(self.benchmark.index)
-        if not common_index.empty:
-            initial_reference = self.initial_investment
-            cumulative_benchmark_returns = (1 + self.benchmark.loc[common_index]).cumprod()
-            self.ts["benchmark"] = cumulative_benchmark_returns * initial_reference
+        if not self.benchmark.empty and not self.ts["total"].empty:
+            portfolio_start = self.ts["total"].first_valid_index()
+            if portfolio_start is not None:
+                benchmark_for_chart = self.benchmark[self.benchmark.index >= portfolio_start]
+                if not benchmark_for_chart.empty:
+                    initial_reference = self.initial_investment
+                    cumulative_benchmark_returns = (1 + benchmark_for_chart).cumprod()
+                    self.ts["benchmark"] = cumulative_benchmark_returns * initial_reference
+                else:
+                    self.ts["benchmark"] = pd.Series(dtype='float64')
+            else:
+                self.ts["benchmark"] = pd.Series(dtype='float64')
         else:
-            logger.warning("No common dates between portfolio and benchmark. Benchmark series not added.")
+            logger.warning("Benchmark series is empty. Benchmark not added.")
             self.ts["benchmark"] = pd.Series(dtype='float64')
 
     # ----------------------------------------------------------------------
@@ -977,12 +990,16 @@ class PortfolioAnalyzer:
         if self.etoro_username:
             portfolio_loaded = self._load_etoro_portfolio_path()
             if not portfolio_loaded:
-                self.load_data()
-                self.start = self.parse_inception_date()
-                logger.info("Falling back to transaction-mode backtest.")
-        else:
-            self.load_data()
+                raise PortfolioFunctionsError(
+                    "eToro portfolio failed to load and transaction mode is disabled. "
+                    "Check ETORO_PUBLIC_KEY/ETORO_PRIVATE_KEY env vars and the eToro username."
+                )
+
             self.start = self.parse_inception_date()
+        else:
+            raise PortfolioFunctionsError(
+                "eToro username is required. Transaction mode has been disabled."
+            )
 
         logger.info("Starting portfolio functions...")
         if not self._etoro_portfolio_mode or self.prices.empty:

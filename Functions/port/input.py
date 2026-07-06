@@ -58,6 +58,8 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
     <form method="POST">
         <label for="etoro_username">eToro Username:</label>
         <input type="text" id="etoro_username" name="etoro_username" required autofocus>
+        <label for="benchmark_ticker">Benchmark Ticker (optional):</label>
+        <input type="text" id="benchmark_ticker" name="benchmark_ticker" placeholder="e.g. ^GSPC">
         <button type="submit">Generate Report</button>
     </form>
 </body>
@@ -68,12 +70,15 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
 
 def handle_portfolio_input():
     etoro_username = ""
+    benchmark_ticker = ""
     if request.method == "POST":
         etoro_username = request.form.get("etoro_username", "").strip()
+        benchmark_ticker = request.form.get("benchmark_ticker", "").strip()
     elif request.args.get("etoro_username"):
         etoro_username = request.args.get("etoro_username", "").strip()
+        benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
     if etoro_username:
         from Functions.port.main import generate_portfolio_html
-        return generate_portfolio_html(etoro_username=etoro_username)
+        return generate_portfolio_html(etoro_username=etoro_username, benchmark_ticker=benchmark_ticker)
     return PORTFOLIO_FORM_HTML

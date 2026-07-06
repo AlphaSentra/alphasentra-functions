@@ -129,6 +129,12 @@ class PortfolioAnalyzer:
                 self.prices = self.prices_full[["Close"]]
 
             self._etoro_portfolio_raw = portfolio
+            if 'benchmark_ticker' not in self.config:
+                candidates = getattr(self, '_ordered_benchmark_candidates', BENCHMARK_CANDIDATES)
+                candidates = [c for c in candidates if c in self.prices.columns]
+                if candidates:
+                    self.benchmark_ticker = candidates[0]
+                    logger.info("Default benchmark set to %s based on eToro portfolio market exposure.", self.benchmark_ticker)
             logger.info("eToro live portfolio fast-path loaded successfully (%d positions).", len(agg_positions))
             return True
 
@@ -158,6 +164,58 @@ class PortfolioAnalyzer:
         tickers = self.transactions_df["Ticker"].dropna().unique().astype(str).tolist()
         return tickers
 
+    def _infer_primary_market(self, tickers: list) -> str:
+        """Infer the portfolio's primary market from weights and suffix rules.
+
+        Returns one of: 'AU', 'US', 'EU', 'CRYPTO', 'OTHER'.
+        """
+        weights: dict[str, float] = {}
+        total_weight = 0.0
+
+        if self._etoro_portfolio_mode and not self.portfolio.empty:
+            for _, row in self.portfolio.iterrows():
+                t = str(row.get('ticker', ''))
+                w = float(row.get('weight', 0) or 0)
+                if t in tickers:
+                    weights[t] = weights.get(t, 0.0) + w
+                    total_weight += w
+        elif not self.transactions_df.empty:
+            counts = self.transactions_df['Ticker'].value_counts()
+            for t in tickers:
+                w = float(counts.get(t, 1))
+                weights[t] = weights.get(t, 0.0) + w
+                total_weight += w
+
+        if total_weight == 0:
+            for t in tickers:
+                weights[t] = 1.0
+                total_weight += 1.0
+
+        suffix_map = {
+            ".AX": "AU", ".ASX": "AU",
+            ".US": "US",
+            ".DE": "EU", ".F": "EU", ".PA": "EU", ".MI": "EU",
+            ".L": "OTHER",
+        }
+        crypto_prefixes = ("BTC", "ETH", "BNB", "USDT", "SOL", "XRP")
+
+        votes = {"AU": 0.0, "US": 0.0, "EU": 0.0, "CRYPTO": 0.0, "OTHER": 0.0}
+        for ticker, w in weights.items():
+            upper = ticker.upper()
+            market = "OTHER"
+            for suffix, region in suffix_map.items():
+                if upper.endswith(suffix):
+                    market = region
+                    break
+            if any(upper.startswith(p) for p in crypto_prefixes):
+                market = "CRYPTO"
+            votes[market] += w / total_weight
+
+        best_market = max(votes, key=votes.get)
+        if votes[best_market] < 0.5:
+            return "OTHER"
+        return best_market
+
     # ----------------------------------------------------------------------
     # Market Data Processing
     # ----------------------------------------------------------------------
@@ -165,6 +223,10 @@ class PortfolioAnalyzer:
     def _prepare_tickers(self, tickers: list) -> list:
         """
         Normalize ticker format and add benchmarks.
+
+        Reorders benchmark candidates based on the portfolio's actual market
+        exposure so the default fallback is regionally appropriate rather than
+        always ASX 200.
 
         Args:
             tickers: List of ticker symbols.
@@ -174,7 +236,23 @@ class PortfolioAnalyzer:
         """
         tickers = [t.replace(".ASX", ".AX") if isinstance(t, str) and t.endswith(".ASX") else t for t in tickers]
 
-        for candidate in BENCHMARK_CANDIDATES:
+        candidates = list(BENCHMARK_CANDIDATES)
+        if candidates:
+            primary_market = self._infer_primary_market(tickers)
+            market_defaults = {
+                "AU": "^AXJO",
+                "US": "^GSPC",
+                "EU": "^STOXX50E",
+                "CRYPTO": "BTC-USD",
+                "OTHER": "^GSPC",
+            }
+            default_candidate = market_defaults.get(primary_market, "^GSPC")
+            candidates.sort(key=lambda c: (0 if c == default_candidate else 1, BENCHMARK_CANDIDATES.index(c)))
+            logger.info("Portfolio primary market inferred as %s; default benchmark candidate=%s.", primary_market, default_candidate)
+
+        self._ordered_benchmark_candidates = candidates
+
+        for candidate in candidates:
             if candidate not in tickers:
                 tickers.append(candidate)
 
@@ -200,6 +278,13 @@ class PortfolioAnalyzer:
         else:
             self.prices = self.prices_full[["Close"]]
 
+        if 'benchmark_ticker' not in self.config:
+            candidates = getattr(self, '_ordered_benchmark_candidates', BENCHMARK_CANDIDATES)
+            candidates = [c for c in candidates if c in self.prices.columns]
+            if candidates:
+                self.benchmark_ticker = candidates[0]
+                logger.info("Default benchmark set to %s based on portfolio market exposure.", self.benchmark_ticker)
+
         relisted_tickers = detect_relisted_stocks(self.prices)
         if relisted_tickers:
             logger.info(f"Excluding re-listed/crashed stocks: {relisted_tickers}")
@@ -217,14 +302,17 @@ class PortfolioAnalyzer:
         if R² computation is not possible.
         """
         if not hasattr(self, 'prices') or self.prices.empty:
+            logger.warning("Benchmark auto-selection skipped: prices empty or missing.")
             return
 
         portfolio_tickers = [t for t in self._get_tickers() if t in self.prices.columns]
         if not portfolio_tickers:
+            logger.warning("Benchmark auto-selection skipped: no portfolio tickers in price data.")
             return
 
         portfolio_returns = self.prices[portfolio_tickers].pct_change().dropna()
         if portfolio_returns.empty:
+            logger.warning("Benchmark auto-selection skipped: portfolio returns empty after dropna.")
             return
 
         best_benchmark = None
@@ -251,42 +339,58 @@ class PortfolioAnalyzer:
         benchmark_returns_lookup = {}
         for candidate in candidates:
             if candidate not in self.prices.columns:
+                logger.info("Benchmark candidate %s skipped: not in price columns.", candidate)
                 continue
             benchmark_returns_lookup[candidate] = self.prices[candidate].pct_change().dropna()
 
+        MIN_ALIGN = 10
+
         if etoro_path and etoro_total_returns is not None:
+            candidate_scores = []
             for candidate, benchmark_returns in benchmark_returns_lookup.items():
                 if benchmark_returns.empty or benchmark_returns.std() == 0:
+                    logger.info("Benchmark candidate %s skipped: empty or zero-std returns.", candidate)
                     continue
                 aligned = pd.concat([etoro_total_returns, benchmark_returns], axis=1).dropna()
-                if len(aligned) < 20:
+                if len(aligned) < MIN_ALIGN:
+                    logger.info("Benchmark candidate %s skipped: only %d aligned rows (need %d).", candidate, len(aligned), MIN_ALIGN)
                     continue
                 x = aligned.iloc[:, 1].values
                 y = aligned.iloc[:, 0].values
                 if np.std(x) == 0 or np.std(y) == 0:
+                    logger.info("Benchmark candidate %s skipped: zero std in aligned series.", candidate)
                     continue
                 corr = np.corrcoef(x, y)[0, 1]
-                if not np.isnan(corr):
-                    score = corr ** 2
-                    logger.info("Benchmark candidate %s R² vs eToro total: %.4f", candidate, score)
-                    if score > best_score:
-                        best_score = score
-                        best_benchmark = candidate
+                if np.isnan(corr):
+                    logger.info("Benchmark candidate %s skipped: NaN correlation.", candidate)
+                    continue
+                score = corr ** 2
+                weight = min(len(aligned) / 60.0, 1.0)
+                candidate_scores.append((score, weight, candidate))
+                logger.info("Benchmark candidate %s R² vs eToro total: %.4f (weight=%.2f)", candidate, score, weight)
+
+            if candidate_scores:
+                candidate_scores.sort(key=lambda t: t[0] * t[1], reverse=True)
+                best_score, best_weight, best_benchmark = candidate_scores[0]
+                logger.info("Selected benchmark %s via eToro path (weighted score=%.4f).", best_benchmark, best_score * best_weight)
         else:
-            portfolio_tickers = [t for t in self._get_tickers() if t in self.prices.columns]
-            if portfolio_tickers and not self.prices.empty:
-                portfolio_returns = self.prices[portfolio_tickers].pct_change().dropna()
+            portfolio_tickers_in_prices = [t for t in portfolio_tickers if t in self.prices.columns]
+            if portfolio_tickers_in_prices and not self.prices.empty:
+                portfolio_returns = self.prices[portfolio_tickers_in_prices].pct_change().dropna()
                 if not portfolio_returns.empty:
+                    candidate_scores = []
                     for candidate in candidates:
                         if candidate not in self.prices.columns:
                             continue
                         benchmark_returns = self.prices[candidate].pct_change().dropna()
                         if benchmark_returns.empty or benchmark_returns.std() == 0:
+                            logger.info("Benchmark candidate %s skipped: empty or zero-std returns.", candidate)
                             continue
                         r2_scores = []
+                        weights = []
                         for ticker in portfolio_returns.columns:
                             aligned = pd.concat([portfolio_returns[ticker], benchmark_returns], axis=1).dropna()
-                            if len(aligned) < 20:
+                            if len(aligned) < MIN_ALIGN:
                                 continue
                             x = aligned.iloc[:, 1].values
                             y = aligned.iloc[:, 0].values
@@ -294,21 +398,61 @@ class PortfolioAnalyzer:
                                 continue
                             corr = np.corrcoef(x, y)[0, 1]
                             if not np.isnan(corr):
-                                r2_scores.append(corr ** 2)
+                                r2 = corr ** 2
+                                w = min(len(aligned) / 40.0, 1.0)
+                                r2_scores.append(r2 * w)
+                                weights.append(w)
                         if r2_scores:
-                            score = float(np.mean(r2_scores))
-                            if score > best_score:
-                                best_score = score
-                                best_benchmark = candidate
+                            score = float(sum(r2_scores) / sum(weights)) if sum(weights) > 0 else 0.0
+                            candidate_scores.append((score, candidate))
+                            logger.info("Benchmark candidate %s weighted R²: %.4f (from %d tickers).", candidate, score, len(r2_scores))
+                        else:
+                            logger.info("Benchmark candidate %s skipped: no tickers with sufficient aligned data.", candidate)
+
+                    if candidate_scores:
+                        candidate_scores.sort(key=lambda t: t[0], reverse=True)
+                        best_score, best_benchmark = candidate_scores[0]
+                        logger.info("Selected benchmark %s via per-stock weighted R² (score=%.3f).", best_benchmark, best_score)
 
         if best_benchmark:
             self.benchmark_ticker = best_benchmark
             logger.info(f"Selected benchmark {best_benchmark} (score={best_score:.3f})")
         else:
+            selection_failure_reason = "no R² data available"
+            if portfolio_tickers and not portfolio_returns.empty:
+                combined_returns = portfolio_returns.mean(axis=1)
+                for candidate in candidates:
+                    if candidate not in self.prices.columns:
+                        continue
+                    benchmark_returns = self.prices[candidate].pct_change().dropna()
+                    if benchmark_returns.empty or benchmark_returns.std() == 0:
+                        continue
+                    aligned = pd.concat([combined_returns, benchmark_returns], axis=1).dropna()
+                    if len(aligned) < MIN_ALIGN:
+                        continue
+                    x = aligned.iloc[:, 1].values
+                    y = aligned.iloc[:, 0].values
+                    if np.std(x) == 0 or np.std(y) == 0:
+                        continue
+                    corr = np.corrcoef(x, y)[0, 1]
+                    if not np.isnan(corr):
+                        score = corr ** 2
+                        logger.info(
+                            "Selected benchmark %s via combined portfolio correlation (score=%.3f); per-stock R² insufficient.",
+                            candidate, score,
+                        )
+                        self.benchmark_ticker = candidate
+                        return
+
+                selection_failure_reason = "combined portfolio correlation insufficient"
+
             for candidate in candidates:
                 if candidate in self.prices.columns:
                     self.benchmark_ticker = candidate
-                    logger.warning(f"No R² data available, falling back to {candidate}")
+                    logger.warning(
+                        "Auto-selection failed (%s) Falling back to %s.",
+                        selection_failure_reason, candidate,
+                    )
                     break
 
     def _load_etoro_gain_timeseries(self) -> tuple[pd.Series, pd.Series]:

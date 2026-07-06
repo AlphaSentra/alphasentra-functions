@@ -25,7 +25,7 @@ from engine.modeling.risk import (
     generate_shock_curve_chart,
     generate_shock_contribution_table
 )
-from config import BENCHMARK_CANDIDATES, ENABLED_MODULES
+from config import BENCHMARK_CANDIDATES, ENABLED_MODULES, MARKET_SUFFIX_MAP, CRYPTO_PREFIXES, MARKET_DEFAULT_BENCHMARK
 
 logger = logging.getLogger(__name__)
 
@@ -191,13 +191,8 @@ class PortfolioAnalyzer:
                 weights[t] = 1.0
                 total_weight += 1.0
 
-        suffix_map = {
-            ".AX": "AU", ".ASX": "AU",
-            ".US": "US",
-            ".DE": "EU", ".F": "EU", ".PA": "EU", ".MI": "EU",
-            ".L": "OTHER",
-        }
-        crypto_prefixes = ("BTC", "ETH", "BNB", "USDT", "SOL", "XRP")
+        suffix_map = MARKET_SUFFIX_MAP
+        crypto_prefixes = CRYPTO_PREFIXES
 
         votes = {"AU": 0.0, "US": 0.0, "EU": 0.0, "CRYPTO": 0.0, "OTHER": 0.0}
         for ticker, w in weights.items():
@@ -239,13 +234,7 @@ class PortfolioAnalyzer:
         candidates = list(BENCHMARK_CANDIDATES)
         if candidates:
             primary_market = self._infer_primary_market(tickers)
-            market_defaults = {
-                "AU": "^AXJO",
-                "US": "^GSPC",
-                "EU": "^STOXX50E",
-                "CRYPTO": "BTC-USD",
-                "OTHER": "^GSPC",
-            }
+            market_defaults = MARKET_DEFAULT_BENCHMARK
             default_candidate = market_defaults.get(primary_market, "^GSPC")
             candidates.sort(key=lambda c: (0 if c == default_candidate else 1, BENCHMARK_CANDIDATES.index(c)))
             logger.info("Portfolio primary market inferred as %s; default benchmark candidate=%s.", primary_market, default_candidate)

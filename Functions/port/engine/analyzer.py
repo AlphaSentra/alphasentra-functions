@@ -1088,13 +1088,25 @@ class PortfolioAnalyzer:
         asset_returns = asset_returns[mask]
         # Compute individual betas via regression
         betas = {}
-        if market_proxy.std() > 0:
+        valid_obs = market_proxy.notna().sum()
+        market_std = market_proxy.std()
+        if valid_obs >= 2 and not np.isnan(market_std) and market_std > 0:
             for col in asset_returns.columns:
-                slope, _, _, _, _ = linregress(market_proxy, asset_returns[col])
-                betas[col] = max(-5.0, min(5.0, slope))
+                y = asset_returns[col]
+                if y.notna().sum() >= 2:
+                    try:
+                        slope, _, _, _, _ = linregress(market_proxy, y)
+                        if not np.isnan(slope):
+                            betas[col] = max(-5.0, min(5.0, slope))
+                        else:
+                            betas[col] = np.nan
+                    except Exception:
+                        betas[col] = np.nan
+                else:
+                    betas[col] = np.nan
         else:
             for col in asset_returns.columns:
-                betas[col] = 1.0
+                betas[col] = np.nan
         # Assign to holdings_df; tickers not in betas dict will get NaN
         self.holdings_df['beta'] = pd.Series(betas)
 

@@ -284,26 +284,31 @@ def calculate_shock_contributions(holdings_df, shock_level=-0.20):
     """
     Calculates shock contribution metrics for each holding.
 
+    Rows with missing beta are included using a neutral beta of 1.0 for the
+    contribution math, but the original NaN is preserved so the table can
+    distinguish between estimated and unknown betas.
+
     Args:
         holdings_df: DataFrame with 'Weight' and 'beta' columns
         shock_level: Market shock level (default -0.20 for -20%)
 
     Returns:
-        DataFrame with columns: shock_contrib, pct_of_loss, sorted ascending by shock_contrib
+        DataFrame with columns: beta, shock_contrib, pct_of_loss, sorted ascending by shock_contrib
     """
     if holdings_df is None or holdings_df.empty or 'beta' not in holdings_df.columns or 'Weight' not in holdings_df.columns:
         return None
 
-    df = holdings_df[holdings_df['beta'].notna() & (holdings_df['Weight'] > 0)].copy()
+    df = holdings_df[holdings_df['Weight'] > 0].copy()
     if df.empty:
         return None
 
-    df['shock_contrib'] = df['Weight'] * df['beta'] * shock_level
+    df['_calc_beta'] = df['beta'].fillna(0.0)
+    df['shock_contrib'] = df['Weight'] * df['_calc_beta'] * shock_level
     total_shock_impact = df['shock_contrib'].sum()
     if total_shock_impact != 0:
         df['pct_of_loss'] = (df['shock_contrib'] / total_shock_impact) * 100
     else:
-        df['pct_of_loss'] = 0
+        df['pct_of_loss'] = 0.0
 
     # Sort ascending: most negative (largest contributor to loss) first
     return df.sort_values('shock_contrib', ascending=True)
@@ -324,14 +329,21 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         str: HTML string for the contribution table.
     """
     weights = risk_contrib["Weight"]
+    holdings_for_contrib = pd.DataFrame({'Weight': weights})
 
-    # Prepare holdings DataFrame with Weight and beta for contribution calculation
+    # Use precomputed betas when available; otherwise all NaN to trigger on-the-fly computation
     if betas is not None:
-        # Use provided betas
-        holdings_for_contrib = pd.DataFrame({'Weight': weights})
-        holdings_for_contrib['beta'] = betas
+        holdings_for_contrib['beta'] = betas.reindex(weights.index)
     else:
-        # Compute betas from asset_returns and benchmark_returns
+        holdings_for_contrib['beta'] = np.nan
+
+    # Compute missing betas from asset_returns if possible
+    missing_mask = holdings_for_contrib['beta'].isna()
+    if (
+        missing_mask.any()
+        and asset_returns is not None
+        and not asset_returns.empty
+    ):
         if benchmark_returns is not None:
             market_proxy = benchmark_returns.reindex(asset_returns.index)
             mask = market_proxy.notna()
@@ -341,19 +353,29 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
             market_proxy = asset_returns.mean(axis=1)
             aligned_asset_returns = asset_returns
 
-        asset_betas = {}
-        if market_proxy.std() > 0:
-            for col in aligned_asset_returns.columns:
-                slope, _, _, _, _ = stats.linregress(market_proxy, aligned_asset_returns[col])
-                asset_betas[col] = max(-5.0, min(5.0, slope))
+        valid_obs = market_proxy.notna().sum()
+        market_std = market_proxy.std()
+        if valid_obs >= 2 and not np.isnan(market_std) and market_std > 0:
+            for ticker in holdings_for_contrib.index[missing_mask]:
+                if ticker in aligned_asset_returns.columns:
+                    y = aligned_asset_returns[ticker]
+                    if y.notna().sum() >= 2:
+                        try:
+                            slope, _, _, _, _ = stats.linregress(market_proxy, y)
+                            if not np.isnan(slope):
+                                holdings_for_contrib.loc[ticker, 'beta'] = max(-5.0, min(5.0, slope))
+                            else:
+                                holdings_for_contrib.loc[ticker, 'beta'] = 0.0
+                        except Exception:
+                            holdings_for_contrib.loc[ticker, 'beta'] = 0.0
+                    else:
+                        holdings_for_contrib.loc[ticker, 'beta'] = 0.0
+                else:
+                    holdings_for_contrib.loc[ticker, 'beta'] = 0.0
         else:
-            for col in aligned_asset_returns.columns:
-                asset_betas[col] = 1.0
+            for ticker in holdings_for_contrib.index[missing_mask]:
+                holdings_for_contrib.loc[ticker, 'beta'] = 0.0
 
-        holdings_for_contrib = pd.DataFrame({'Weight': weights})
-        holdings_for_contrib['beta'] = [asset_betas.get(t, np.nan) for t in weights.index]
-
-    # Use shared calculation to get contributions sorted by shock_contrib ascending
     contrib_df = calculate_shock_contributions(holdings_for_contrib, shock_level)
     if contrib_df is None or contrib_df.empty:
         return "<p>Insufficient data for shock contribution analysis.</p>"
@@ -378,8 +400,12 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         pct_of_loss = row['pct_of_loss']
         bar_width = min(100, abs(pct_of_loss) * 2)
         
-        # Determine color class based on sign of pct_of_loss
-        # Negative = hedging/reducing total loss (green), Positive = contributing to loss (red)
+        beta_val = row['beta']
+        if pd.isna(beta_val):
+            beta_cell = '0.00'
+        else:
+            beta_cell = f'{beta_val:.2f}'
+        
         color_class = 'text-success-dark' if pct_of_loss < 0 else 'text-danger-dark'
         bg_class = 'bar-success' if pct_of_loss < 0 else 'bar-danger'
 
@@ -387,7 +413,7 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
             <tr>
                 <td class="u-bold">{ticker}</td>
                 <td class="u-align-right">{row['Weight']*100:.2f}%</td>
-                <td class="u-align-center">{row['beta']:.2f}</td>
+                <td class="u-align-center">{beta_cell}</td>
                 <td class="u-align-right">
                     <span class="{color_class} u-bold">
                         {row['shock_contrib']*100:+.2f}%

@@ -29,13 +29,28 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
     Returns:
         str: HTML string representing the generated Plotly chart.
     """
-    # Merge holdings with risk contribution to get the % Risk Contribution
-    plot_df = holdings_df.merge(risk_contrib[['% Risk Contribution']], left_index=True, right_index=True, how='left')
+    if holdings_df is None or holdings_df.empty:
+        return "<p>No Z-Score data available.</p>"
 
-    # Ensure % Risk Contribution is positive for bubble size (risk can't be negative in this context usually)
-    plot_df['Abs Risk Contrib'] = plot_df['% Risk Contribution'].fillna(0).abs() * 100
+    plot_df = holdings_df.copy()
 
-    # Define color column based on Z-Score
+    if risk_contrib is not None and not risk_contrib.empty and '% Risk Contribution' in risk_contrib.columns:
+        plot_df = plot_df.merge(risk_contrib[['% Risk Contribution']], left_index=True, right_index=True, how='left')
+    else:
+        plot_df['% Risk Contribution'] = np.nan
+
+    plot_df['% Risk Contribution'] = plot_df['% Risk Contribution'].fillna(0)
+
+    if plot_df['% Risk Contribution'].abs().sum() == 0 and 'Weight' in plot_df.columns:
+        plot_df['Abs Risk Contrib'] = plot_df['Weight'] * 100
+    else:
+        plot_df['Abs Risk Contrib'] = plot_df['% Risk Contribution'].abs() * 100
+
+    plot_df.loc[plot_df['Abs Risk Contrib'] <= 0, 'Abs Risk Contrib'] = 1.0
+
+    if 'z_score' not in plot_df.columns or plot_df['z_score'].isna().all():
+        return "<p>No Z-Score data available.</p>"
+
     plot_df['Z-Score Sentiment'] = plot_df['z_score'].apply(lambda x: 'Positive Z-Score' if x > 0 else 'Negative Z-Score')
 
     fig = px.scatter(

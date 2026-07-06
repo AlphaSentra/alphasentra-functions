@@ -128,21 +128,22 @@
 {% if charts["zscore_scatter"] is defined %}
 <div class="chart-container">
      <h2>Z-Score Analysis Scatter Plot</h2>
-     <p>Insights into the risk-weighting of each position relative to its statistical Z-score (1-year historical mean). Bubble size represents the percentage risk contribution to the total portfolio volatility.</p>
+     <p>Strategy-aware view of each position's Z-Score relative to its weight and portfolio risk contribution. Bubble size represents the percentage risk contribution. Colors distinguish long vs short direction and overbought vs oversold regime.</p>
      <div class="bg-info-box">
          <h4 class="m-t-0">How to interpret this:</h4>
          <ul class="m-b-0">
-             <li><strong>Z-Score (X-Axis):</strong> Measures how many standard deviations the current price is from its 1-year historical mean. Z-Score &gt; 2.0 indicates statistically overbought/expensive territory; Z-Score &lt; -2.0 indicates statistically oversold/cheap territory. Values between -2 and +2 are within normal historical ranges.</li>
-             <li><strong>Bubble Size:</strong> Represents each position's contribution to overall portfolio volatility. Larger bubbles indicate the position contributes more to total portfolio risk. A large bubble at an extreme Z-Score signals a large, statistically atypical position that may warrant rebalancing.</li>
-             <li><strong>Quadrant Analysis:</strong>
+             <li><strong>Z-Score (X-Axis):</strong> Number of standard deviations the current price is from its 1-year historical mean. Z-Score &gt; 2.0 = overbought/expensive; Z-Score &lt; -2.0 = oversold/cheap. Values between -2 and +2 are within normal ranges.</li>
+             <li><strong>Bubble Size:</strong> Each position's contribution to overall portfolio volatility. Larger bubbles = larger risk footprint.</li>
+             <li><strong>Direction × Regime (Color):</strong>
                  <ul class="m-t-6">
-                     <li><strong>Top-Right (High Z, Large Bubble):</strong> Overbought large-risk positions — candidates for profit-taking or hedging.</li>
-                     <li><strong>Top-Left (High Z, Small Bubble):</strong> Overbought but low-risk — minor concern, may hold for momentum.</li>
-                     <li><strong>Bottom-Left (Low Z, Small Bubble):</strong> Oversold low-risk — potential small add opportunities if fundamentals are sound.</li>
-                     <li><strong>Bottom-Right (Low Z, Large Bubble):</strong> Oversold high-risk — potential value opportunity if risk is acceptable, or avoid if fundamental deterioration is suspected.</li>
+                     <li><strong>Long · Overbought (Red):</strong> Long positions in expensive territory. Consider trimming or hedging.</li>
+                     <li><strong>Long · Oversold (Green):</strong> Long positions in cheap territory. Potential add opportunities if fundamentals support.</li>
+                     <li><strong>Short · Overbought (Blue):</strong> Short positions in expensive territory. Short thesis is working; monitor for squeeze risk.</li>
+                     <li><strong>Short · Oversold (Orange):</strong> Short positions in cheap territory. Short is against-the-grain; elevated squeeze risk.</li>
                  </ul>
              </li>
-             <li><strong>Outlier Detection:</strong> Positions far from the origin (0,0) are statistical outliers. Those with both extreme Z-Scores and large bubble sizes represent concentrated, atypical risk exposures that diverge significantly from historical norms.</li>
+             <li><strong>Weight (Y-Axis):</strong> Portfolio weight. In backtest mode, short weights are negative (below axis); in live/eToro mode, weights are shown as positive allocations and direction is indicated by color.</li>
+             <li><strong>Outlier Detection:</strong> Positions far from the origin (0,0) with large bubble sizes are concentrated, atypical exposures that diverge from historical norms.</li>
          </ul>
      </div>
      <div class="w-100 overflow-hidden">

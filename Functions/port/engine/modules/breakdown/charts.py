@@ -51,7 +51,26 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
     if 'z_score' not in plot_df.columns or plot_df['z_score'].isna().all():
         return "<p>No Z-Score data available.</p>"
 
-    plot_df['Z-Score Sentiment'] = plot_df['z_score'].apply(lambda x: 'Positive Z-Score' if x > 0 else 'Negative Z-Score')
+    def _is_short(row):
+        t = str(row.get('type', '')).strip()
+        if t == 'S':
+            return True
+        q = row.get('quantity', 0)
+        if pd.notna(q) and q < 0:
+            return True
+        return False
+
+    plot_df['Direction'] = plot_df.apply(lambda row: 'Short' if _is_short(row) else 'Long', axis=1)
+    plot_df['Z-Score Zone'] = plot_df['z_score'].apply(lambda x: 'Overbought' if x >= 0 else 'Oversold')
+    plot_df['Strategy Signal'] = plot_df['Direction'] + ' · ' + plot_df['Z-Score Zone']
+
+    color_map = {
+        'Long · Overbought': BREAKDOWN_NEGATIVE_RED,
+        'Long · Oversold': BREAKDOWN_POSITIVE_GREEN,
+        'Short · Overbought': BREAKDOWN_NEUTRAL_BLUE,
+        'Short · Oversold': BREAKDOWN_NEUTRAL_ORANGE,
+    }
+    plot_df['Strategy Signal'] = plot_df['Strategy Signal'].apply(lambda s: s if s in color_map else 'Long · Overbought')
 
     fig = px.scatter(
         plot_df,
@@ -59,16 +78,14 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
         y="Weight",
         size="Abs Risk Contrib",
         size_max=60,
-        color="Z-Score Sentiment",
-        color_discrete_map={
-            'Positive Z-Score': POSITIVE_RETURN_CARD,
-            'Negative Z-Score': NEGATIVE_RETURN_CARD
-        },
+        color="Strategy Signal",
+        color_discrete_map=color_map,
         hover_name=plot_df.index,
         hover_data={
             "z_score": ":.2f",
             "Weight": ":.2%",
             "% Risk Contribution": ":.2%",
+            "Direction": True,
             "name": True
         },
         title="Portfolio Z-Score Analysis (Weight vs. Z-Score)",
@@ -80,17 +97,24 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
         height=450
     )
 
-    # Format Y axis as percentage
-    fig.update_layout(yaxis_tickformat=".1%")
-
     fig.update_layout(
         plot_bgcolor=BG_CHART,
         paper_bgcolor=BG_CHART,
         title_font=dict(color=TEXT_MUTED),
         font=dict(color=TEXT_PRIMARY),
-        legend_font=dict(color=TEXT_MUTED),
-        legend_title_font=dict(color=TEXT_MUTED),
+        legend_title_text="Position",
+        legend=dict(
+            title_font=dict(color=TEXT_PRIMARY),
+            font=dict(color=TEXT_PRIMARY),
+            bgcolor="rgba(0,0,0,0)",
+            itemsizing='constant',
+            itemwidth=40,
+            traceorder='normal'
+        ),
+        legend_font=dict(color=TEXT_PRIMARY),
+        legend_title_font=dict(color=TEXT_PRIMARY),
         margin=dict(l=60, r=50, t=60, b=50),
+        yaxis_tickformat=".1%",
         xaxis=dict(
             autorange=True,
             zeroline=True,
@@ -110,10 +134,14 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
         )
     )
 
-    # Add vertical lines at Z-Score = -2, 0, 2 for reference
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
     fig.add_vline(x=2, line_dash="dot", line_color=BREAKDOWN_NEGATIVE_RED, opacity=0.3)
     fig.add_vline(x=-2, line_dash="dot", line_color=BREAKDOWN_POSITIVE_GREEN, opacity=0.3)
+
+    fig.update_layout(shapes=[
+        dict(type="rect", xref="x", yref="paper", x0=0, x1=2, y0=0, y1=1, fillcolor=BREAKDOWN_POSITIVE_GREEN, opacity=0.03, line_width=0),
+        dict(type="rect", xref="x", yref="paper", x0=-2, x1=0, y0=0, y1=1, fillcolor=BREAKDOWN_NEGATIVE_RED, opacity=0.03, line_width=0),
+    ])
 
     return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 

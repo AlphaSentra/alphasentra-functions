@@ -9,11 +9,7 @@ REPORT_LOGO_SRC = "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/i
 ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 
 # Optimisation default targets
-SHARPE_TARGET = 1.0
-SORTINO_TARGET = 1.5
-IR_TARGET = 0.5
-MAX_POSITION_SIZE = 20.0
-MAX_SECTOR_SIZE = 30.0
+MAX_POSITION_SIZE = 30.0
 MIN_POSITION_SIZE = 0.50
 
 # Default market data provider

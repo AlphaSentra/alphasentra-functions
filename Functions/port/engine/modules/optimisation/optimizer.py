@@ -34,8 +34,18 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         return None
 
     # Calculate returns
-    daily_returns = prices_df[portfolio_tickers].pct_change().dropna()
-    daily_benchmark = benchmark_series.pct_change().dropna()
+    daily_returns = prices_df[portfolio_tickers].pct_change()
+    daily_returns = daily_returns.replace([np.inf, -np.inf], np.nan)
+    daily_returns = daily_returns.dropna(axis=1, how='all')
+    daily_returns = daily_returns.dropna(how='any')
+    portfolio_tickers = daily_returns.columns.tolist()
+    if not portfolio_tickers:
+        logger.error("No portfolio tickers with valid return data. Optimization cannot run.")
+        return None
+    
+    daily_benchmark = pd.Series(dtype=float)
+    if benchmark_series is not None:
+        daily_benchmark = benchmark_series.pct_change().replace([np.inf, -np.inf], np.nan).dropna()
     
     # Align dates
     common_dates = daily_returns.index.intersection(daily_benchmark.index)
@@ -46,8 +56,14 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
         if anchor is not None and not pd.isnull(anchor):
             start_date = anchor - pd.DateOffset(years=1)
             one_year_dates = common_dates[common_dates >= start_date]
-            common_dates = one_year_dates[-252:]
-            
+            sliced_dates = one_year_dates[-252:]
+            if len(sliced_dates) > 0:
+                common_dates = sliced_dates
+                
+    if len(common_dates) < 2:
+        logger.error(f"Insufficient aligned data points ({len(common_dates)}) for optimization. Need at least 2.")
+        return None
+                
     daily_returns = daily_returns.loc[common_dates]
     daily_benchmark = daily_benchmark.loc[common_dates]
     
@@ -82,35 +98,11 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     for _ in range(num_assets):
         bounds.append((min_position_size, pos_limit))
 
-    relaxed_sector_limits = {}
-    for sector, mask in sector_groups.items():
-        min_required_for_sector = 1.0 if np.sum(mask) == num_assets else 0.0
-        relaxed_sector_limits[sector] = min(1.0, max(max_sector_size, min_required_for_sector + 0.05))
-        if relaxed_sector_limits[sector] > max_sector_size:
-            logger.warning(f"Relaxed sector limit for '{sector}' from {max_sector_size:.2%} to {relaxed_sector_limits[sector]:.2%} to allow optimization degrees of freedom.")
-
-    sector_sum = sum(relaxed_sector_limits.values())
-    if sector_sum < 1.20:
-        scale_factor = 1.20 / max(1e-8, sector_sum)
-        for sector in list(relaxed_sector_limits.keys()):
-            old_lim = relaxed_sector_limits[sector]
-            new_lim = min(1.0, old_lim * scale_factor)
-            relaxed_sector_limits[sector] = new_lim
-            if new_lim > old_lim:
-                logger.warning(f"Proportionally relaxed sector limit for '{sector}' from {old_lim:.2%} to {new_lim:.2%} to ensure feasibility.")
-
     constraints = []
     constraints.append({
         'type': 'eq',
         'fun': lambda w: np.sum(w) - 1.0
     })
-
-    for sector, mask in sector_groups.items():
-        limit = relaxed_sector_limits[sector]
-        constraints.append({
-            'type': 'ineq',
-            'fun': lambda w, m=mask, lim=limit: lim - np.sum(w[m])
-        })
 
     # 4. Define performance metrics calculation
     mean_rets = daily_returns.mean().values

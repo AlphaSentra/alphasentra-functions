@@ -20,40 +20,47 @@ from config import (
 )
 
 
-def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_free_rate=0.02, window=252):
+def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365):
     """
     Generates a line chart of rolling Sharpe, Sortino, and Information Ratios.
+    Uses the same calendar-day window as the Rolling Metrics History table.
     """
-    if returns_series is None or len(returns_series) < window + 10:
+    if returns_series is None or len(returns_series) < calendar_days + 10:
         return "<p>Insufficient data for rolling metrics chart.</p>"
 
     daily_rf = (1 + risk_free_rate) ** (1/252) - 1
     
     # Calculate rolling Sharpe
-    rolling_mean = returns_series.rolling(window=window).mean()
-    rolling_std = returns_series.rolling(window=window).std()
+    rolling_mean = returns_series.rolling(window=f'{calendar_days}D').mean()
+    rolling_std = returns_series.rolling(window=f'{calendar_days}D').std()
     rolling_sharpe = ((rolling_mean - daily_rf) / rolling_std) * np.sqrt(252)
+    rolling_sharpe = rolling_sharpe.where(returns_series.rolling(window=f'{calendar_days}D').count() >= 60)
     
-    # Calculate rolling Sortino
+    # Calculate rolling Sortino (annualized to match table)
     def sortino_rolling(window_returns):
+        n = len(window_returns)
+        if n < 60:
+            return np.nan
         downside = window_returns[window_returns < 0]
         downside_std = downside.std()
         if pd.isna(downside_std) or downside_std == 0:
             return np.nan
         ann_ret = (1 + window_returns).prod() - 1
+        ann_ret = (1 + ann_ret) ** (252 / n) - 1
         return (ann_ret - risk_free_rate) / (downside_std * np.sqrt(252))
 
-    rolling_sortino = returns_series.rolling(window=window).apply(sortino_rolling, raw=False)
+    rolling_sortino = returns_series.rolling(window=f'{calendar_days}D').apply(sortino_rolling, raw=False)
     
     # Calculate rolling Information Ratio
     rolling_ir = pd.Series(index=returns_series.index, dtype=float)
     if benchmark_returns is not None and not benchmark_returns.empty:
         common_idx = returns_series.index.intersection(benchmark_returns.index)
-        if len(common_idx) > window:
+        if len(common_idx) > calendar_days:
             excess = (returns_series.loc[common_idx] - benchmark_returns.loc[common_idx]).dropna()
-            rolling_excess_mean = excess.rolling(window=window).mean()
-            rolling_excess_std = excess.rolling(window=window).std()
+            rolling_excess_mean = excess.rolling(window=f'{calendar_days}D').mean()
+            rolling_excess_std = excess.rolling(window=f'{calendar_days}D').std()
             rolling_ir = (rolling_excess_mean / rolling_excess_std) * np.sqrt(252)
+            rolling_ir = rolling_ir.where(excess.rolling(window=f'{calendar_days}D').count() >= 60)
 
     fig = go.Figure()
 
@@ -451,13 +458,16 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     port_rolling_std = port.rolling(window=f'{calendar_days}D').std()
     
     sharpe = ((port_rolling_mean - daily_rf) / port_rolling_std) * np.sqrt(252)
+    sharpe = sharpe.where(port.rolling(window=f'{calendar_days}D').count() >= 60)
 
     def sortino_rolling(w):
+        n = len(w)
+        if n < 60:
+            return np.nan
         downside = w[w < 0]
         downside_std = downside.std()
         if pd.isna(downside_std) or downside_std == 0:
             return np.nan
-        n = len(w)
         ann_ret = (1 + w).prod() - 1
         ann_ret = (1 + ann_ret) ** (252 / n) - 1
         return (ann_ret - risk_free_rate) / (downside_std * np.sqrt(252))
@@ -468,6 +478,7 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     rolling_excess_mean = excess.rolling(window=f'{calendar_days}D').mean()
     rolling_excess_std = excess.rolling(window=f'{calendar_days}D').std()
     ir = (rolling_excess_mean / rolling_excess_std) * np.sqrt(252)
+    ir = ir.where(excess.rolling(window=f'{calendar_days}D').count() >= 60)
 
     cov_pb = port.rolling(window=f'{calendar_days}D').cov(bench)
     var_b = bench.rolling(window=f'{calendar_days}D').var()

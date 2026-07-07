@@ -772,7 +772,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Current Ratio':
                     cr_val = row.get('current_ratio', np.nan)
                     if pd.notna(cr_val) and cr_val != 0:
-                        cr_class = 'val-low' if cr_val > 1.5 else 'val-high' if cr_val < 1.0 else ''
+                        cr_class = 'val-low' if cr_val > 1.0 else 'val-high' if cr_val < 1.0 else ''
                         html += f'<td class="u-align-center u-valign-middle"><div class="val-chip {cr_class}">{cr_val:.2f}</div></td>'
                     else:
                         html += '<td>-</td>'
@@ -834,11 +834,11 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Est. OS Z-Score':
                     val = row.get('z_score_min_5y', np.nan)
                     if pd.notna(val):
-                        color = ZSCORE_OVERSOLD if val < -1.5 else ZSCORE_OVERBOUGHT if val > 1.5 else ZSCORE_NEUTRAL
+                        color = ZSCORE_OVERSOLD if val < -1.0 else ZSCORE_OVERBOUGHT if val > 1.0 else ZSCORE_NEUTRAL
                         html += f'''
                         <td class="u-align-center u-valign-middle">
                             <div class="stdev-wrap">
-                                <div class="stdev-value {'negative' if val < -1.5 else 'positive' if val > 1.5 else ''}" style="color: {color};">
+                                <div class="stdev-value {'negative' if val < -1.0 else 'positive' if val > 1.0 else ''}" style="color: {color};">
                                     {val:+.2f}
                                 </div>
                                 <div class="stdev-label">STDEV</div>
@@ -849,11 +849,11 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Current Z-Score':
                     val = row.get('z_score', np.nan)
                     if pd.notna(val):
-                        color = ZSCORE_OVERSOLD if val < -1.5 else ZSCORE_OVERBOUGHT if val > 1.5 else ZSCORE_NEUTRAL
+                        color = ZSCORE_OVERSOLD if val < -1.0 else ZSCORE_OVERBOUGHT if val > 1.0 else ZSCORE_NEUTRAL
                         html += f'''
                         <td class="u-align-center u-valign-middle">
                             <div class="stdev-wrap">
-                                <div class="stdev-value {'negative' if val < -1.5 else 'positive' if val > 1.5 else ''}" style="color: {color};">
+                                <div class="stdev-value {'negative' if val < -1.0 else 'positive' if val > 1.0 else ''}" style="color: {color};">
                                     {val:+.2f}
                                 </div>
                                 <div class="stdev-label">STDEV</div>
@@ -864,7 +864,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                 elif col == 'Est. OB Z-Score':
                     val = row.get('z_score_max_5y', np.nan)
                     if pd.notna(val):
-                        color = ZSCORE_OVERSOLD if val < -1.5 else ZSCORE_OVERBOUGHT if val > 1.5 else ZSCORE_NEUTRAL
+                        color = ZSCORE_OVERSOLD if val < -1.0 else ZSCORE_OVERBOUGHT if val > 1.0 else ZSCORE_NEUTRAL
                         html += f'''
                         <td class="u-align-center u-valign-middle">
                             <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; min-height: 50px;">
@@ -1152,13 +1152,15 @@ def render_holdings_tab(risk_contrib, sector_industry_df, price_data, portfolio_
     """
     Renders the Holdings tab HTML block.
     """
-    html_table, holdings_df, chart_data_json = generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price_data, portfolio_df)
-    
-    # Prepare charts dictionary for the template
     if charts is None:
         charts = {}
-    charts['holdings_table'] = html_table
-    charts['chart_data'] = chart_data_json
+    
+    if 'holdings_table' not in charts or 'chart_data' not in charts:
+        html_table, holdings_df, chart_data_json = generate_portfolio_holdings_analysis(
+            risk_contrib, sector_industry_df, price_data, portfolio_df
+        )
+        charts['holdings_table'] = html_table
+        charts['chart_data'] = chart_data_json
 
     template_path = os.path.join(os.path.dirname(__file__), "template.html")
     with open(template_path, "r", encoding="utf-8") as f:

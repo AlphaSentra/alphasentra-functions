@@ -903,6 +903,7 @@ class PortfolioAnalyzer:
                 logger.info("Generating portfolio holdings analysis...")
                 self._generate_holdings_table()
                 charts["holdings_table"] = self.holdings_table_html
+                charts["chart_data"] = self.chart_data_json
 
             logger.info("Generating Z-Score scatter plot...")
             charts["zscore_scatter"] = generate_zscore_scatter_plot(self.holdings_df, self.risk_df)
@@ -912,6 +913,7 @@ class PortfolioAnalyzer:
             logger.info("Generating portfolio holdings analysis...")
             self._generate_holdings_table()
             charts["holdings_table"] = self.holdings_table_html
+            charts["chart_data"] = self.chart_data_json
 
         if ENABLED_MODULES.get("holdings", True):
             charts["sector_sunburst"] = generate_sector_sunburst_chart(self.holdings_df)

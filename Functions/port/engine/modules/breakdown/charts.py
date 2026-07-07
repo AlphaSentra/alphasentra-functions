@@ -61,14 +61,25 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
         return False
 
     plot_df['Direction'] = plot_df.apply(lambda row: 'Short' if _is_short(row) else 'Long', axis=1)
-    plot_df['Z-Score Zone'] = plot_df['z_score'].apply(lambda x: 'Overbought' if x >= 0 else 'Oversold')
+
+    def _classify_zscore_zone(x):
+        if x >= 1:
+            return 'Overbought'
+        elif x <= -1:
+            return 'Oversold'
+        else:
+            return 'Neutral'
+
+    plot_df['Z-Score Zone'] = plot_df['z_score'].apply(_classify_zscore_zone)
     plot_df['Strategy Signal'] = plot_df['Direction'] + ' · ' + plot_df['Z-Score Zone']
 
     color_map = {
         'Long · Overbought': BREAKDOWN_NEGATIVE_RED,
         'Long · Oversold': BREAKDOWN_POSITIVE_GREEN,
+        'Long · Neutral': NEUTRAL_GRAY,
         'Short · Overbought': BREAKDOWN_NEUTRAL_BLUE,
         'Short · Oversold': BREAKDOWN_NEUTRAL_ORANGE,
+        'Short · Neutral': NEUTRAL_GRAY,
     }
     plot_df['Strategy Signal'] = plot_df['Strategy Signal'].apply(lambda s: s if s in color_map else 'Long · Overbought')
 
@@ -135,12 +146,12 @@ def generate_zscore_scatter_plot(holdings_df, risk_contrib):
     )
 
     fig.add_vline(x=0, line_dash="dash", line_color="gray", opacity=0.5)
-    fig.add_vline(x=2, line_dash="dot", line_color=BREAKDOWN_NEGATIVE_RED, opacity=0.3)
-    fig.add_vline(x=-2, line_dash="dot", line_color=BREAKDOWN_POSITIVE_GREEN, opacity=0.3)
+    fig.add_vline(x=1, line_dash="dot", line_color=BREAKDOWN_NEGATIVE_RED, opacity=0.3)
+    fig.add_vline(x=-1, line_dash="dot", line_color=BREAKDOWN_POSITIVE_GREEN, opacity=0.3)
 
     fig.update_layout(shapes=[
-        dict(type="rect", xref="x", yref="paper", x0=0, x1=2, y0=0, y1=1, fillcolor=BREAKDOWN_POSITIVE_GREEN, opacity=0.03, line_width=0),
-        dict(type="rect", xref="x", yref="paper", x0=-2, x1=0, y0=0, y1=1, fillcolor=BREAKDOWN_NEGATIVE_RED, opacity=0.03, line_width=0),
+        dict(type="rect", xref="x", yref="paper", x0=-1, x1=0, y0=0, y1=1, fillcolor=BREAKDOWN_POSITIVE_GREEN, opacity=0.03, line_width=0),
+        dict(type="rect", xref="x", yref="paper", x0=0, x1=1, y0=0, y1=1, fillcolor=BREAKDOWN_NEGATIVE_RED, opacity=0.03, line_width=0),
     ])
 
     return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})

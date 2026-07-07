@@ -126,11 +126,23 @@ def generate_risk_metrics_strip(metrics, total_series=None, ts_data=None):
                 if len(common_index) >= 30:
                     port_ret_aligned = portfolio_returns.loc[common_index]
                     bench_ret_aligned = benchmark_returns.loc[common_index]
-                    
-                    # Calculate rolling beta (1Y rolling ~ 252 trading days)
-                    rolling_cov = port_ret_aligned.rolling(window=252).cov(bench_ret_aligned)
-                    rolling_var_bench = bench_ret_aligned.rolling(window=252).var()
-                    rolling_beta = rolling_cov / rolling_var_bench
+
+                    def _rolling_beta_calendar_day(i):
+                        end = port_ret_aligned.index[i]
+                        start = end - pd.DateOffset(days=365)
+                        window_p = port_ret_aligned.loc[start:end]
+                        window_b = bench_ret_aligned.loc[start:end]
+                        window_p = window_p.tail(252)
+                        window_b = window_b.tail(252)
+                        if len(window_p) < 2:
+                            return np.nan
+                        cov = window_p.cov(window_b)
+                        var_b = window_b.var()
+                        return cov / var_b if var_b != 0 else np.nan
+
+                    rolling_beta = port_ret_aligned.expanding().apply(
+                        lambda i: _rolling_beta_calendar_day(i[-1]), raw=False
+                    )
                     
                     # Drop NaN values
                     rolling_beta = rolling_beta.dropna()

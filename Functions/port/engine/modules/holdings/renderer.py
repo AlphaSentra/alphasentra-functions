@@ -126,12 +126,18 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
             
             # Performance metrics
             p_current = ticker_prices.iloc[-1]
-            p_1w = ticker_prices.iloc[-min(len(ticker_prices), 6)] # 5 sessions ago
-            p_1m = ticker_prices.iloc[-min(len(ticker_prices), 22)] # 21 sessions ago
-            p_3m = ticker_prices.iloc[-min(len(ticker_prices), 64)] # 63 sessions ago
-            p_1y = ticker_prices.iloc[-min(len(ticker_prices), 252)] # ~1Y
-            p_5y = ticker_prices.iloc[-min(len(ticker_prices), 1260)] # ~5Y
-            p_all = ticker_prices.iloc[0] # inception
+            now = ticker_prices.index[-1]
+            p_1w = ticker_prices[ticker_prices.index >= now - pd.Timedelta(days=7)]
+            p_1m = ticker_prices[ticker_prices.index >= now - pd.DateOffset(months=1)]
+            p_3m = ticker_prices[ticker_prices.index >= now - pd.DateOffset(months=3)]
+            p_1y = ticker_prices[ticker_prices.index >= now - pd.DateOffset(years=1)]
+            p_5y = ticker_prices[ticker_prices.index >= now - pd.DateOffset(years=5)]
+            p_1w = p_1w.iloc[0] if not p_1w.empty else ticker_prices.iloc[0]
+            p_1m = p_1m.iloc[0] if not p_1m.empty else ticker_prices.iloc[0]
+            p_3m = p_3m.iloc[0] if not p_3m.empty else ticker_prices.iloc[0]
+            p_1y = p_1y.iloc[0] if not p_1y.empty else ticker_prices.iloc[0]
+            p_5y = p_5y.iloc[0] if not p_5y.empty else ticker_prices.iloc[0]
+            p_all = ticker_prices.iloc[0]
             
             ret_1w = (p_current / p_1w - 1)
             ret_1m = (p_current / p_1m - 1)

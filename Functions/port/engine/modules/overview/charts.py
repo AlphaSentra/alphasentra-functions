@@ -391,6 +391,12 @@ def generate_advances_declines_charts(holdings_df):
     df = holdings_df.copy()
     df['label'] = df.get('name', df.index.to_series()).fillna(df.index.to_series())
 
+    if 'type' in df.columns:
+        mask_short = df['type'] == 'S'
+        for perf_col in ['ret_1w', 'ret_1m', 'ret_3m', 'ret_1y', 'ret_5y', 'ret_all']:
+            if perf_col in df.columns:
+                df.loc[mask_short, perf_col] = -df.loc[mask_short, perf_col]
+
     period_map = {'1W': 'ret_1w', '1M': 'ret_1m', '3M': 'ret_3m', '1Y': 'ret_1y', '5Y': 'ret_5y', 'All': 'ret_all'}
     available = {k: v for k, v in period_map.items() if v in df.columns}
     if not available:

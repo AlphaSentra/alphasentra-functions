@@ -288,8 +288,14 @@ def calculate_shock_contributions(holdings_df, shock_level=-0.20):
     contribution math, but the original NaN is preserved so the table can
     distinguish between estimated and unknown betas.
 
+    Short positions are handled by flipping the sign of their contribution:
+    a short with positive beta contributes POSITIVELY to a market crash
+    (it hedges the portfolio), while a short with negative beta contributes
+    negatively (it amplifies the crash).
+
     Args:
-        holdings_df: DataFrame with 'Weight' and 'beta' columns
+        holdings_df: DataFrame with 'Weight' and 'beta' columns, and optionally
+                     'direction_sign' (+1 for long, -1 for short).
         shock_level: Market shock level (default -0.20 for -20%)
 
     Returns:
@@ -303,7 +309,8 @@ def calculate_shock_contributions(holdings_df, shock_level=-0.20):
         return None
 
     df['_calc_beta'] = df['beta'].fillna(0.0)
-    df['shock_contrib'] = df['Weight'] * df['_calc_beta'] * shock_level
+    direction = df['direction_sign'] if 'direction_sign' in df.columns else 1
+    df['shock_contrib'] = df['Weight'] * df['_calc_beta'] * shock_level * direction
     total_shock_impact = df['shock_contrib'].sum()
     if total_shock_impact != 0:
         df['pct_of_loss'] = (df['shock_contrib'] / total_shock_impact) * 100
@@ -314,9 +321,14 @@ def calculate_shock_contributions(holdings_df, shock_level=-0.20):
     return df.sort_values('shock_contrib', ascending=True)
 
 
-def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-0.20, benchmark_returns=None, betas=None):
+def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-0.20, benchmark_returns=None, betas=None, holdings_df=None):
     """
     Generates an HTML table showing which securities contribute most to a specific market shock (default -20%).
+
+    Short positions are handled by flipping their weight sign in the contribution
+    calculation: a short with positive beta hedges the portfolio during a crash,
+    producing a positive shock_contrib, while a short with negative beta amplifies
+    the crash (negative shock_contrib).
 
     Args:
         asset_returns (pd.DataFrame): DataFrame of asset returns.
@@ -324,12 +336,20 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         shock_level (float): The market shock level to analyze (default -0.20 for -20%).
         benchmark_returns (pd.Series, optional): Benchmark returns for beta calculation.
         betas (Series, optional): Pre-computed beta values indexed by ticker. If provided, these are used instead of recomputing.
+        holdings_df (pd.DataFrame, optional): Portfolio holdings with a 'type' column
+            ('S' for short, anything else for long). Used to flip contribution signs
+            for short positions.
 
     Returns:
         str: HTML string for the contribution table.
     """
     weights = risk_contrib["Weight"]
     holdings_for_contrib = pd.DataFrame({'Weight': weights})
+
+    if holdings_df is not None and 'type' in holdings_df.columns:
+        direction_sign = holdings_df.loc[weights.index, 'type'].map({'S': -1})
+        direction_sign = direction_sign.reindex(weights.index).fillna(1)
+        holdings_for_contrib['direction_sign'] = direction_sign
 
     # Use precomputed betas when available; otherwise all NaN to trigger on-the-fly computation
     if betas is not None:
@@ -387,6 +407,7 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         <thead>
             <tr>
                 <th class="u-text-left">Ticker</th>
+                <th class="u-align-center">Direction</th>
                 <th class="u-align-right">Weight (%)</th>
                 <th class="u-align-center">Estimated Beta</th>
                 <th class="u-align-right">Impact at {shock_level*100:.0f}% Shock</th>
@@ -395,6 +416,10 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         </thead>
         <tbody>
     """
+
+    direction_lookup = {}
+    if holdings_df is not None and 'type' in holdings_df.columns:
+        direction_lookup = holdings_df['type'].to_dict()
 
     for ticker, row in contrib_df.iterrows():
         pct_of_loss = row['pct_of_loss']
@@ -409,9 +434,18 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
         color_class = 'text-success-dark' if pct_of_loss < 0 else 'text-danger-dark'
         bg_class = 'bar-success' if pct_of_loss < 0 else 'bar-danger'
 
+        position_type = direction_lookup.get(ticker, 'L')
+        if position_type == 'S':
+            dir_display = 'S'
+            dir_class = 'badge-short'
+        else:
+            dir_display = 'L'
+            dir_class = 'badge-long'
+
         table_html += f"""
             <tr>
                 <td class="u-bold">{ticker}</td>
+                <td class="u-align-center"><span class="badge {dir_class}">{dir_display}</span></td>
                 <td class="u-align-right">{row['Weight']*100:.2f}%</td>
                 <td class="u-align-center">{beta_cell}</td>
                 <td class="u-align-right">
@@ -435,6 +469,7 @@ def generate_shock_contribution_table(asset_returns, risk_contrib, shock_level=-
     table_html += f"""
             <tr class="total-row">
                 <td>TOTAL</td>
+                <td class="u-align-center">-</td>
                 <td class="u-align-right">{weights.sum()*100:.2f}%</td>
                 <td class="u-align-center">-</td>
                 <td class="u-align-right text-danger-dark">

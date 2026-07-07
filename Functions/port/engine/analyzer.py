@@ -938,7 +938,8 @@ class PortfolioAnalyzer:
                     asset_returns, self.risk_df, shock_level=level, benchmark_returns=self.benchmark
                 )
                 charts[f"shock_contrib_{level_key}"] = generate_shock_contribution_table(
-                    asset_returns, self.risk_df, shock_level=-level, benchmark_returns=self.benchmark, betas=betas
+                    asset_returns, self.risk_df, shock_level=-level, benchmark_returns=self.benchmark, betas=betas,
+                    holdings_df=self.holdings_df if not self.holdings_df.empty else None
                 )
 
             # VaR/ES multi-horizon

@@ -428,9 +428,11 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
 '''
     return selector_html + chart_html + js_code
 
-def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365):
+def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365, analyzer_metrics=None):
     """
     Generates a Bloomberg-style HTML table of rolling efficiency metrics ordered by date DESC.
+    The last row is pinned to the fixed 1Y window from analyzer_metrics so it matches
+    the overview table exactly.
     """
     if returns_series is None or benchmark_returns is None:
         return "<p>Insufficient data for metrics table.</p>"
@@ -508,6 +510,25 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     df['Beta_diff'] = df['Beta'].diff()
 
     df = df.sort_values(by='Date', ascending=False)
+    
+    # Pin the most recent row to the exact same fixed 1Y values the overview table uses.
+    # This guarantees the last row matches the Efficiency strip cards and the 1Y table row.
+    _one_year = (analyzer_metrics or {}).get("1Y", {})
+    if not df.empty and _one_year:
+        most_recent = df.iloc[0]
+        pinned = {
+            'Date': most_recent['Date'],
+            'Sharpe Ratio': _one_year.get('Sharpe Ratio', np.nan),
+            'Sortino Ratio': _one_year.get('Sortino Ratio', np.nan),
+            'Information Ratio': _one_year.get('Information Ratio', np.nan),
+            'Alpha (%)': _one_year.get('Alpha (Risk-Adj) Annualized', np.nan) * 100,
+            'Beta': _one_year.get('Beta', np.nan),
+            'Correlation': _one_year.get('Benchmark Beta', np.nan),
+            'Alpha_diff': most_recent['Alpha_diff'],
+            'Beta_diff': most_recent['Beta_diff'],
+        }
+        df.iloc[0] = pinned
+    
     df['Date'] = df['Date'].dt.strftime('%Y-%m-%d')
     
     html = ['<table id="efficiency-metrics-table">']

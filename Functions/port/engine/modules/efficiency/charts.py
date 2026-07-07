@@ -129,13 +129,15 @@ def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_
     
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
-def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365):
+def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365, analyzer_metrics=None):
     """
     Generates a 3D scatter/line chart showing the rolling 1-year trajectory of:
       X = Rolling Beta  (market sensitivity)
       Y = Rolling Correlation (with benchmark)
       Z = Rolling Alpha (annualised excess return vs CAPM, expressed as %)
     Points are coloured from cool-purple (earliest) to warm-pink (latest) to convey time progression.
+    The most recent point is pinned to the same fixed 1Y values used by the table
+    so the trajectory and the table agree at the current date.
     """
     import json
     if returns_series is None or benchmark_returns is None:
@@ -161,6 +163,9 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
         p_win = port.loc[d - pd.DateOffset(days=calendar_days):d]
         b_win = bench.loc[d - pd.DateOffset(days=calendar_days):d]
 
+        if len(p_win) < 60:
+            continue
+
         b_var = b_win.var()
         if b_var == 0 or pd.isna(b_var):
             continue
@@ -183,6 +188,18 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
 
     if not dates:
         return "<p>Could not calculate rolling metrics for 3D trajectory.</p>"
+
+    # Pin the most recent trajectory point to the same fixed 1Y values
+    # used by the Rolling Metrics History table, so the current position
+    # on the 3D surface matches the pinned table row exactly.
+    _one_year = (analyzer_metrics or {}).get("1Y", {})
+    if _one_year:
+        pinned_beta = _one_year.get('Beta', np.nan)
+        pinned_alpha = _one_year.get('Alpha (Risk-Adj) Annualized', np.nan)
+        if not pd.isna(pinned_beta):
+            betas[-1] = float(pinned_beta)
+        if not pd.isna(pinned_alpha):
+            alphas[-1] = float(pinned_alpha) * 100
 
     n           = len(dates)
     t_norm      = list(range(n))
@@ -526,17 +543,18 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     # This guarantees the last row matches the Efficiency strip cards and the 1Y table row.
     _one_year = (analyzer_metrics or {}).get("1Y", {})
     if not df.empty and _one_year:
-        most_recent = df.iloc[0]
+        most_recent_date = df.iloc[0]['Date']
+        most_recent_corr = df.iloc[0]['Correlation']
         pinned = {
-            'Date': most_recent['Date'],
+            'Date': most_recent_date,
             'Sharpe Ratio': _one_year.get('Sharpe Ratio', np.nan),
             'Sortino Ratio': _one_year.get('Sortino Ratio', np.nan),
             'Information Ratio': _one_year.get('Information Ratio', np.nan),
             'Alpha (%)': _one_year.get('Alpha (Risk-Adj) Annualized', np.nan) * 100,
             'Beta': _one_year.get('Beta', np.nan),
-            'Correlation': _one_year.get('Benchmark Beta', np.nan),
-            'Alpha_diff': most_recent['Alpha_diff'],
-            'Beta_diff': most_recent['Beta_diff'],
+            'Correlation': most_recent_corr,
+            'Alpha_diff': df.iloc[0]['Alpha_diff'],
+            'Beta_diff': df.iloc[0]['Beta_diff'],
         }
         df.iloc[0] = pinned
     

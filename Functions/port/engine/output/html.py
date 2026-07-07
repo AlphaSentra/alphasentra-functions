@@ -424,6 +424,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
                         benchmark_returns=benchmark_returns,
                         holdings_df=holdings_df,
                         prices=price_data,
+                        metrics=metrics,
                     )
                 else:
                     tabs_content += '<p>No efficiency data available.</p>'

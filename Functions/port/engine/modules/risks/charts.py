@@ -132,8 +132,6 @@ def generate_risk_metrics_strip(metrics, total_series=None, ts_data=None):
                         start = end - pd.DateOffset(days=365)
                         window_p = port_ret_aligned.loc[start:end]
                         window_b = bench_ret_aligned.loc[start:end]
-                        window_p = window_p.tail(252)
-                        window_b = window_b.tail(252)
                         if len(window_p) < 2:
                             return np.nan
                         cov = window_p.cov(window_b)
@@ -148,16 +146,15 @@ def generate_risk_metrics_strip(metrics, total_series=None, ts_data=None):
                     rolling_beta = rolling_beta.dropna()
                     
                     if len(rolling_beta) > 0:
-                        # Use 1Y rolling beta for the card value instead of since-inception
-                        beta = rolling_beta.iloc[-1]
-                        beta_color = get_beta_color(beta)
+                        rolling_beta_latest = rolling_beta.iloc[-1]
+                        beta_sparkline_color = get_beta_color(rolling_beta_latest)
                     
                     if len(rolling_beta) >= 5:
                         # Create sparkline figure for rolling beta
                         fig_beta = go.Figure()
                         
-                        # Determine color based on current beta value
-                        spark_color = beta_color
+                        # Determine sparkline color based on latest rolling beta value
+                        spark_color = beta_sparkline_color if len(rolling_beta) > 0 else beta_color
                         
                         fig_beta.add_trace(go.Scatter(
                             x=rolling_beta.index,

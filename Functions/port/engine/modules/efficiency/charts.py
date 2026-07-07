@@ -22,10 +22,10 @@ from config import (
 
 def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_free_rate=0.02, window=252):
     """
-    Generates a line chart of 1-year rolling Sharpe, Sortino, and Information Ratios.
+    Generates a line chart of rolling Sharpe, Sortino, and Information Ratios.
     """
     if returns_series is None or len(returns_series) < window + 10:
-        return "<p>Insufficient data for rolling 1-year metrics chart.</p>"
+        return "<p>Insufficient data for rolling metrics chart.</p>"
 
     daily_rf = (1 + risk_free_rate) ** (1/252) - 1
     
@@ -35,14 +35,12 @@ def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_
     rolling_sharpe = ((rolling_mean - daily_rf) / rolling_std) * np.sqrt(252)
     
     # Calculate rolling Sortino
-    # We need to compute downside deviation rolling
     def sortino_rolling(window_returns):
         downside = window_returns[window_returns < 0]
         downside_std = downside.std()
         if pd.isna(downside_std) or downside_std == 0:
             return np.nan
         ann_ret = (1 + window_returns).prod() - 1
-        # In a strict 252 window, this is already 1 year, so ann_ret is just the compound return
         return (ann_ret - risk_free_rate) / (downside_std * np.sqrt(252))
 
     rolling_sortino = returns_series.rolling(window=window).apply(sortino_rolling, raw=False)
@@ -124,9 +122,9 @@ def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_
     
     return fig.to_html(full_html=False, include_plotlyjs=False)
 
-def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rate=0.02, window=252):
+def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365):
     """
-    Generates a 3D scatter/line chart showing the 1-year rolling trajectory of:
+    Generates a 3D scatter/line chart showing the rolling 1-year trajectory of:
       X = Rolling Beta  (market sensitivity)
       Y = Rolling Correlation (with benchmark)
       Z = Rolling Alpha (annualised excess return vs CAPM, expressed as %)
@@ -138,7 +136,7 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
 
     # Align on common dates
     common_idx = returns_series.index.intersection(benchmark_returns.index)
-    if len(common_idx) < window + 10:
+    if len(common_idx) < calendar_days + 10:
         return "<p>Insufficient overlapping data for 3D Risk Trajectory chart (need at least 1 year + benchmark).</p>"
 
     port  = returns_series.loc[common_idx]
@@ -149,9 +147,12 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
     corrs  = []
     alphas = []
 
-    for i in range(window, len(common_idx) + 1):
-        p_win = port.iloc[i - window: i]
-        b_win = bench.iloc[i - window: i]
+    min_date = common_idx[0] + pd.DateOffset(days=calendar_days)
+    for d in common_idx:
+        if d < min_date:
+            continue
+        p_win = port.loc[d - pd.DateOffset(days=calendar_days):d]
+        b_win = bench.loc[d - pd.DateOffset(days=calendar_days):d]
 
         b_var = b_win.var()
         if b_var == 0 or pd.isna(b_var):
@@ -168,7 +169,7 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
         if pd.isna(beta) or pd.isna(corr) or pd.isna(alpha):
             continue
 
-        dates.append(common_idx[i - 1])
+        dates.append(d)
         betas.append(float(beta))
         corrs.append(float(corr))
         alphas.append(float(alpha) * 100)   # express as %
@@ -185,7 +186,7 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
         '1W': 5,
         '1M': 22,
         '3M': 63,
-        '1Y': 252,
+        '1Y': 365,
         '5Y': 1260
     }
 
@@ -427,15 +428,15 @@ def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rat
 '''
     return selector_html + chart_html + js_code
 
-def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_rate=0.02, window=252):
+def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365):
     """
-    Generates a Bloomberg-style HTML table of 1-year rolling metrics ordered by date DESC.
+    Generates a Bloomberg-style HTML table of rolling efficiency metrics ordered by date DESC.
     """
     if returns_series is None or benchmark_returns is None:
         return "<p>Insufficient data for metrics table.</p>"
 
     common_idx = returns_series.index.intersection(benchmark_returns.index)
-    if len(common_idx) < window + 10:
+    if len(common_idx) < calendar_days + 10:
         return "<p>Insufficient overlapping data for metrics table.</p>"
 
     port  = returns_series.loc[common_idx]
@@ -444,8 +445,8 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     daily_rf = (1 + risk_free_rate) ** (1/252) - 1
 
     # Rolling calculations
-    port_rolling_mean = port.rolling(window=window).mean()
-    port_rolling_std = port.rolling(window=window).std()
+    port_rolling_mean = port.rolling(window=f'{calendar_days}D').mean()
+    port_rolling_std = port.rolling(window=f'{calendar_days}D').std()
     
     sharpe = ((port_rolling_mean - daily_rf) / port_rolling_std) * np.sqrt(252)
 
@@ -454,27 +455,29 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
         downside_std = downside.std()
         if pd.isna(downside_std) or downside_std == 0:
             return np.nan
+        n = len(w)
         ann_ret = (1 + w).prod() - 1
+        ann_ret = (1 + ann_ret) ** (252 / n) - 1
         return (ann_ret - risk_free_rate) / (downside_std * np.sqrt(252))
     
-    sortino = port.rolling(window=window).apply(sortino_rolling, raw=False)
+    sortino = port.rolling(window=f'{calendar_days}D').apply(sortino_rolling, raw=False)
 
     excess = port - bench
-    rolling_excess_mean = excess.rolling(window=window).mean()
-    rolling_excess_std = excess.rolling(window=window).std()
+    rolling_excess_mean = excess.rolling(window=f'{calendar_days}D').mean()
+    rolling_excess_std = excess.rolling(window=f'{calendar_days}D').std()
     ir = (rolling_excess_mean / rolling_excess_std) * np.sqrt(252)
 
-    cov_pb = port.rolling(window=window).cov(bench)
-    var_b = bench.rolling(window=window).var()
+    cov_pb = port.rolling(window=f'{calendar_days}D').cov(bench)
+    var_b = bench.rolling(window=f'{calendar_days}D').var()
     beta = cov_pb / var_b
 
-    corr = port.rolling(window=window).corr(bench)
+    corr = port.rolling(window=f'{calendar_days}D').corr(bench)
 
     def ann_ret_rolling(w):
         return (1+w).prod() - 1
 
-    port_ann = port.rolling(window=window).apply(ann_ret_rolling, raw=False)
-    bench_ann = bench.rolling(window=window).apply(ann_ret_rolling, raw=False)
+    port_ann = port.rolling(window=f'{calendar_days}D').apply(ann_ret_rolling, raw=False)
+    bench_ann = bench.rolling(window=f'{calendar_days}D').apply(ann_ret_rolling, raw=False)
     
     alpha = port_ann - (risk_free_rate + beta * (bench_ann - risk_free_rate))
     alpha = alpha * 100
@@ -646,22 +649,25 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     return f'<div id="efficiency-metrics-wrapper">\n{script}\n' + "".join(html) + '\n</div>'
 
 
-def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_free_rate=0.02, window=252):
+def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_free_rate=0.02, analyzer_metrics=None):
     """
     Generates header strip with key efficiency metrics including mini sparkline charts.
     """
     if returns_series is None or benchmark_returns is None:
         return ""
+    
     common_idx = returns_series.index.intersection(benchmark_returns.index)
-    if len(common_idx) < window + 10:
+    if len(common_idx) < 262:
         return ""
     
     port = returns_series.loc[common_idx]
     bench = benchmark_returns.loc[common_idx]
     daily_rf = (1 + risk_free_rate) ** (1/252) - 1
+    rolling_window = 252
 
-    port_rolling_mean = port.rolling(window=window).mean()
-    port_rolling_std = port.rolling(window=window).std()
+    # Rolling metrics for sparklines (1-year rolling, 252 trading days)
+    port_rolling_mean = port.rolling(window=rolling_window).mean()
+    port_rolling_std = port.rolling(window=rolling_window).std()
     sharpe = ((port_rolling_mean - daily_rf) / port_rolling_std) * np.sqrt(252)
 
     def sortino_rolling(w):
@@ -672,25 +678,25 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         ann_ret = (1 + w).prod() - 1
         return (ann_ret - risk_free_rate) / (downside_std * np.sqrt(252))
     
-    sortino = port.rolling(window=window).apply(sortino_rolling, raw=False)
+    sortino = port.rolling(window=rolling_window).apply(sortino_rolling, raw=False)
 
     excess = port - bench
-    rolling_excess_mean = excess.rolling(window=window).mean()
-    rolling_excess_std = excess.rolling(window=window).std()
+    rolling_excess_mean = excess.rolling(window=rolling_window).mean()
+    rolling_excess_std = excess.rolling(window=rolling_window).std()
     ir = (rolling_excess_mean / rolling_excess_std) * np.sqrt(252)
 
-    cov_pb = port.rolling(window=window).cov(bench)
-    var_b = bench.rolling(window=window).var()
+    cov_pb = port.rolling(window=rolling_window).cov(bench)
+    var_b = bench.rolling(window=rolling_window).var()
     beta = cov_pb / var_b
 
     def ann_ret_rolling(w):
         return (1+w).prod() - 1
     
-    port_ann = port.rolling(window=window).apply(ann_ret_rolling, raw=False)
-    bench_ann = bench.rolling(window=window).apply(ann_ret_rolling, raw=False)
+    port_ann = port.rolling(window=rolling_window).apply(ann_ret_rolling, raw=False)
+    bench_ann = bench.rolling(window=rolling_window).apply(ann_ret_rolling, raw=False)
     alpha = (port_ann - (risk_free_rate + beta * (bench_ann - risk_free_rate))) * 100
 
-    metrics = {
+    metrics_rolling = {
         'Sharpe Ratio': sharpe,
         'Sortino Ratio': sortino,
         'Information Ratio': ir,
@@ -698,14 +704,8 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         'Beta (1Y Rolling)': beta
     }
     
-    anchor = port.index.max()
-    start_1y = anchor - pd.DateOffset(years=1)
-    port_1y = port.loc[port.index >= start_1y]
-    bench_1y = bench.loc[bench.index >= start_1y]
-    common_1y = port_1y.index.intersection(bench_1y.index)
-    port_1y = port_1y.loc[common_1y]
-    bench_1y = bench_1y.loc[common_1y]
-
+    one_year = (analyzer_metrics or {}).get("1Y", {})
+    
     def _fixed_sharpe(p, b):
         if len(p) < 2 or p.std() == 0:
             return np.nan
@@ -730,10 +730,16 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
             return np.nan
         return (excess.mean() / excess.std()) * np.sqrt(252)
 
+    # Pre-compute fixed 1Y values that will appear as the card numbers.
+    # These are sourced from the same anchored calendar-year window the Overview
+    # table uses, so the strip cards match the 1Y table row exactly.
     fixed_1y = {
-        'Sharpe Ratio': _fixed_sharpe(port_1y, bench_1y),
-        'Sortino Ratio': _fixed_sortino(port_1y),
-        'Information Ratio': _fixed_ir(port_1y, bench_1y),
+        'Sharpe Ratio': one_year.get('Sharpe Ratio', _fixed_sharpe(port, bench)),
+        'Sortino Ratio': one_year.get('Sortino Ratio', _fixed_sortino(port)),
+        'Information Ratio': one_year.get('Information Ratio', _fixed_ir(port, bench)),
+        'Alpha (%)': one_year.get('Alpha (Risk-Adj) Annualized', np.nan) * 100 
+            if not pd.isna(one_year.get('Alpha (Risk-Adj) Annualized', np.nan)) else np.nan,
+        'Beta': one_year.get('Beta', np.nan),
     }
     
     def generate_gauge(series, val, color):
@@ -799,9 +805,9 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
     def card(label, series_name, fixed_1y_val=None):
         if fixed_1y_val is not None and not pd.isna(fixed_1y_val):
             val = fixed_1y_val
-            series = metrics[series_name]
+            series = metrics_rolling[series_name]
         else:
-            series = metrics[series_name]
+            series = metrics_rolling[series_name]
             clean = series.dropna()
             val = clean.iloc[-1] if not clean.empty else np.nan
 
@@ -812,7 +818,7 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         else:
             color = POSITIVE_RETURN_CARD if val >= 0 else NEGATIVE_RETURN_CARD
 
-        gauge_series = metrics[series_name] if fixed_1y_val is None else series
+        gauge_series = metrics_rolling[series_name]
         gauge_html = generate_gauge(gauge_series, val, color)
 
         if np.isnan(val):
@@ -838,15 +844,15 @@ def generate_efficiency_metrics_strip(returns_series, benchmark_returns, risk_fr
         {card('Sharpe Ratio (1-Yr)', 'Sharpe Ratio', fixed_1y_val=fixed_1y.get('Sharpe Ratio'))}
         {card('Sortino Ratio (1-Yr)', 'Sortino Ratio', fixed_1y_val=fixed_1y.get('Sortino Ratio'))}
         {card('Info Ratio (1-Yr)', 'Information Ratio', fixed_1y_val=fixed_1y.get('Information Ratio'))}
-        {card('Alpha (1-Yr)', 'Alpha (%)')}
-        {card('Beta (1-Yr)', 'Beta (1Y Rolling)')}
+        {card('Alpha (1-Yr)', 'Alpha (%)', fixed_1y_val=fixed_1y.get('Alpha (%)'))}
+        {card('Beta (1-Yr)', 'Beta (1Y Rolling)', fixed_1y_val=fixed_1y.get('Beta'))}
     </div>
     '''
     return html
 
-def generate_security_efficiency_table(returns_series, holdings_df, prices, risk_free_rate=0.02, window=252):
+def generate_security_efficiency_table(returns_series, holdings_df, prices, risk_free_rate=0.02, calendar_days=365):
     """
-    Generates a table of individual security efficiency metrics over the last 1 year.
+    Generates a table of individual security efficiency metrics over the last 1 calendar year.
     Columns: Security Name (Ticker), Weight, Expected Return (1Y), Volatility (1Y), Correlation to Portfolio (1Y), Composite Score (0-100)
     """
     if holdings_df is None or holdings_df.empty or prices is None or prices.empty:
@@ -856,7 +862,10 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
     if returns_series is None or returns_series.empty:
         return "<p>Insufficient portfolio return data to calculate correlation.</p>"
 
-    port_rets_1y = returns_series.tail(window)
+    calendar_days = int(calendar_days)
+    end_date = returns_series.index.max()
+    start_date = end_date - pd.DateOffset(days=calendar_days)
+    port_rets_1y = returns_series.loc[start_date:end_date]
     
     rows_data = []
     
@@ -870,7 +879,9 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
             continue
             
         rets = series.pct_change().dropna()
-        rets_1y = rets.tail(window)
+        ret_end = rets.index.max()
+        ret_start = ret_end - pd.DateOffset(days=calendar_days)
+        rets_1y = rets.loc[ret_start:ret_end]
         
         if len(rets_1y) < 20:
             continue

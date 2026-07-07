@@ -599,18 +599,16 @@ class PortfolioAnalyzer:
         else:
             self.returns = calculate_returns(self.ts)
 
-        self.benchmark = self.prices[self.benchmark_ticker].pct_change().dropna()
+        raw_benchmark_prices = self.prices[self.benchmark_ticker]
+        self.benchmark = raw_benchmark_prices.pct_change()
 
         if not self.benchmark.empty and not self.ts["total"].empty:
             portfolio_start = self.ts["total"].first_valid_index()
-            if portfolio_start is not None:
-                benchmark_for_chart = self.benchmark[self.benchmark.index >= portfolio_start]
-                if not benchmark_for_chart.empty:
-                    initial_reference = self.initial_investment
-                    cumulative_benchmark_returns = (1 + benchmark_for_chart).cumprod()
-                    self.ts["benchmark"] = cumulative_benchmark_returns * initial_reference
-                else:
-                    self.ts["benchmark"] = pd.Series(dtype='float64')
+            if portfolio_start is not None and portfolio_start in raw_benchmark_prices.index and pd.notna(raw_benchmark_prices.loc[portfolio_start]):
+                benchmark_for_chart = self.benchmark.loc[portfolio_start:].copy()
+                initial_reference = self.initial_investment
+                cumulative_benchmark_returns = (1 + benchmark_for_chart.fillna(0)).cumprod()
+                self.ts["benchmark"] = cumulative_benchmark_returns * initial_reference
             else:
                 self.ts["benchmark"] = pd.Series(dtype='float64')
         else:

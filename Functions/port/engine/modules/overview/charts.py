@@ -231,56 +231,46 @@ def generate_performance_barchart(ts_data, benchmark_ticker=None, annual_yield=0
     current_date = total_ts.index[-1]
     current_year = current_date.year
 
-    # Helper to calculate period performances for a given daily yield factor
     def calculate_performances(daily_yield_factor):
-        period_days = {
+        periods = {
             'YTD': None,
-            '6M': 126,
-            '1Y': 252,
-            '3Y': 756,
-            '5Y': 1260
+            '6M': pd.DateOffset(months=6),
+            '1Y': pd.DateOffset(years=1),
+            '3Y': pd.DateOffset(years=3),
+            '5Y': pd.DateOffset(years=5)
         }
         period_order = ['YTD', '6M', '1Y', '3Y', '5Y']
         port_perf = {}
         bench_perf = {}
 
-        # YTD
-        try:
-            ytd_indices = total_ts.index[total_ts.index.year == current_year]
-            if len(ytd_indices) > 0:
-                start_val = total_ts.loc[ytd_indices[0]]
-                end_val = total_ts.iloc[-1]
-                if start_val > 0 and not pd.isna(start_val) and not pd.isna(end_val):
-                    n_days = len(ytd_indices)
-                    yield_factor = daily_yield_factor ** n_days if annual_yield > 0 else 1.0
-                    port_perf['YTD'] = ((end_val / start_val) * yield_factor) - 1
-
-                if benchmark_ts is not None and not benchmark_ts.empty:
-                    bench_start = benchmark_ts.loc[ytd_indices[0]]
-                    bench_end = benchmark_ts.iloc[-1]
-                    if not pd.isna(bench_start) and not pd.isna(bench_end) and bench_start > 0:
-                        bench_perf['YTD'] = (bench_end / bench_start) - 1
-        except Exception:
-            pass
-
-        # Other periods
         for label in period_order:
-            if label == 'YTD':
-                continue
-            days = period_days[label]
-            if len(total_ts) >= days:
-                start_idx = len(total_ts) - days
-                start_val = total_ts.iloc[start_idx]
+            offset = periods[label]
+            try:
+                if offset is None:
+                    ytd_indices = total_ts.index[total_ts.index.year == current_year]
+                    start_idx = ytd_indices[0] if len(ytd_indices) > 0 else total_ts.index[0]
+                else:
+                    start_date = current_date - offset
+                    start_idx = total_ts.index[total_ts.index >= start_date]
+                    start_idx = start_idx[0] if len(start_idx) > 0 else total_ts.index[0]
+                
+                start_val = total_ts.loc[start_idx]
+                end_idx = total_ts.index[-1]
                 end_val = total_ts.iloc[-1]
                 if start_val > 0 and not pd.isna(start_val) and not pd.isna(end_val):
-                    yield_factor = daily_yield_factor ** days if annual_yield > 0 else 1.0
+                    start_pos = total_ts.index.get_loc(start_idx)
+                    end_pos = total_ts.index.get_loc(end_idx)
+                    n_days = end_pos - start_pos
+                    yield_factor = daily_yield_factor ** n_days if annual_yield > 0 else 1.0
                     port_perf[label] = ((end_val / start_val) * yield_factor) - 1
 
-                if benchmark_ts is not None and not benchmark_ts.empty and len(benchmark_ts) >= days:
-                    bench_start_val = benchmark_ts.iloc[start_idx]
+                if benchmark_ts is not None and not benchmark_ts.empty and start_idx in benchmark_ts.index:
+                    bench_start_val = benchmark_ts.loc[start_idx]
                     bench_end_val = benchmark_ts.iloc[-1]
                     if not pd.isna(bench_start_val) and not pd.isna(bench_end_val) and bench_start_val > 0:
                         bench_perf[label] = (bench_end_val / bench_start_val) - 1
+            except Exception:
+                pass
 
         return port_perf, bench_perf
 

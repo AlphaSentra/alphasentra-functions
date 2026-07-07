@@ -107,7 +107,7 @@ class PortfolioAnalyzer:
 
             self.portfolio = pd.DataFrame([
                 {
-                    "ticker": pos.symbol,
+                    "ticker": pos.symbol.replace(".ASX", ".AX") if isinstance(pos.symbol, str) and pos.symbol.endswith(".ASX") else pos.symbol,
                     "quantity": pos.weight,
                     "type": "L" if pos.trade_direction == "BUY" else "S" if pos.trade_direction == "SELL" else "MIXED",
                     "avg_price": pos.average_entry_price,
@@ -690,10 +690,13 @@ class PortfolioAnalyzer:
             return
 
         # Total portfolio yield
-        yield_analysis_df = self.risk_df[['Weight']].merge(
-            self.sector_industry_df[['dividendYield']],
-            left_index=True, right_index=True, how='left'
-        )
+        if getattr(self, 'holdings_df', None) is not None and not self.holdings_df.empty and 'Weight' in self.holdings_df.columns and 'dividendYield' in self.holdings_df.columns:
+            yield_analysis_df = self.holdings_df[['Weight', 'dividendYield']].copy()
+        else:
+            yield_analysis_df = self.risk_df[['Weight']].merge(
+                self.sector_industry_df[['dividendYield']],
+                left_index=True, right_index=True, how='left'
+            )
         yield_analysis_df['dividendYield'] = yield_analysis_df['dividendYield'].fillna(0)
         total_yield = (yield_analysis_df['Weight'] * yield_analysis_df['dividendYield']).sum()
         self.layer_yields["total"] = total_yield
@@ -842,7 +845,7 @@ class PortfolioAnalyzer:
         from engine.modules.risks.charts import generate_var_es_analysis_charts
         from engine.modules.history.charts import generate_trades_metrics_strip
         from engine.modules.holdings.charts import generate_holdings_metrics_strip
-        from engine.modules.overview.charts import generate_advances_declines_charts
+        from engine.modules.overview.charts import generate_advances_declines_charts, generate_overview_metrics_strip
         
         from engine.modules.breakdown.renderer import (
             generate_sector_industry_analysis,
@@ -891,7 +894,7 @@ class PortfolioAnalyzer:
         if ENABLED_MODULES.get("breakdown", True):
             # Sector analysis
             logger.info("Analyzing sector and industry weighting...")
-            sector_analysis = generate_sector_industry_analysis(self.risk_df, self.sector_industry_df, include_yield=self.include_yield)
+            sector_analysis = generate_sector_industry_analysis(self.risk_df, self.sector_industry_df, include_yield=self.include_yield, holdings_df=self.holdings_df)
             charts["sector_table"] = sector_analysis["table_html"]
             charts["sector_pie"] = sector_analysis["pie_chart_html"]
 
@@ -902,6 +905,7 @@ class PortfolioAnalyzer:
                 self._generate_holdings_table()
                 charts["holdings_table"] = self.holdings_table_html
                 charts["chart_data"] = self.chart_data_json
+                charts["overview_metrics_strip"] = generate_overview_metrics_strip(self.ts["total"], self.layer_yields.get("total", 0.0))
 
             logger.info("Generating Z-Score scatter plot...")
             charts["zscore_scatter"] = generate_zscore_scatter_plot(self.holdings_df, self.risk_df)
@@ -912,6 +916,7 @@ class PortfolioAnalyzer:
             self._generate_holdings_table()
             charts["holdings_table"] = self.holdings_table_html
             charts["chart_data"] = self.chart_data_json
+            charts["overview_metrics_strip"] = generate_overview_metrics_strip(self.ts["total"], self.layer_yields.get("total", 0.0))
 
         if ENABLED_MODULES.get("holdings", True):
             charts["sector_sunburst"] = generate_sector_sunburst_chart(self.holdings_df)
@@ -1035,6 +1040,15 @@ class PortfolioAnalyzer:
             # consumers (yield, metrics, pie chart, alerts, sector tables) use the
             # exact eToro-reported weights, not recomputed backtest weights.
             self.risk_df = temp_risk.copy()
+            # Recalculate dividend yields using the populated holdings_df now
+            # that it carries the authoritative Weight + dividendYield columns.
+            self.calculate_yields()
+            # Update Estimated Yield across metric horizons to reflect
+            # the authoritative eToro weights.
+            if self.layer_yields.get("total"):
+                for horizon in self.metrics:
+                    if isinstance(self.metrics[horizon], dict):
+                        self.metrics[horizon]["Estimated Yield"] = self.layer_yields["total"]
             self._add_beta_to_holdings()
             return
 

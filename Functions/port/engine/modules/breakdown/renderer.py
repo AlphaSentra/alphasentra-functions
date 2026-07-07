@@ -9,12 +9,21 @@ from config import (
 )
 
 
-def generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_yield=True):
+def generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_yield=True, holdings_df=None):
     """
     Analyzes portfolio weighting per sector and industry.
     Returns dict with 'table_html' and 'pie_chart_html'.
+    Uses holdings_df as the authoritative source when provided;
+    otherwise falls back to risk_contrib.
     """
-    analysis_df = risk_contrib[['Weight']].merge(sector_industry_df, left_index=True, right_index=True, how='left')
+    if holdings_df is not None and not holdings_df.empty and 'Weight' in holdings_df.columns:
+        analysis_df = holdings_df[['Weight']].merge(
+            sector_industry_df, left_index=True, right_index=True, how='left'
+        )
+    else:
+        analysis_df = risk_contrib[['Weight']].merge(
+            sector_industry_df, left_index=True, right_index=True, how='left'
+        )
     analysis_df['sector'] = analysis_df['sector'].fillna('Others')
     analysis_df['industry'] = analysis_df['industry'].fillna('Others')
 
@@ -302,7 +311,7 @@ def render_breakdown_tab(risk_contrib, sector_industry_df, price_data, holdings_
     """
     Renders the Breakdown tab HTML block.
     """
-    sector_analysis = generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_yield)
+    sector_analysis = generate_sector_industry_analysis(risk_contrib, sector_industry_df, include_yield, holdings_df=holdings_df)
     sector_perf_table = generate_sector_performance_table(risk_contrib, sector_industry_df, price_data, holdings_df)
 
     template_path = os.path.join(os.path.dirname(__file__), "template.html")

@@ -72,48 +72,26 @@ def generate_trades_metrics_strip(transactions_df):
         entry_price = _safe_to_float(row.get("EntryPrice"))
         exit_price = _safe_to_float(row.get("ExitPrice"))
 
-        if ticker not in holdings:
-            holdings[ticker] = []
-
         if side == 'BUY':
-            price = entry_price
-            # Add to holdings queue with buy date
-            holdings[ticker].append({'qty': 1.0, 'price': price, 'buy_date': trade_date})
+            pnl_pct = 0.0
+            if entry_price and exit_price:
+                pnl_pct = (exit_price - entry_price) / entry_price * 100
+            elif entry_price:
+                pnl_value = _safe_to_float(row.get("PnL"))
+                if pnl_value and entry_price:
+                    pnl_pct = pnl_value / entry_price * 100
+
+            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
         elif side == 'SELL':
-            price = exit_price
-            # Match sells against earliest buys (FIFO)
-            remaining_qty = qty
-            while remaining_qty > 0 and holdings[ticker]:
-                buy_lot = holdings[ticker][0]
-                matched_qty = min(remaining_qty, buy_lot['qty'])
+            pnl_pct = 0.0
+            if entry_price and exit_price:
+                pnl_pct = (exit_price - entry_price) / entry_price * 100
+            elif exit_price:
+                pnl_value = _safe_to_float(row.get("PnL"))
+                if pnl_value and exit_price:
+                    pnl_pct = pnl_value / exit_price * 100
 
-                # Calculate P&L percentage for this matched lot
-                if buy_lot['price'] > 0:
-                    pnl_pct = (price - buy_lot['price']) / buy_lot['price'] * 100
-                else:
-                    pnl_pct = 0.0
-
-                # Calculate trade duration in days
-                buy_date = buy_lot['buy_date']
-                if isinstance(buy_date, pd.Timestamp) and isinstance(trade_date, pd.Timestamp):
-                    duration_days = (trade_date - buy_date).days
-                    # Ensure non-negative (in case of same-day trades)
-                    duration_days = max(0, duration_days)
-                else:
-                    duration_days = 0
-
-                # Store as a completed trade with the sell date and duration
-                if buy_lot['qty'] <= matched_qty + 1e-10:
-                    # Complete lot used up
-                    holdings[ticker].pop(0)
-                else:
-                    # Partial use, reduce lot quantity
-                    buy_lot['qty'] -= matched_qty
-
-                completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': duration_days})
-                remaining_qty -= matched_qty
-
-            # If remaining_qty > 0, it means we sold more than we bought (short sale or data issue) — skip
+            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
 
     if not completed_trades:
         return f"<div style='text-align: center; padding: 20px; color: {EMPTY_PLACEHOLDER_TEXT}'>No completed trades found.</div>"

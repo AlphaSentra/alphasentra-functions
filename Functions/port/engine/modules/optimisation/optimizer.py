@@ -66,9 +66,13 @@ def optimize_portfolio(prices_df, portfolio_df, benchmark_series, sector_industr
     
     num_assets = len(portfolio_tickers)
     
-    # Get sector grouping
-    sector_series = sector_industry_df.loc[portfolio_tickers, 'sector'].fillna('Others')
-    name_series = sector_industry_df.loc[portfolio_tickers, 'name'].fillna('')
+    # Get sector grouping; use safe lookup so missing tickers fall back to 'Others'
+    available_tickers = [t for t in portfolio_tickers if t in sector_industry_df.index]
+    sector_series = pd.Series('Others', index=portfolio_tickers, dtype=str)
+    name_series = pd.Series('', index=portfolio_tickers, dtype=str)
+    if available_tickers:
+        sector_series.loc[available_tickers] = sector_industry_df.loc[available_tickers, 'sector'].fillna('Others')
+        name_series.loc[available_tickers] = sector_industry_df.loc[available_tickers, 'name'].fillna('')
     unique_sectors = sector_series.unique()
     sector_groups = {sector: np.array([sector_series.iloc[i] == sector for i in range(num_assets)]) for sector in unique_sectors}
 

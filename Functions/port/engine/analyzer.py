@@ -85,7 +85,11 @@ class PortfolioAnalyzer:
     # ----------------------------------------------------------------------
 
     def load_data(self) -> None:
-        """Load transactions from CSV."""
+        """Load transactions from eToro trade history or CSV."""
+        if self.etoro_username:
+            logger.info("eToro username configured; skipping CSV load, trade history will be loaded in run_analysis().")
+            return
+
         self.transaction_mode = True
         csv_path = Path(__file__).resolve().parent.parent / "transactions.csv"
         self.transactions_df = load_transactions_from_csv(str(csv_path))
@@ -1199,6 +1203,16 @@ class PortfolioAnalyzer:
                 )
 
             self.start = self.parse_inception_date()
+            if not self.etoro_cid:
+                try:
+                    from Functions.etoro.client import get_public_client_from_env
+                    client = get_public_client_from_env()
+                    self.etoro_cid = client.resolve_cid(self.etoro_username)
+                    logger.info("Auto-resolved eToro CID=%s for username=%s", self.etoro_cid, self.etoro_username)
+                except Exception as exc:
+                    logger.warning("Could not auto-resolve eToro CID: %s. Trade history will not be loaded.", exc)
+                    self.etoro_cid = None
+
             if self.etoro_cid:
                 self.transactions_df = load_transactions_from_etoro(self.etoro_username, self.etoro_cid)
             else:

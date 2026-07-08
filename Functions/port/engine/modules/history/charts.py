@@ -14,6 +14,15 @@ from config import (
 )
 
 
+def _safe_to_float(value) -> float:
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
+
 
 def generate_trades_metrics_strip(transactions_df):
     """
@@ -21,7 +30,7 @@ def generate_trades_metrics_strip(transactions_df):
 
     Args:
         transactions_df (pd.DataFrame): DataFrame with transaction data containing
-                                        columns: 'Date', 'Ticker', 'Side', 'Quantity', 'Price'.
+                                        columns: 'Date', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice'.
         prices (pd.DataFrame, optional): Price data for calculating P&L over time.
 
     Returns:
@@ -33,16 +42,14 @@ def generate_trades_metrics_strip(transactions_df):
     df = transactions_df.copy()
 
     # Drop rows with missing essential data
-    df = df.dropna(subset=['Side', 'Quantity', 'Price'])
+    df = df.dropna(subset=['Side', 'EntryPrice', 'ExitPrice'])
     if df.empty:
         return f"<div style='text-align: center; padding: 20px; color: {EMPTY_PLACEHOLDER_TEXT}'>No valid trades found.</div>"
 
-    df['Quantity'] = pd.to_numeric(df['Quantity'], errors='coerce').fillna(0)
-    df['Price'] = pd.to_numeric(df['Price'], errors='coerce').fillna(0)
+    df['EntryPrice'] = pd.to_numeric(df['EntryPrice'], errors='coerce').fillna(0)
 
-    # Filter to only BUY/SELL trades with positive quantity
+    # Filter to only BUY/SELL trades
     df = df[df['Side'].str.upper().isin(['BUY', 'SELL'])]
-    df = df[df['Quantity'] > 0]
 
     if df.empty:
         return f"<div style='text-align: center; padding: 20px; color: {EMPTY_PLACEHOLDER_TEXT}'>No valid trades found.</div>"
@@ -61,17 +68,19 @@ def generate_trades_metrics_strip(transactions_df):
     for _, row in df.iterrows():
         ticker = row['Ticker']
         side = row['Side'].upper()
-        qty = float(row['Quantity'])
-        price = float(row['Price'])
         trade_date = row['Date']  # Capture the transaction date
+        entry_price = _safe_to_float(row.get("EntryPrice"))
+        exit_price = _safe_to_float(row.get("ExitPrice"))
 
         if ticker not in holdings:
             holdings[ticker] = []
 
         if side == 'BUY':
+            price = entry_price
             # Add to holdings queue with buy date
-            holdings[ticker].append({'qty': qty, 'price': price, 'buy_date': trade_date})
+            holdings[ticker].append({'qty': 1.0, 'price': price, 'buy_date': trade_date})
         elif side == 'SELL':
+            price = exit_price
             # Match sells against earliest buys (FIFO)
             remaining_qty = qty
             while remaining_qty > 0 and holdings[ticker]:

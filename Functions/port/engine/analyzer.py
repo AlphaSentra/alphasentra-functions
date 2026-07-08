@@ -4,16 +4,30 @@ Core portfolio functions engine.
 
 
 import logging
+import os
 import traceback
 from datetime import datetime, timedelta
 from pathlib import Path
 from typing import Any, Dict, Optional, Tuple
 
+_dotenv_path = Path(__file__).resolve().parent.parent.parent.parent / ".env"
+if _dotenv_path.exists():
+    try:
+        from dotenv import load_dotenv
+        load_dotenv(dotenv_path=str(_dotenv_path))
+    except ImportError:
+        with open(_dotenv_path, "r", encoding="utf-8") as _f:
+            for _line in _f:
+                _line = _line.strip()
+                if _line and not _line.startswith("#") and "=" in _line:
+                    _k, _v = _line.split("=", 1)
+                    os.environ.setdefault(_k.strip(), _v.strip())
+
 import numpy as np
 import pandas as pd
 from scipy.stats import linregress
 
-from data.loader import load_transactions_from_csv
+from data.loader import load_transactions_from_csv, load_transactions_from_etoro
 from data.market import detect_relisted_stocks
 from data.provider_factory import get_market_data_provider as _get_provider
 from data.protocols import MarketDataProvider
@@ -61,6 +75,7 @@ class PortfolioAnalyzer:
         self.market_data_provider = market_data_provider
         self._provider_instance = self.market_data_provider or _get_provider()
         self.etoro_username = config.get('etoro_username') or None
+        self.etoro_cid = config.get('etoro_cid') or None
         self._etoro_returns_loaded = False
         self._etoro_portfolio_mode = False
         self._etoro_portfolio_raw = None
@@ -958,8 +973,8 @@ class PortfolioAnalyzer:
                 var_es_html += generate_var_es_analysis_charts(monthly_returns, "MONTHLY")
             charts["var_es_analysis"] = var_es_html
 
-        # Trades (transaction mode only)
-        if ENABLED_MODULES.get("history", True) and self.transaction_mode and not self.transactions_df.empty:
+        # Trades (transaction mode or eToro mode with trade history)
+        if ENABLED_MODULES.get("history", True) and not self.transactions_df.empty:
             logger.info("Generating trades table...")
             charts["trades_table"] = generate_trades_table(self.transactions_df, self.sector_industry_df, self.prices)
             charts["trades_metrics_strip"] = generate_trades_metrics_strip(self.transactions_df)
@@ -1184,6 +1199,10 @@ class PortfolioAnalyzer:
                 )
 
             self.start = self.parse_inception_date()
+            if self.etoro_cid:
+                self.transactions_df = load_transactions_from_etoro(self.etoro_username, self.etoro_cid)
+            else:
+                logger.warning("eToro username is set but etoro_cid is missing; trade history will not be loaded.")
         else:
             raise PortfolioFunctionsError(
                 "eToro username is required. Transaction mode has been disabled."

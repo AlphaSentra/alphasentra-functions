@@ -75,7 +75,7 @@ No command-line arguments are required; all main inputs are collected via prompt
     """.strip())
 
 
-def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_ticker: str = "") -> dict:
+def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> dict:
     """
     Collect all inputs interactively from the user.
 
@@ -83,6 +83,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
         no_browser: Whether to suppress browser opening.
         etoro_username: Optional eToro username for report title customization.
         benchmark_ticker: Optional benchmark ticker to override auto-selection.
+        etoro_cid: Optional eToro customer ID to avoid username resolution.
 
     Returns:
         Dictionary containing all configuration options.
@@ -118,6 +119,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
         'initial_investment': initial_investment,
         'no_browser': no_browser,
         'etoro_username': etoro_username,
+        'etoro_cid': etoro_cid or None,
     }
 
     if benchmark_ticker:
@@ -126,7 +128,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
     return config
 
 
-def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "") -> str:
+def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> str:
     """
     Generate portfolio HTML report and return it as a string.
     This function is used by the Flask web application.
@@ -134,11 +136,12 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     Args:
         etoro_username: Optional eToro username for report title customization.
         benchmark_ticker: Optional benchmark ticker to override auto-selection.
+        etoro_cid: Optional eToro customer ID to avoid username resolution.
 
     Returns:
         HTML string of the portfolio report.
     """
-    config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker)
+    config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
 
@@ -174,18 +177,19 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     return html
 
 
-def generate_ai_commentary_text(etoro_username: str = "", benchmark_ticker: str = "") -> str:
+def generate_ai_commentary_text(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> str:
     """
     Generate combined plain-text commentary from overview, holdings and efficiency modules.
 
     Args:
         etoro_username: Optional eToro username for report title customization.
         benchmark_ticker: Optional benchmark ticker to override auto-selection.
+        etoro_cid: Optional eToro customer ID to avoid username resolution.
 
     Returns:
         str: Combined commentary text suitable for sending to an AI prompt.
     """
-    config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker)
+    config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
 

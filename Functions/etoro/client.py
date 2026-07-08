@@ -303,25 +303,29 @@ class ETPublicClient:
         username: str,
         page: int = 1,
         items_per_page: int = 9999999,
+        explicit_cid: Optional[str] = None,
     ) -> EToroTradeHistory:
         """
-        Fetch flat public credit/trade history for a user by username.
-    
-        The client resolves the username to a customer ID via the public
+        Fetch flat public credit/trade history for a user by CID or username.
+
+        If `explicit_cid` is provided, it is used directly. Otherwise the
+        client resolves the username to a customer ID via the public
         user-info API before fetching trade history. History is automatically
         fetched from 10 years back from the current UTC date.
-    
+
         GET https://www.etoro.com/sapi/trade-data-real/history/public/credit/flat
-    
+
         Args:
             username: eToro username to resolve and query.
             page: 1-based page number.
             items_per_page: Number of records per page.
-    
+            explicit_cid: Optional explicit customer ID to skip username
+                resolution.
+
         Returns:
             EToroTradeHistory containing a list of ``EToroTradeRecord`` objects
             with the raw JSON fields for each trade credit entry.
-    
+
         Raises:
             EToroClientError: If the request fails or returns a non-2xx status.
         """
@@ -330,7 +334,10 @@ class ETPublicClient:
             .replace(year=datetime.now(timezone.utc).year - 10)
             .strftime("%Y-%m-%dT%H:%M:%SZ")
         )
-        resolved_cid = self._resolve_cid_from_username(username)
+        if explicit_cid:
+            resolved_cid = str(explicit_cid)
+        else:
+            resolved_cid = self.resolve_cid(username)
     
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
         url = "https://www.etoro.com/sapi/trade-data-real/history/public/credit/flat"
@@ -349,7 +356,7 @@ class ETPublicClient:
         except requests.RequestException as exc:
             raise EToroClientError(f"GET trade history failed: {exc}") from exc
     
-        raw_items = data.get("items", data if isinstance(data, list) else [])
+        raw_items = data.get("PublicHistoryPositions", data if isinstance(data, list) else [])
         records = [EToroTradeRecord(raw=item) for item in raw_items]
     
         return EToroTradeHistory(
@@ -357,26 +364,46 @@ class ETPublicClient:
             records=records,
             page=data.get("pageNumber", page),
             items_per_page=data.get("itemsPerPage", items_per_page),
-            total_items=data.get("totalItems", len(records)),
+            total_items=len(records),
         )
-    
     
     def _resolve_cid_from_username(self, username: str) -> str:
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}"
-    
+        url = "https://public-api.etoro.com/api/v1/user-info/people"
+        params: Dict[str, Any] = {"usernames": username}
+
         try:
-            resp = session.get(url, timeout=self._timeout)
+            resp = session.get(url, params=params, timeout=self._timeout)
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
             raise EToroClientError(f"GET user by username failed: {exc}") from exc
-    
-        user = data.get("user", data) if isinstance(data, dict) else {}
-        cid = user.get("gcid") or user.get("realCID") or user.get("demoCID")
+
+        users = data.get("users", [])
+        if not users and isinstance(data, dict):
+            users = [data]
+
+        user = users[0] if users else {}
+        cid = user.get("realCID") or user.get("demoCID") or user.get("gcid")
         if not cid:
             raise EToroClientError(f"Could not resolve CID for username={username}")
         return str(cid)
+
+    def resolve_cid(self, username: str) -> str:
+        """
+        Resolve an eToro username to a numeric customer ID (CID).
+
+        This requires either:
+        - ETORO_PUBLIC_KEY and ETORO_PRIVATE_KEY env vars set on this client,
+        - Or a pre-authenticated ``ETPublicClient`` instance.
+
+        Returns:
+            str: Numeric customer ID.
+
+        Raises:
+            EToroClientError: If resolution fails.
+        """
+        return self._resolve_cid_from_username(username)
     
     def get_users_by_cid(self, cids: List[str]) -> EToroUserLookupResult:
         """

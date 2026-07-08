@@ -6,6 +6,15 @@ import pandas as pd
 import re
 from jinja2 import Template
 
+
+def _safe_to_float(value) -> float:
+    if value is None:
+        return 0.0
+    try:
+        return float(value)
+    except (TypeError, ValueError):
+        return 0.0
+
 def minify_css(css_content: str) -> str:
     """Minify CSS content to reduce file size."""
     # Remove CSS comments
@@ -86,7 +95,7 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
 
     Args:
         transactions_df (pd.DataFrame): DataFrame containing transaction data with columns:
-                                       'Date', 'Ticker', 'Side', 'Quantity', 'Price', 'Fees', 'Currency'.
+                                       'Date', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice', 'PnL'.
         sector_industry_df (pd.DataFrame, optional): DataFrame with 'name' for each ticker.
         price_data (pd.DataFrame, optional): DataFrame with latest prices for each ticker.
 
@@ -97,8 +106,7 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
         return "<p>No trades available.</p>"
 
     trades_df = transactions_df.copy()
-    trades_df = trades_df.dropna(subset=["Date", "Ticker", "Side", "Quantity", "Price"])
-    trades_df = trades_df[trades_df["Quantity"] > 0]
+    trades_df = trades_df.dropna(subset=["Date", "Ticker", "Side", "EntryPrice", "ExitPrice", "PnL"])
     if trades_df.empty:
         return "<p>No trades available.</p>"
     trades_df = trades_df.sort_values(by="Date", ascending=False)
@@ -106,45 +114,6 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
     name_map = {}
     if sector_industry_df is not None and not sector_industry_df.empty:
         name_map = sector_industry_df['name'].to_dict()
-
-    latest_prices = {}
-    if price_data is not None and not price_data.empty:
-        for ticker in trades_df['Ticker'].unique():
-            if ticker in price_data.columns:
-                valid_prices = price_data[ticker].dropna()
-                if not valid_prices.empty:
-                    latest_prices[ticker] = valid_prices.iloc[-1]
-
-    holdings = {}
-    cost_basis = {}
-
-    trades_df_calc = trades_df.sort_values(by="Date", ascending=True)
-    calc_indices = trades_df_calc.index.tolist()
-    pnl_map = {idx: None for idx in trades_df.index}
-
-    for orig_idx in calc_indices:
-        row = trades_df.loc[orig_idx]
-        ticker = row["Ticker"]
-        side = row["Side"]
-        quantity = row["Quantity"]
-        price = row["Price"]
-
-        if ticker not in holdings:
-            holdings[ticker] = 0.0
-            cost_basis[ticker] = 0.0
-
-        pnl = None
-        if side == "BUY":
-            total_cost = holdings[ticker] * cost_basis[ticker] + quantity * price
-            holdings[ticker] += quantity
-            if holdings[ticker] > 0:
-                cost_basis[ticker] = total_cost / holdings[ticker]
-        elif side == "SELL":
-            if holdings[ticker] > 0 and cost_basis[ticker] > 0:
-                pnl = (price - cost_basis[ticker]) / cost_basis[ticker] * 100
-            holdings[ticker] -= quantity
-
-        pnl_map[orig_idx] = pnl
 
     table_html = """
 <div id="trades-table-wrapper">
@@ -155,9 +124,9 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
                 <th>Ticker</th>
                 <th>Name</th>
                 <th>Side</th>
-                <th>Avg Entry</th>
-                <th>Price</th>
-                <th>PnL %</th>
+                <th>Entry Price</th>
+                <th>Exit Price</th>
+                <th>PnL</th>
             </tr>
         </thead>
         <tbody>
@@ -174,14 +143,22 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
         else:
             date_str = str(date_val)[:10]
         ticker = row["Ticker"]
-        name = name_map.get(ticker, ticker)
-        avg_entry = cost_basis.get(ticker, 0)
-        pnl_pct = pnl_map.get(orig_idx)
-        if pnl_pct is not None:
+        name = row.get("Name") or name_map.get(ticker, ticker)
+
+        entry_price = _safe_to_float(row.get("EntryPrice"))
+        exit_price = _safe_to_float(row.get("ExitPrice"))
+        pnl_value = _safe_to_float(row.get("PnL"))
+
+        pnl_class = "pnl-neutral"
+        if entry_price and exit_price:
+            pnl_pct = (exit_price - entry_price) / entry_price * 100
             pnl_class = "pnl-positive" if pnl_pct > 0 else "pnl-negative" if pnl_pct < 0 else "pnl-neutral"
             pnl_str = f'<span class="{pnl_class}">{pnl_pct:+.2f}%</span>'
+        elif pnl_value:
+            pnl_str = f'<span class="{pnl_class}">${pnl_value:+.2f}</span>'
         else:
             pnl_str = "-"
+
         table_html += f"""
             <tr>
                 <td>{date_str}</td>
@@ -192,8 +169,8 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
                         {side}
                     </div>
                 </td>
-                <td>${avg_entry:.2f}</td>
-                <td>${row["Price"]:.2f}</td>
+                <td>${entry_price:.2f}</td>
+                <td>${exit_price:.2f}</td>
                 <td>{pnl_str}</td>
             </tr>
         """

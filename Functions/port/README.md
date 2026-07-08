@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-Portfolio analytics module for interpreting eToro portfolio data and delivering advanced analytics for Pro Investors. The module is served via the AlphaSentra Flask backend under the `/port` endpoint. It ingests portfolio transaction history exported from eToro, enriches it with market data, computes comprehensive performance and risk metrics, and renders an interactive Plotly HTML report.
+Portfolio analytics module for interpreting eToro portfolio data and delivering advanced analytics for Pro Investors. The module is served via the AlphaSentra Flask backend under the `/port` endpoint. It fetches live portfolio data from the eToro API, enriches it with market data, computes comprehensive performance and risk metrics, and renders an interactive Plotly HTML report.
 
-**Input:** eToro transaction ledger (`transactions.csv`)
+**Input:** eToro API (live portfolio data)
 
 ```mermaid
 graph LR
-    A[eToro CSV Export] --> B[Flask /port Endpoint]
+    A[eToro API] --> B[Flask /port Endpoint]
     B --> C[PortfolioAnalyzer]
     C --> D[Market Data Provider]
     D --> E[Portfolio Time Series + Returns]
@@ -29,21 +29,11 @@ Ensure you have Python 3.x installed. The project dependencies are listed in [`.
 
 ## Usage
 
-The module receives portfolio data from eToro via a CSV export.
+The module fetches live portfolio data from the eToro API using the configured username.
 
-1. Export your transaction history from eToro as `transactions.csv`.
-2. Place it at `Functions/port/transactions.csv`.
-3. Start the Flask backend: `python app.py` (from the project root).
-4. Navigate to `http://localhost:8888/port`.
-
-Expected `transactions.csv` columns:
-
-| Date | Ticker | Side | Quantity | Price | Fees | Currency |
-|------|--------|------|----------|-------|------|----------|
-| 01/01/2023 | AAPL | BUY | 100 | 145.00 | 1.00 | USD |
-| 15/06/2023 | MSFT | BUY | 50 | 330.00 | 1.00 | USD |
-
-The backend will download market data, construct the portfolio time series, calculate all metrics, and return the interactive HTML report.
+1. Configure your eToro username in the environment or config.
+2. Start the Flask backend: `python app.py` (from the project root).
+3. Navigate to `http://localhost:8888/port`.
 
 ## Project Structure
 
@@ -51,7 +41,6 @@ The module is organized as a Python package:
 
 ```
 Functions/port/
-├── transactions.csv                 # (Input) eToro transaction ledger
 ├── main.py                          # Portfolio entry point (HTML + commentary generators)
 ├── config.py                        # Global config, theme color mapping
 ├── README.md                        # This file

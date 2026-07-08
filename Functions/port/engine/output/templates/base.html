@@ -1816,7 +1816,6 @@
                 csv.push(
                     Array.from(cols)
                         .map(function(c) {
-                            // Clean all nested text into a single line
                             var text = (c.innerText || c.textContent || '').replace(/\s+/g, ' ').trim();
                             return '"' + text.replace(/"/g, '""') + '"';
                         })

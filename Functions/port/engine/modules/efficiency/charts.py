@@ -1287,7 +1287,6 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
                 sec_weight_csv = f"{sec_row['weight'] * 100:.2f}"
                 sec_vol_csv = f"{sec_row['vol'] * 100:.2f}" if pd.notna(sec_row['vol']) else "-"
                 sec_corr_csv = f"{sec_row['corr']:.3f}" if pd.notna(sec_row['corr']) else "-"
-                # Escape any double-quotes in the name for use in data attributes
                 sec_name_csv = sec_name.replace('"', '&quot;')
 
                 html.append(f'<tr class="security-row {sid}-securities {iid}-securities" style="display: none; background-color: {LIGHT_ELEMENT};"'
@@ -1447,7 +1446,6 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
         var staticHeaders = ['Name','Weight','ER (1Y)','Vol (1Y)','Correl (1Y)','Composite Score'];
         csv.push(staticHeaders.join(','));
 
-        // Security rows — read clean values from data attributes (avoids textContent spacing issues)
         securityRows.forEach(function(row) {
             var d = row.dataset;
             var fields = [

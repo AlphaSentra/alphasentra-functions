@@ -64,7 +64,7 @@ Options:
     --help, -h      Show this help message and exit.
 
 The program will then prompt you interactively for:
-  - Inception date (auto-detected from CSV in transaction mode)
+  - Inception date (auto-detected from transaction history in eToro mode)
   - Benchmark ticker
   - Yield inclusion
   - Maximum position size

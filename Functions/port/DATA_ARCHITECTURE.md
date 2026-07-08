@@ -38,21 +38,20 @@ When you run `python main.py`, the first interactive question determines the **e
 ```
 Select portfolio input method:
 1. Load from Excel files (core_portfolio.xlsx, active_portfolio.xlsx)
-2. Import transactions from CSV (transactions.csv)
-3. Load active portfolio only (active_portfolio.xlsx)
+2. Load active portfolio only (active_portfolio.xlsx)
 ```
 
 This choice is stored in `config['input_method']` and affects:
 
-| Aspect | Method 1 (Excel Both) | Method 2 (CSV Transactions) | Method 3 (Active Only) |
-|--------|----------------------|-----------------------------|------------------------|
-| **Source files** | `core_portfolio.xlsx` + `active_portfolio.xlsx` | `transactions.csv` | `active_portfolio.xlsx` only |
-| **Defensive layer** | ✓ From core_portfolio | ✓ If `core_portfolio.xlsx` exists alongside | ✗ No defensive layer |
-| **Mode** | Static portfolio | Dynamic transaction-based backtest | Static portfolio (active only) |
-| **Time series** | Direct position value calculation | Day-by-day FIFO simulation | Direct position value |
-| **Cash accounting** | Not tracked | Full cash ledger with fees | Not tracked |
-| **Rebalancing** | Optional (quarterly) | N/A (trades define allocations) | Optional (quarterly) |
-| **Multi-layer metrics** | Defensive, Active, Total | Defensive (core), Active (trading), Total | Active, Total only |
+| Aspect | Method 1 (Excel Both) | Method 2 (Active Only) |
+|--------|----------------------|------------------------|
+| **Source files** | `core_portfolio.xlsx` + `active_portfolio.xlsx` | `active_portfolio.xlsx` only |
+| **Defensive layer** | ✓ From core_portfolio | ✗ No defensive layer |
+| **Mode** | Static portfolio | Static portfolio (active only) |
+| **Time series** | Direct position value calculation | Direct position value |
+| **Cash accounting** | Not tracked | Not tracked |
+| **Rebalancing** | Optional (quarterly) | Optional (quarterly) |
+| **Multi-layer metrics** | Defensive, Active, Total | Active, Total only |
 
 ---
 
@@ -64,8 +63,7 @@ flowchart TD
     B --> C{Input Method Choice}
 
     C -->|1. Excel Both| M1[Method 1\nStatic Full Portfolio]
-    C -->|2. CSV Transactions| M2[Method 2\nTransaction Backtest]
-    C -->|3. Active Only| M3[Method 3\nStatic Active-only]
+    C -->|2. Active Only| M2[Method 2\nStatic Active-only]
 
     %% Method 1 Path
     subgraph Path1 [Method 1 - Excel Both Layers]
@@ -80,21 +78,8 @@ flowchart TD
         TS1A & TS1B & TS1C --> CALC1[calculate_metrics\nmetrics.defensive\nmetrics.active\nmetrics.total]
     end
 
-    %% Method 2 Path
-    subgraph Path2 [Method 2 - Transaction Mode]
-        direction TB
-        M2 --> L2[load_transactions_from_csv\ntransactions_df]
-        L2 --> P2[Full trade history\nwith dates and prices]
-        P2 --> T2[build_portfolio_timeseries\ntransaction mode]
-        T2 --> TS2[ts dict\ndefensive from core\nactive from trades\ntotal = both]
-        TS2 --> DEF[_calculate_defensive_metrics\nseparate core_portfolio.xlsx build]
-        TS2 --> ACT[_calculate_active_metrics\ntransaction position build]
-        DEF --> CALC2[metrics.defensive\nmetrics.active\nmetrics.total]
-        ACT --> CALC2
-    end
-
     %% Method 3 Path
-    subgraph Path3 [Method 3 - Active Only]
+    subgraph Path2 [Method 2 - Active Only]
         direction TB
         M3 --> L3[load_portfolio\ninclude_core = False]
         L3 --> F3[portfolio_df\nactive rows only\nno defensive layer]
@@ -152,12 +137,12 @@ active_portfolio.xlsx (active)
 
 ---
 
-### Method 2 (CSV Transactions): Backtest with Full History
+### Method 2 (Active Only): Static Active Portfolio
 
 **Data flow**:
 
 ```
-transactions.csv (full ledger)
+active_portfolio.xlsx (active rows only)
          ↓
     transactions_df (sorted by date)
          ↓
@@ -215,7 +200,7 @@ active_portfolio.xlsx only
 | `include_core` in `load_portfolio()` | `True` | N/A (transactions used) | `False` |
 | Layers calculated | defensive, active, total | defensive + active (separate) | active, total |
 | `ts["holdings"]` populated | `None` | Yes (FIFO quantities) | `None` |
-| `transactions_df` length | 0 | Full CSV | 0 |
+| `portfolio_df` length | 0 | Active rows | 0 |
 | `rebalance` option | Available | Not used | Available |
 | Yield layer calculation | Per-layer (def/act) | From core + from active positions | Total only |
 
@@ -227,26 +212,16 @@ active_portfolio.xlsx only
 
 **Files**: `core_portfolio.xlsx`, `active_portfolio.xlsx`
 
-```csv
-ticker | quantity | type
------- | -------- | ----
-VAS.AX | 100      | defensive
-BHP.AX | 2000     | active
-```
+
 
 - `type` column indicates `defensive` (core) or `active` (tactical) layer
 - Quantities are either **share counts** or **percentages** (auto-detected or forced via config)
 
 ### 2. Transaction History (Dynamic Mode)
 
-**File**: `transactions.csv`
+**File**: `active_portfolio.xlsx`
 
-```csv
-Date       | Ticker | Side  | Quantity | Price | Fees
------------|--------|-------|----------|-------|------
-01/01/2023 | BHP.AX | BUY   | 100      | 45.00 | 10.00
-15/06/2023 | BHP.AX | SELL  | 50       | 48.50 | 10.00
-```
+
 
 - Enables true backtesting with cash flows and transaction costs
 - FIFO accounting for P&L calculation
@@ -256,7 +231,7 @@ Date       | Ticker | Side  | Quantity | Price | Fees
 **Source**: Yahoo Finance via `yfinance` library
 
 **Downloaded tickers**:
-- All portfolio holdings (from Excel or CSV)
+- All portfolio holdings (from Excel files)
 - Benchmark ticker (default: `^AXJO` – S&P/ASX 200 Index)
 - Market index (`^AXJO` – ASX 200 index)
 
@@ -307,7 +282,7 @@ ts = {
 - **Actual shares**: Quantity × price per share
 - If `rebalance=True`, weights are rebalanced quarterly to maintain target allocation
 
-#### Transaction Mode (CSV)
+#### Active-Only Mode
 - Simulates day-by-day portfolio evolution
 - Buys/sells adjust holdings and cash balance
 - Position values = shares held × price on that date
@@ -586,7 +561,7 @@ Diagonal: Masked with sentinel value (-2.0)
 graph TB
     %% Input Layer
     F1["Excel Files\ncore_portfolio.xlsx\nactive_portfolio.xlsx"] -->|load_portfolio| D1
-    F2["CSV File\ntransactions.csv"] -->|load_transactions_from_csv| D2["transactions_df\nDate, Ticker, Qty, Price, Fees"]
+    D2["portfolio_df\nTicker, Weight, Type"] -->|load_portfolio| P2[Active positions only]
     F3["Yahoo Finance API\nReal-time market data + metadata"] -->|download_price_data\nget_sector_industry_data| D3
 
     %% Layer 1: Raw DataFrames
@@ -803,7 +778,7 @@ flowchart LR
     subgraph P1 [Phase 1 - Input Data]
         direction LR
         F1[(Excel Files\ncore/active_portfolio.xlsx)]
-        F2[(transactions.csv)]
+        F2[(active_portfolio.xlsx)]
         F3[(Yahoo Finance API\nPrice and Metadata)]
     end
 
@@ -860,7 +835,7 @@ flowchart LR
 
     %% CONNECTIONS
     F1 -->|reads both Excel files\nmerged into portfolio_df| D1
-    F2 -->|CSV transactions| D2
+    D2 -->|active portfolio| P2
     F3 -->|prices + metadata| D3
 
     D1 & D2 -->|portfolio_df + transactions_df| TS
@@ -1070,7 +1045,7 @@ This layer enables pluggable data sources without changing downstream callers th
 ## Quick Reference: Input → Output Map
 
 ```
-Input Files (Excel/CSV)
+Input Files (Excel)
     ↓
 Portfolio/Transaction DataFrame
     ↓
@@ -1124,12 +1099,12 @@ flowchart TD
         L1_6 --> L1_7[calculate_metrics\nmetrics.defensive\nmetrics.active\nmetrics.total]
     end
 
-    %% ========== METHOD 2: CSV TRANSACTIONS ==========
-    D -->|2. CSV Transactions| M2[Method 2 Selected\nTransaction Backtest]
+    %% ========== METHOD 2: ACTIVE ONLY ==========
+    D -->|2. Active Only| M2[Method 2 Selected\nStatic Active Portfolio]
 
     subgraph M2_Flow [Method 2 Execution Flow]
         direction TB
-        M2 --> L2_1[load_transactions_from_csv\ntransactions.csv]
+        M2 --> L2_1[load_portfolio\ninclude_core = False]
         L2_1 --> L2_2[Parse dates, sides, qty, price\nSort by date ascending]
         L2_2 --> L2_3[Determine inception date\nfrom earliest transaction]
         L2_3 --> L2_4[build_portfolio_timeseries\nmode: transaction\nwith transactions_df]
@@ -1208,9 +1183,9 @@ flowchart TD
 def load_data(self):
     method = self.config['input_method']
 
-    if method == '2':           # CSV transactions
+    if method == '2':           # Active only
         self.transaction_mode = True
-        self.transactions_df = load_transactions_from_csv("transactions.csv")
+        self.portfolio = load_portfolio(include_core=False)
     elif method == '3':         # Active only
         self.portfolio = load_portfolio(include_core=False)
         self.portfolio = self.portfolio[self.portfolio['type'] != 'defensive']
@@ -1271,7 +1246,7 @@ def calculate_metrics(self):
 
 ## Why Method 2 is Different
 
-Method 2 (CSV transactions) is fundamentally a **backtesting engine**, not just a static allocation analyzer:
+Method 2 (Active Only) provides a simplified static portfolio analysis using only the active holdings:
 
 ### Key Distinctions
 
@@ -1283,7 +1258,7 @@ Method 2 (CSV transactions) is fundamentally a **backtesting engine**, not just 
 | **Active layer** | Derived as `total - defensive` | Derived from transaction P&L only |
 | **Cash tracking** | Implicit (unallocated cash) | Explicit cash_balance series tracked daily |
 | **Transaction costs** | Ignored | Fees column deducts from cash |
-| **Inception date** | Config or default (5yr) | Earliest transaction date in CSV |
+| **Inception date** | Config or default (5yr) | Config or default (5yr) |
 
 ### Transaction Mode Simulation Logic
 
@@ -1352,7 +1327,7 @@ else:
 User selects input method at CLI
          ↓
 Determines:
-├─ Which files are read (Excel vs CSV)
+├─ Which files are read (Excel)
 ├─ Whether transaction simulation runs
 ├─ How defensive layer is constructed
 ├─ What layers appear in metrics dict
@@ -1376,7 +1351,7 @@ All downstream calculations adapt accordingly
 | What changes? | Method 1 | Method 2 | Method 3 |
 |---------------|----------|----------|----------|
 | **`self.transaction_mode`** | `False` | `True` | `False` |
-| **Files required** | Both Excel files | transactions.csv + optionally core_portfolio.xlsx | active_portfolio.xlsx only |
+| **Files required** | Both Excel files | active_portfolio.xlsx only |
 | **Defensive metrics** | ✓ From ts['defensive'] | ✓ Separately from core file | ✗ |
 | **Active metrics** | ✓ From ts['active'] | ✓ From transaction simulation | ✓ From ts['active'] |
 | **Total metrics** | ✓ Combined | ✓ Combined | ✓ Combined |

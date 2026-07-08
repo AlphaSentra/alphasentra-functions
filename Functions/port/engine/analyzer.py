@@ -27,7 +27,7 @@ import numpy as np
 import pandas as pd
 from scipy.stats import linregress
 
-from data.loader import load_transactions_from_csv, load_transactions_from_etoro
+from data.loader import load_transactions_from_etoro
 from data.market import detect_relisted_stocks
 from data.provider_factory import get_market_data_provider as _get_provider
 from data.protocols import MarketDataProvider
@@ -85,18 +85,9 @@ class PortfolioAnalyzer:
     # ----------------------------------------------------------------------
 
     def load_data(self) -> None:
-        """Load transactions from eToro trade history or CSV."""
-        if self.etoro_username:
-            logger.info("eToro username configured; skipping CSV load, trade history will be loaded in run_analysis().")
-            return
-
-        self.transaction_mode = True
-        csv_path = Path(__file__).resolve().parent.parent / "transactions.csv"
-        self.transactions_df = load_transactions_from_csv(str(csv_path))
-        if self.transactions_df.empty:
-            raise PortfolioFunctionsError("No transactions loaded from CSV.")
-        logger.info(f"Loaded {len(self.transactions_df)} transactions.")
-        logger.info("Portfolio/transactions loaded successfully.")
+        if not self.etoro_username:
+            raise PortfolioFunctionsError("eToro username is required for portfolio analysis.")
+        logger.info("Loading eToro portfolio data...")
 
     def _load_etoro_portfolio_path(self) -> Tuple[bool, Optional[str]]:
         """

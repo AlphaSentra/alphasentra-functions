@@ -180,26 +180,35 @@ class ETPublicClient:
 
         # --- 3. Pull from MongoDB and compare fields ---
         db_symbol_map: Dict[str, str] = {}
-        if DatabaseManager is not None and instrument_ids:
+        symbol_fulls = list({v for v in etoro_symbol_map.values() if v})
+        if DatabaseManager is not None and symbol_fulls:
             try:
                 db = DatabaseManager().get_client()
                 db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
                 tickers_collection = db[db_name]["tickers"]
 
                 cursor = tickers_collection.find(
-                    {"ticker_etoro": {"$in": instrument_ids}},
+                    {"ticker_etoro": {"$in": symbol_fulls}},
                     {"ticker_etoro": 1, "ticker": 1},
                 )
                 for doc in cursor:
-                    iid = str(doc.get("ticker_etoro", ""))
+                    sym_full = str(doc.get("ticker_etoro", ""))
                     db_ticker = doc.get("ticker")
-                    if iid and db_ticker is not None:
-                        db_symbol_map[iid] = str(db_ticker)
+                    if sym_full and db_ticker is not None:
+                        db_symbol_map[sym_full] = str(db_ticker)
 
-                        api_symbol = etoro_symbol_map.get(iid)
+                        matched_iid = None
+                        for iid, sf in etoro_symbol_map.items():
+                            if sf == sym_full:
+                                matched_iid = iid
+                                break
+                        if matched_iid:
+                            api_symbol = etoro_symbol_map.get(matched_iid)
+                        else:
+                            api_symbol = None
                         if api_symbol and api_symbol != str(db_ticker):
                             logger.warning(
-                                f"Symbol mismatch detected for ID {iid}: "
+                                f"Symbol mismatch detected for symbol_full '{sym_full}': "
                                 f"eToro API says '{api_symbol}', DB mapping says '{db_ticker}'."
                             )
             except Exception as exc:
@@ -209,12 +218,13 @@ class ETPublicClient:
         positions = []
         for item in raw_positions:
             iid = str(item.get("instrumentId", ""))
+            symbol_full = etoro_symbol_map.get(iid)
             
-            # Fallback hierarchy logic:
-            # 1. Prefer MongoDB symbol mapping if available
-            # 2. Fall back to the real-time API mapped symbol if DB skipped/missing 
-            # 3. Fall back to None if both failed
-            resolved_symbol = db_symbol_map.get(iid) or etoro_symbol_map.get(iid)
+            resolved_symbol = None
+            if symbol_full:
+                resolved_symbol = db_symbol_map.get(symbol_full)
+            if resolved_symbol is None:
+                resolved_symbol = symbol_full
     
             positions.append(
                 EToroPortfolioPosition(
@@ -246,6 +256,8 @@ class ETPublicClient:
                     "buy_weight": 0.0,
                     "sell_weight": 0.0,
                     "position_count": 0,
+                    "instrument_ids": [],
+                    "symbol_fulls": [],
                 }
             entry = aggregated[sym]
             entry["weight"] += abs(pct)
@@ -255,6 +267,10 @@ class ETPublicClient:
                 entry["buy_weight"] += abs(pct)
             else:
                 entry["sell_weight"] += abs(pct)
+            if hasattr(pos, 'instrument_id') and pos.instrument_id:
+                entry["instrument_ids"].append(pos.instrument_id)
+            if hasattr(pos, 'symbol_full') and pos.symbol_full:
+                entry["symbol_fulls"].append(pos.symbol_full)
 
         aggregated_positions = []
         total_weight = 0.0
@@ -269,6 +285,8 @@ class ETPublicClient:
                 else "MIXED"
             )
             avg_price = (entry["invested"] / weight) if weight else 0.0
+            first_iid = entry["instrument_ids"][0] if entry["instrument_ids"] else None
+            first_symfull = entry["symbol_fulls"][0] if entry["symbol_fulls"] else None
             aggregated_positions.append(
                 EToroAggregatedPosition(
                     symbol=sym,
@@ -276,6 +294,8 @@ class ETPublicClient:
                     trade_direction=direction,
                     average_entry_price=avg_price,
                     position_count=entry["position_count"],
+                    instrument_id=first_iid,
+                    symbol_full=first_symfull,
                 )
             )
 

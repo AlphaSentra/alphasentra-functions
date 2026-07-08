@@ -21,30 +21,52 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
     """
     Generates a table of portfolio holdings sorted by weight from largest to lowest.
     Returns tuple (html_table, holdings_df).
+
+    The canonical ticker displayed in the table is produced upstream by
+    client.py which resolves it via:
+
+        instrumentId (eToro portfolio API)
+          → symbol_full (eToro search API internalSymbolFull)
+          → tickers.ticker_etoro (MongoDB, keyed by symbol_full)
+          → tickers.ticker (the canonical value)
+
+    risk_contrib and sector_industry_df are aligned to the same canonical
+    ticker, so merging by index preserves name/sector/metrics integrity.
     """
-    # Merge all data
-    holdings = risk_contrib[['Weight']].merge(sector_industry_df, left_index=True, right_index=True, how='left')
     cols = ['ticker', 'type']
+    if 'symbol_full' in portfolio_df.columns:
+        cols.append('symbol_full')
+    if 'instrument_id' in portfolio_df.columns:
+        cols.append('instrument_id')
     if 'quantity' in portfolio_df.columns:
         cols.append('quantity')
     if 'avg_price' in portfolio_df.columns:
         cols.append('avg_price')
     elif 'average_cost' in portfolio_df.columns:
         cols.append('average_cost')
-    
-    # Safety check: if columns are missing (e.g. empty portfolio_df), skip the merge
+
+    holdings = risk_contrib[['Weight']].merge(sector_industry_df, left_index=True, right_index=True, how='left')
+
     if all(col in portfolio_df.columns for col in ['ticker', 'type']):
-        holdings = holdings.merge(portfolio_df[cols].drop_duplicates().set_index('ticker'), left_index=True, right_index=True, how='left')
+        holdings = holdings.merge(
+            portfolio_df[cols].drop_duplicates().set_index('ticker'),
+            left_index=True, right_index=True, how='left'
+        )
     else:
-        # If missing, initialize with defaults
         if 'quantity' not in holdings.columns:
             holdings['quantity'] = 1.0
         if 'type' not in holdings.columns:
             holdings['type'] = 'active'
     holdings['type'] = holdings['type'].fillna('active').astype(str)
     if 'quantity' not in holdings.columns:
-        holdings['quantity'] = 1.0 # Default to Long if unknown
-    
+        holdings['quantity'] = 1.0
+
+    # portfolio_df['ticker'] already carries the canonical ticker from
+    # client.py (resolved via tickers.ticker_etoro → tickers.ticker).
+    # holdings.index is keyed by the same canonical value after the merge,
+    # so use it directly as the display ticker.
+    holdings['ticker'] = holdings.index
+
     # Calculate percentage growth and momentum spread
     # price_data columns are tickers, index are dates
     growth_pct = {}
@@ -717,7 +739,8 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                     val_str = f"${latest_val:.2f}" if pd.notna(latest_val) else "-"
                     html += f'<td class="u-sm">{val_str}</td>'
                 elif col == 'Ticker':
-                    html += f'<td class="u-sm u-nowrap overflow-visible">{ticker}</td>'
+                    display_ticker = row.get('ticker', ticker)
+                    html += f'<td class="u-sm u-nowrap overflow-visible">{display_ticker}</td>'
                 elif col == 'Name':
                     html += f'<td class="u-sm">{row["name"]}</td>'
                 elif col == 'Weight (%)':

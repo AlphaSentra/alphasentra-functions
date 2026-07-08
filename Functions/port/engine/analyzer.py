@@ -118,6 +118,8 @@ class PortfolioAnalyzer:
             self.portfolio = pd.DataFrame([
                 {
                     "ticker": pos.symbol.replace(".ASX", ".AX") if isinstance(pos.symbol, str) and pos.symbol.endswith(".ASX") else pos.symbol,
+                    "instrument_id": pos.instrument_id,
+                    "symbol_full": pos.symbol_full,
                     "quantity": pos.weight,
                     "type": "L" if pos.trade_direction == "BUY" else "S" if pos.trade_direction == "SELL" else "MIXED",
                     "avg_price": pos.average_entry_price,

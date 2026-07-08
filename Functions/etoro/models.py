@@ -40,6 +40,8 @@ class EToroAggregatedPosition:
     trade_direction: str
     average_entry_price: float
     position_count: int
+    instrument_id: Optional[str] = None
+    symbol_full: Optional[str] = None
 
 
 @dataclass

@@ -68,29 +68,16 @@ def generate_trades_metrics_strip(transactions_df):
     for _, row in df.iterrows():
         ticker = row['Ticker']
         side = row['Side'].upper()
-        trade_date = row['Date']  # Capture the transaction date
+        trade_date = row['Date']
         entry_price = _safe_to_float(row.get("EntryPrice"))
         exit_price = _safe_to_float(row.get("ExitPrice"))
+        pnl_value = _safe_to_float(row.get("PnL"))
 
         if side == 'BUY':
-            pnl_pct = 0.0
-            if entry_price and exit_price:
-                pnl_pct = (exit_price - entry_price) / entry_price * 100
-            elif entry_price:
-                pnl_value = _safe_to_float(row.get("PnL"))
-                if pnl_value and entry_price:
-                    pnl_pct = pnl_value / entry_price * 100
-
+            pnl_pct = pnl_value if pnl_value else 0.0
             completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
         elif side == 'SELL':
-            pnl_pct = 0.0
-            if entry_price and exit_price:
-                pnl_pct = (exit_price - entry_price) / entry_price * 100
-            elif exit_price:
-                pnl_value = _safe_to_float(row.get("PnL"))
-                if pnl_value and exit_price:
-                    pnl_pct = pnl_value / exit_price * 100
-
+            pnl_pct = pnl_value if pnl_value else 0.0
             completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
 
     if not completed_trades:

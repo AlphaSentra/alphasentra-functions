@@ -149,13 +149,9 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
         exit_price = _safe_to_float(row.get("ExitPrice"))
         pnl_value = _safe_to_float(row.get("PnL"))
 
-        pnl_class = "pnl-neutral"
-        if entry_price and exit_price:
-            pnl_pct = (exit_price - entry_price) / entry_price * 100
-            pnl_class = "pnl-positive" if pnl_pct > 0 else "pnl-negative" if pnl_pct < 0 else "pnl-neutral"
-            pnl_str = f'<span class="{pnl_class}">{pnl_pct:+.2f}%</span>'
-        elif pnl_value:
-            pnl_str = f'<span class="{pnl_class}">${pnl_value:+.2f}</span>'
+        if pnl_value:
+            pnl_class = "pnl-positive" if pnl_value > 0 else "pnl-negative" if pnl_value < 0 else "pnl-neutral"
+            pnl_str = f'<span class="{pnl_class}">{pnl_value:+.2f}%</span>'
         else:
             pnl_str = "-"
 

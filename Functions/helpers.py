@@ -3,6 +3,7 @@ Helper functions
 """
 
 import os
+from typing import Tuple
 from urllib.parse import quote_plus
 from logging_utils import log_error, log_info
 
@@ -82,4 +83,56 @@ class DatabaseManager:
             self._client.close()
             self._client = None
             log_info("MongoDB connection closed")
+
+
+def get_ticker_by_etoro_symbol(internal_symbol_full: str) -> str:
+    """
+    Look up the canonical ticker from MongoDB `tickers` collection
+    by matching the eToro full symbol against `ticker_etoro`.
+
+    Returns the `ticker` field value, or the original symbol if not found.
+    """
+    if not internal_symbol_full or not PYMONGO_AVAILABLE:
+        return internal_symbol_full or ""
+
+    try:
+        db = DatabaseManager().get_client()
+        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+        tickers_collection = db[db_name]["tickers"]
+        doc = tickers_collection.find_one(
+            {"ticker_etoro": internal_symbol_full},
+            {"ticker": 1},
+        )
+        if doc and doc.get("ticker"):
+            return str(doc["ticker"])
+    except Exception as exc:
+        log_error("Failed to lookup ticker by eToro symbol", "MONGODB_LOOKUP", exc)
+
+    return internal_symbol_full
+
+
+def get_ticker_and_name_by_etoro_symbol(internal_symbol_full: str) -> Tuple[str, str]:
+    """
+    Look up the canonical ticker and security name from MongoDB `tickers`
+    collection by matching the eToro full symbol against `ticker_etoro`.
+
+    Returns (ticker, name). Falls back to (original_symbol, "") if not found.
+    """
+    if not internal_symbol_full or not PYMONGO_AVAILABLE:
+        return internal_symbol_full or "", ""
+
+    try:
+        db = DatabaseManager().get_client()
+        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+        tickers_collection = db[db_name]["tickers"]
+        doc = tickers_collection.find_one(
+            {"ticker_etoro": internal_symbol_full},
+            {"ticker": 1, "name": 1},
+        )
+        if doc:
+            return str(doc.get("ticker", internal_symbol_full)), str(doc.get("name", ""))
+    except Exception as exc:
+        log_error("Failed to lookup ticker/name by eToro symbol", "MONGODB_LOOKUP", exc)
+
+    return internal_symbol_full, ""
 

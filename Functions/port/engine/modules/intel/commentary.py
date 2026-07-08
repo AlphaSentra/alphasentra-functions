@@ -427,6 +427,13 @@ def _build_overview_underperforming_table(holdings_df):
         if c is not None and c in df.columns:
             df[c] = pd.to_numeric(df[c], errors="coerce")
 
+    type_col = _pick("type", "direction", "side")
+    if type_col is not None and type_col in df.columns:
+        short_mask = df[type_col] == 'S'
+        for c in (ret_1w_col, ret_1m_col, ret_3m_col):
+            if c is not None and c in df.columns:
+                df.loc[short_mask, c] = -df.loc[short_mask, c]
+
     weights = {}
     if ret_1w_col is not None and ret_1w_col in df.columns:
         weights[ret_1w_col] = 0.50
@@ -1510,7 +1517,10 @@ def _security_composite_flags(holdings_df, prices, returns_series, risk_free_rat
         std_ret = rets_1y.std()
         vol = std_ret * np.sqrt(252) if std_ret > 0 else np.nan
         common_idx = rets_1y.index.intersection(port_rets_1y.index)
-        corr = rets_1y.loc[common_idx].corr(port_rets_1y.loc[common_idx]) if len(common_idx) > 20 else np.nan
+        sec_rets = rets_1y.loc[common_idx]
+        if direction == 'S':
+            sec_rets = -sec_rets
+        corr = sec_rets.corr(port_rets_1y.loc[common_idx]) if len(common_idx) > 20 else np.nan
         if pd.isna(expected_ret) or pd.isna(vol) or pd.isna(corr):
             continue
         e_score = min(max(expected_ret / 0.20, 0.0), 1.0) if expected_ret > 0 else 0.0

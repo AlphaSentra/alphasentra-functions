@@ -972,7 +972,10 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
         # Correlation to Portfolio
         common_idx = rets_1y.index.intersection(port_rets_1y.index)
         if len(common_idx) > 20:
-            corr = rets_1y.loc[common_idx].corr(port_rets_1y.loc[common_idx])
+            sec_rets = rets_1y.loc[common_idx]
+            if direction == 'S':
+                sec_rets = -sec_rets
+            corr = sec_rets.corr(port_rets_1y.loc[common_idx])
         else:
             corr = np.nan
             

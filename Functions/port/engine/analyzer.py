@@ -59,7 +59,7 @@ class PortfolioAnalyzer:
         self.ts = {}
         self.returns = {}
         self.benchmark = pd.Series(dtype='float64')
-        self.benchmark_ticker = config.get('benchmark_ticker', BENCHMARK_CANDIDATES[0] if BENCHMARK_CANDIDATES else "^AXJO")
+        self.benchmark_ticker = config.get('benchmark_ticker')
         self.include_yield = config['include_yield']
         self.initial_investment = config['initial_investment']
         self.start: Optional[datetime] = None
@@ -285,166 +285,6 @@ class PortfolioAnalyzer:
             if not self.portfolio.empty:
                 self.portfolio = self.portfolio.drop(index=relisted_tickers, errors='ignore')
             logger.info(f"Removed {len(relisted_tickers)} tickers from records.")
-
-    def _select_benchmark(self) -> None:
-        """
-        Dynamically select the best benchmark from candidates based on average R²
-        fit across portfolio holdings. Falls back to the first available candidate
-        if R² computation is not possible.
-        """
-        if not hasattr(self, 'prices') or self.prices.empty:
-            logger.warning("Benchmark auto-selection skipped: prices empty or missing.")
-            return
-
-        portfolio_tickers = [t for t in self._get_tickers() if t in self.prices.columns]
-        if not portfolio_tickers:
-            logger.warning("Benchmark auto-selection skipped: no portfolio tickers in price data.")
-            return
-
-        portfolio_returns = self.prices[portfolio_tickers].pct_change().dropna()
-        if portfolio_returns.empty:
-            logger.warning("Benchmark auto-selection skipped: portfolio returns empty after dropna.")
-            return
-
-        best_benchmark = None
-        best_score = -1
-
-        candidates = list(BENCHMARK_CANDIDATES)
-        if self.benchmark_ticker not in candidates:
-            candidates.append(self.benchmark_ticker)
-
-        etoro_total_returns = None
-        etoro_path = False
-        if self._etoro_returns_loaded:
-            etoro_total_returns = self.returns["total"]
-            etoro_path = True
-            logger.info(
-                "Benchmark selection using eToro total-return series (%d points)",
-                len(etoro_total_returns),
-            )
-        elif self.etoro_username:
-            logger.info(
-                "Benchmark selection: eToro username present but eToro returns failed; using per-stock R²"
-            )
-
-        benchmark_returns_lookup = {}
-        for candidate in candidates:
-            if candidate not in self.prices.columns:
-                logger.info("Benchmark candidate %s skipped: not in price columns.", candidate)
-                continue
-            benchmark_returns_lookup[candidate] = self.prices[candidate].pct_change().dropna()
-
-        MIN_ALIGN = 10
-
-        if etoro_path and etoro_total_returns is not None:
-            candidate_scores = []
-            for candidate, benchmark_returns in benchmark_returns_lookup.items():
-                if benchmark_returns.empty or benchmark_returns.std() == 0:
-                    logger.info("Benchmark candidate %s skipped: empty or zero-std returns.", candidate)
-                    continue
-                aligned = pd.concat([etoro_total_returns, benchmark_returns], axis=1).dropna()
-                if len(aligned) < MIN_ALIGN:
-                    logger.info("Benchmark candidate %s skipped: only %d aligned rows (need %d).", candidate, len(aligned), MIN_ALIGN)
-                    continue
-                x = aligned.iloc[:, 1].values
-                y = aligned.iloc[:, 0].values
-                if np.std(x) == 0 or np.std(y) == 0:
-                    logger.info("Benchmark candidate %s skipped: zero std in aligned series.", candidate)
-                    continue
-                corr = np.corrcoef(x, y)[0, 1]
-                if np.isnan(corr):
-                    logger.info("Benchmark candidate %s skipped: NaN correlation.", candidate)
-                    continue
-                score = corr ** 2
-                weight = min(len(aligned) / 60.0, 1.0)
-                candidate_scores.append((score, weight, candidate))
-                logger.info("Benchmark candidate %s R² vs eToro total: %.4f (weight=%.2f)", candidate, score, weight)
-
-            if candidate_scores:
-                candidate_scores.sort(key=lambda t: t[0] * t[1], reverse=True)
-                best_score, best_weight, best_benchmark = candidate_scores[0]
-                logger.info("Selected benchmark %s via eToro path (weighted score=%.4f).", best_benchmark, best_score * best_weight)
-        else:
-            portfolio_tickers_in_prices = [t for t in portfolio_tickers if t in self.prices.columns]
-            if portfolio_tickers_in_prices and not self.prices.empty:
-                portfolio_returns = self.prices[portfolio_tickers_in_prices].pct_change().dropna()
-                if not portfolio_returns.empty:
-                    candidate_scores = []
-                    for candidate in candidates:
-                        if candidate not in self.prices.columns:
-                            continue
-                        benchmark_returns = self.prices[candidate].pct_change().dropna()
-                        if benchmark_returns.empty or benchmark_returns.std() == 0:
-                            logger.info("Benchmark candidate %s skipped: empty or zero-std returns.", candidate)
-                            continue
-                        r2_scores = []
-                        weights = []
-                        for ticker in portfolio_returns.columns:
-                            aligned = pd.concat([portfolio_returns[ticker], benchmark_returns], axis=1).dropna()
-                            if len(aligned) < MIN_ALIGN:
-                                continue
-                            x = aligned.iloc[:, 1].values
-                            y = aligned.iloc[:, 0].values
-                            if np.std(x) == 0 or np.std(y) == 0:
-                                continue
-                            corr = np.corrcoef(x, y)[0, 1]
-                            if not np.isnan(corr):
-                                r2 = corr ** 2
-                                w = min(len(aligned) / 40.0, 1.0)
-                                r2_scores.append(r2 * w)
-                                weights.append(w)
-                        if r2_scores:
-                            score = float(sum(r2_scores) / sum(weights)) if sum(weights) > 0 else 0.0
-                            candidate_scores.append((score, candidate))
-                            logger.info("Benchmark candidate %s weighted R²: %.4f (from %d tickers).", candidate, score, len(r2_scores))
-                        else:
-                            logger.info("Benchmark candidate %s skipped: no tickers with sufficient aligned data.", candidate)
-
-                    if candidate_scores:
-                        candidate_scores.sort(key=lambda t: t[0], reverse=True)
-                        best_score, best_benchmark = candidate_scores[0]
-                        logger.info("Selected benchmark %s via per-stock weighted R² (score=%.3f).", best_benchmark, best_score)
-
-        if best_benchmark:
-            self.benchmark_ticker = best_benchmark
-            logger.info(f"Selected benchmark {best_benchmark} (score={best_score:.3f})")
-        else:
-            selection_failure_reason = "no R² data available"
-            if portfolio_tickers and not portfolio_returns.empty:
-                combined_returns = portfolio_returns.mean(axis=1)
-                for candidate in candidates:
-                    if candidate not in self.prices.columns:
-                        continue
-                    benchmark_returns = self.prices[candidate].pct_change().dropna()
-                    if benchmark_returns.empty or benchmark_returns.std() == 0:
-                        continue
-                    aligned = pd.concat([combined_returns, benchmark_returns], axis=1).dropna()
-                    if len(aligned) < MIN_ALIGN:
-                        continue
-                    x = aligned.iloc[:, 1].values
-                    y = aligned.iloc[:, 0].values
-                    if np.std(x) == 0 or np.std(y) == 0:
-                        continue
-                    corr = np.corrcoef(x, y)[0, 1]
-                    if not np.isnan(corr):
-                        score = corr ** 2
-                        logger.info(
-                            "Selected benchmark %s via combined portfolio correlation (score=%.3f); per-stock R² insufficient.",
-                            candidate, score,
-                        )
-                        self.benchmark_ticker = candidate
-                        return
-
-                selection_failure_reason = "combined portfolio correlation insufficient"
-
-            for candidate in candidates:
-                if candidate in self.prices.columns:
-                    self.benchmark_ticker = candidate
-                    logger.warning(
-                        "Auto-selection failed (%s) Falling back to %s.",
-                        selection_failure_reason, candidate,
-                    )
-                    break
 
     def _load_etoro_gain_timeseries(self) -> tuple[pd.Series, pd.Series]:
         """
@@ -1082,20 +922,6 @@ class PortfolioAnalyzer:
 
         self.build_timeseries()
         self.calculate_returns()
-
-        self._select_benchmark()
-
-        # Validate benchmark availability after selection
-        if self.benchmark_ticker not in self.prices.columns:
-            fallback = "ES=F" if "ES=F" in self.prices.columns else None
-            if fallback:
-                logger.warning(f"Benchmark {self.benchmark_ticker} not found, using {fallback}.")
-                self.benchmark_ticker = fallback
-            else:
-                raise PortfolioFunctionsError(
-                    f"Benchmark {self.benchmark_ticker} not found. "
-                    f"Available columns: {self.prices.columns.tolist()}"
-                )
 
         self.load_sector_industry_data()
         self.calculate_risk_contribution()

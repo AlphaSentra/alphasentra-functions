@@ -1,3 +1,4 @@
+import warnings
 import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
@@ -957,8 +958,11 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
                 arima_contrib = (cached / series.iloc[-1] - 1)
             else:
                 try:
-                    model = ARIMA(series_for_arima, order=(1, 1, 1))
-                    fitted = model.fit()
+                    series_for_arima = series_for_arima.tail(252)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        model = ARIMA(series_for_arima, order=(1, 1, 1))
+                        fitted = model.fit()
                     forecast = fitted.forecast(steps=1).iloc[0]
                     arima_contrib = (forecast / series.iloc[-1] - 1)
                     arima_cache_set(series_for_arima, forecast)

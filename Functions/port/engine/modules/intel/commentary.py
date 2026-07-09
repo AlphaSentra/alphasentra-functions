@@ -1,4 +1,5 @@
 import re
+import warnings
 import pandas as pd
 import numpy as np
 from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
@@ -1510,8 +1511,11 @@ def _security_composite_flags(holdings_df, prices, returns_series, risk_free_rat
             else:
                 try:
                     from statsmodels.tsa.arima.model import ARIMA
-                    model = ARIMA(series_for_arima, order=(1, 1, 1))
-                    fitted = model.fit()
+                    series_for_arima = series_for_arima.tail(252)
+                    with warnings.catch_warnings():
+                        warnings.simplefilter("ignore")
+                        model = ARIMA(series_for_arima, order=(1, 1, 1))
+                        fitted = model.fit()
                     forecast = fitted.forecast(steps=1).iloc[0]
                     arima_contrib = forecast / series.iloc[-1] - 1
                     arima_cache_set(series_for_arima, forecast)

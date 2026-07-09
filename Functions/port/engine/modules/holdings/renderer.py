@@ -1,5 +1,6 @@
 from statsmodels.tsa.arima.model import ARIMA
 from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
+import warnings
 import os
 import pandas as pd
 import numpy as np
@@ -246,8 +247,11 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                     arima_contrib = (cached / end_price - 1)
                 else:
                     try:
-                        model = ARIMA(series_for_arima, order=(1, 1, 1))
-                        fitted = model.fit()
+                        series_for_arima = series_for_arima.tail(252)
+                        with warnings.catch_warnings():
+                            warnings.simplefilter("ignore")
+                            model = ARIMA(series_for_arima, order=(1, 1, 1))
+                            fitted = model.fit()
                         forecast = fitted.forecast(steps=1).iloc[0]
                         arima_contrib = (forecast / end_price - 1)
                         arima_cache_set(series_for_arima, forecast)

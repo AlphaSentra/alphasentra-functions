@@ -1516,7 +1516,7 @@ def _security_composite_flags(holdings_df, prices, returns_series, risk_free_rat
                         warnings.simplefilter("ignore")
                         model = ARIMA(series_for_arima, order=(1, 1, 1))
                         fitted = model.fit()
-                    forecast = fitted.forecast(steps=1).iloc[0]
+                        forecast = fitted.forecast(steps=1).iloc[0]
                     arima_contrib = forecast / series.iloc[-1] - 1
                     arima_cache_set(series_for_arima, forecast)
                 except Exception:

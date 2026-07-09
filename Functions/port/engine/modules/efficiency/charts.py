@@ -963,7 +963,7 @@ def generate_security_efficiency_table(returns_series, holdings_df, prices, risk
                         warnings.simplefilter("ignore")
                         model = ARIMA(series_for_arima, order=(1, 1, 1))
                         fitted = model.fit()
-                    forecast = fitted.forecast(steps=1).iloc[0]
+                        forecast = fitted.forecast(steps=1).iloc[0]
                     arima_contrib = (forecast / series.iloc[-1] - 1)
                     arima_cache_set(series_for_arima, forecast)
                 except Exception:

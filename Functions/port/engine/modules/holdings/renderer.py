@@ -252,7 +252,7 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
                             warnings.simplefilter("ignore")
                             model = ARIMA(series_for_arima, order=(1, 1, 1))
                             fitted = model.fit()
-                        forecast = fitted.forecast(steps=1).iloc[0]
+                            forecast = fitted.forecast(steps=1).iloc[0]
                         arima_contrib = (forecast / end_price - 1)
                         arima_cache_set(series_for_arima, forecast)
                     except Exception:

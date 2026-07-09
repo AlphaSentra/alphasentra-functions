@@ -7,6 +7,8 @@ from typing import Any, Dict, List, Optional
 
 import requests
 
+from Functions.port.cache import get as cache_get, set as cache_set, _ETORO_TTL
+
 _current_dir = Path(__file__).resolve().parent
 _parent_dir = _current_dir.parent
 if str(_parent_dir) not in sys.path:
@@ -73,6 +75,10 @@ class ETPublicClient:
         Raises:
             EToroClientError: If the request fails or returns a non-2xx status.
         """
+        cache_key = ("gains", username, granularity, min_date, max_date)
+        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
         granularity = granularity.capitalize()
         if granularity not in {"Daily", "Period"}:
             raise ValueError("granularity must be one of: Daily, Period")
@@ -118,17 +124,23 @@ class ETPublicClient:
 
         total_gain = gains[-1].gain if gains else None
 
-        return EToroGainHistory(
+        result = EToroGainHistory(
             username=username,
             granularity=granularity,
             total_gain=total_gain,
             gains=gains,
         )
+        cache_set(cache_key, result, ext=".pkl")
+        return result
 
     def get_investor_portfolio(self, username: str) -> EToroInvestorPortfolio:
         """
         Fetch live open portfolio positions for a Popular Investor and match symbols.
         """
+        cache_key = ("portfolio", username)
+        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
         # --- 1. Fetch live portfolio positions ---
         url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/portfolio/live"
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
@@ -142,7 +154,9 @@ class ETPublicClient:
 
         raw_positions = data.get("positions", [])
         if not raw_positions:
-            return EToroInvestorPortfolio(username=username, positions=[])
+            empty_result = EToroInvestorPortfolio(username=username, positions=[])
+            cache_set(cache_key, empty_result, ext=".pkl")
+            return empty_result
 
         # Extract unique instrument IDs
         instrument_ids = list({str(item["instrumentId"]) for item in raw_positions if item.get("instrumentId")})
@@ -326,11 +340,13 @@ class ETPublicClient:
                 )
             )
 
-        return EToroInvestorPortfolio(
+        result = EToroInvestorPortfolio(
             username=username,
             positions=positions,
             aggregated_positions=aggregated_positions,
         )
+        cache_set(cache_key, result, ext=".pkl")
+        return result
     
     def get_trade_history(
         self,
@@ -373,6 +389,10 @@ class ETPublicClient:
             resolved_cid = str(explicit_cid)
         else:
             resolved_cid = self.resolve_cid(username)
+        cache_key = ("history", username, resolved_cid, page, items_per_page)
+        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
     
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
         url = "https://www.etoro.com/sapi/trade-data-real/history/public/credit/flat"
@@ -393,14 +413,16 @@ class ETPublicClient:
     
         raw_items = data.get("PublicHistoryPositions", data if isinstance(data, list) else [])
         records = [EToroTradeRecord(raw=item) for item in raw_items]
-    
-        return EToroTradeHistory(
+
+        result = EToroTradeHistory(
             cid=str(resolved_cid),
             records=records,
             page=data.get("pageNumber", page),
             items_per_page=data.get("itemsPerPage", items_per_page),
             total_items=len(records),
         )
+        cache_set(cache_key, result, ext=".pkl")
+        return result
     
     def _resolve_cid_from_username(self, username: str) -> str:
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
@@ -438,7 +460,13 @@ class ETPublicClient:
         Raises:
             EToroClientError: If resolution fails.
         """
-        return self._resolve_cid_from_username(username)
+        cache_key = ("cid", username)
+        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
+        result = self._resolve_cid_from_username(username)
+        cache_set(cache_key, result, ext=".pkl")
+        return result
     
     def get_users_by_cid(self, cids: List[str]) -> EToroUserLookupResult:
         """

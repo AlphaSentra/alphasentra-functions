@@ -4,6 +4,7 @@ import yfinance as yf
 
 from .protocols import MarketDataProvider
 from .models import AssetMetadata
+from Functions.port.cache import get as cache_get, set as cache_set, _PRICE_TTL, _SECTOR_TTL
 
 
 def _normalize_ticker(ticker: str) -> str:
@@ -52,6 +53,10 @@ def _to_camel_case(meta: AssetMetadata) -> dict:
 class YFinanceProvider(MarketDataProvider):
     def download_price_data(self, tickers, start_date, end_date) -> pd.DataFrame:
         normalized = _normalize_tickers(tickers)
+        cache_key = (tuple(sorted(normalized)), str(start_date), str(end_date))
+        cached = cache_get(cache_key, _PRICE_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
         data = yf.download(
             normalized,
             start=start_date,
@@ -61,10 +66,15 @@ class YFinanceProvider(MarketDataProvider):
         )
         if data.empty:
             raise ValueError("No data downloaded for the specified tickers and date range.")
+        cache_set(cache_key, data, ext=".pkl")
         return data
 
     def get_sector_industry_data(self, tickers) -> pd.DataFrame:
         normalized = _normalize_tickers(tickers)
+        cache_key = ("sector", tuple(sorted(normalized)))
+        cached = cache_get(cache_key, _SECTOR_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
         print(f"[yinance] requested={list(tickers)} normalized={normalized}")
         records = []
         for ticker in normalized:
@@ -91,7 +101,9 @@ class YFinanceProvider(MarketDataProvider):
             records.append(meta)
 
         df = pd.DataFrame([_to_camel_case(r) for r in records])
-        return df.set_index("ticker")
+        result = df.set_index("ticker")
+        cache_set(cache_key, result, ext=".pkl")
+        return result
 
     @staticmethod
     def _fetch_info_with_retries(ticker: str, max_retries: int = 3, delay: float = 2.0):

@@ -8,6 +8,8 @@ from Functions.themes import (
     _BG_SUBTLE, _NEUTRAL_0, font as _font_module
 )
 
+from Functions.port.cache import get as cache_get, set as cache_set, _REPORT_TTL
+
 FONT_FAMILY = _font_module.FONT_PRIMARY
 
 PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
@@ -84,6 +86,12 @@ def handle_portfolio_input():
         benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
     if etoro_username:
+        cache_key = (etoro_username, benchmark_ticker, etoro_cid)
+        cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
+        if cached_html is not None:
+            return cached_html
         from Functions.port.main import generate_portfolio_html
-        return generate_portfolio_html(etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
+        html = generate_portfolio_html(etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
+        cache_set(cache_key, html, ext=".html")
+        return html
     return PORTFOLIO_FORM_HTML

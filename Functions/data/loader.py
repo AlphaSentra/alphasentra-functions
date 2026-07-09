@@ -149,6 +149,7 @@ def _parse_date(value) -> Optional[pd.Timestamp]:
 
 def _map_record_to_row(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     close_date_val = raw.get("CloseDateTime")
+    open_date_val = raw.get("OpenDateTime")
     symbol = raw.get("InstrumentID")
     is_buy = raw.get("IsBuy")
     close_rate = raw.get("CloseRate")
@@ -158,14 +159,16 @@ def _map_record_to_row(raw: Dict[str, Any]) -> Optional[Dict[str, Any]]:
     if not close_date_val or not close_rate or not symbol:
         return None
 
-    parsed_date = _parse_date(close_date_val)
-    if parsed_date is None:
+    parsed_close_date = _parse_date(close_date_val)
+    parsed_open_date = _parse_date(open_date_val)
+    if parsed_close_date is None:
         return None
 
     side = "BUY" if bool(is_buy) else "SELL"
 
     return {
-        "Date": parsed_date,
+        "Exit Date": parsed_close_date,
+        "OpenDate": parsed_open_date,
         "Ticker": str(symbol),
         "Name": "",
         "Side": side,
@@ -243,13 +246,13 @@ def load_transactions_from_etoro(
             if drop_cols:
                 df = df.drop(columns=drop_cols)
 
-            required_cols = {"Date", "Ticker", "Name", "Side", "EntryPrice", "ExitPrice", "PnL"}
+            required_cols = {"Exit Date", "OpenDate", "Ticker", "Name", "Side", "EntryPrice", "ExitPrice", "PnL"}
             missing = required_cols - set(df.columns)
             if missing:
                 logger.warning("eToro trade history missing expected columns: %s", sorted(missing))
 
-            df["Date"] = pd.to_datetime(df["Date"], utc=True)
-            df = df.sort_values("Date").reset_index(drop=True)
+            df["Exit Date"] = pd.to_datetime(df["Exit Date"], utc=True).dt.tz_localize(None)
+            df = df.sort_values("Exit Date").reset_index(drop=True)
 
         logger.info("Loaded %d eToro trade history records for %s.", len(df), username)
         return df

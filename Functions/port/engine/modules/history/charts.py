@@ -30,7 +30,7 @@ def generate_trades_metrics_strip(transactions_df):
 
     Args:
         transactions_df (pd.DataFrame): DataFrame with transaction data containing
-                                        columns: 'Date', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice'.
+                                        columns: 'Exit Date', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice'.
         prices (pd.DataFrame, optional): Price data for calculating P&L over time.
 
     Returns:
@@ -54,12 +54,12 @@ def generate_trades_metrics_strip(transactions_df):
     if df.empty:
         return f"<div style='text-align: center; padding: 20px; color: {EMPTY_PLACEHOLDER_TEXT}'>No valid trades found.</div>"
 
-    # Ensure Date is datetime for proper sorting
-    df['Date'] = pd.to_datetime(df['Date'], errors='coerce')
-    df = df.dropna(subset=['Date'])
+    # Ensure Exit Date is datetime for proper sorting
+    df['Exit Date'] = pd.to_datetime(df['Exit Date'], errors='coerce')
+    df = df.dropna(subset=['Exit Date'])
 
     # Sort by date ascending to process trades chronologically
-    df = df.sort_values('Date').reset_index(drop=True)
+    df = df.sort_values('Exit Date').reset_index(drop=True)
 
     # Track holdings and cost basis using FIFO
     holdings = {}  # ticker -> list of {'qty': float, 'price': float, 'buy_date': Timestamp} (FIFO queue)
@@ -68,17 +68,25 @@ def generate_trades_metrics_strip(transactions_df):
     for _, row in df.iterrows():
         ticker = row['Ticker']
         side = row['Side'].upper()
-        trade_date = row['Date']
+        trade_date = row['Exit Date']
+        open_date = row.get('OpenDate')
         entry_price = _safe_to_float(row.get("EntryPrice"))
         exit_price = _safe_to_float(row.get("ExitPrice"))
         pnl_value = _safe_to_float(row.get("PnL"))
 
+        if pd.isna(trade_date):
+            duration_days = 0
+        elif pd.notna(open_date):
+            duration_days = max(0, (trade_date - open_date).total_seconds() / 86400)
+        else:
+            duration_days = 0
+
         if side == 'BUY':
             pnl_pct = pnl_value if pnl_value else 0.0
-            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
+            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': duration_days})
         elif side == 'SELL':
             pnl_pct = pnl_value if pnl_value else 0.0
-            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': 0})
+            completed_trades.append({'pnl_pct': pnl_pct, 'date': trade_date, 'duration_days': duration_days})
 
     if not completed_trades:
         return f"<div style='text-align: center; padding: 20px; color: {EMPTY_PLACEHOLDER_TEXT}'>No completed trades found.</div>"

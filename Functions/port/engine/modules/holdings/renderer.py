@@ -761,8 +761,10 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
         
         for ticker, row in holdings.iterrows():
             # Common calculations
-            mc = row['marketCap']
-            if mc >= 1e12: mc_str = f"{mc/1e12:.2f}T"
+            mc = row.get('marketCap')
+            if mc is None or (isinstance(mc, float) and pd.isna(mc)):
+                mc_str = "-"
+            elif mc >= 1e12: mc_str = f"{mc/1e12:.2f}T"
             elif mc >= 1e9: mc_str = f"{mc/1e9:.2f}B"
             elif mc >= 1e6: mc_str = f"{mc/1e6:.2f}M"
             elif mc > 0: mc_str = f"{mc:,.0f}"

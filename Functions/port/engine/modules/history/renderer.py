@@ -95,7 +95,7 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
 
     Args:
         transactions_df (pd.DataFrame): DataFrame containing transaction data with columns:
-                                       'Date', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice', 'PnL'.
+                                       'Exit Date', 'OpenDate', 'Ticker', 'Side', 'EntryPrice', 'ExitPrice', 'PnL'.
         sector_industry_df (pd.DataFrame, optional): DataFrame with 'name' for each ticker.
         price_data (pd.DataFrame, optional): DataFrame with latest prices for each ticker.
 
@@ -106,10 +106,10 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
         return "<p>No trades available.</p>"
 
     trades_df = transactions_df.copy()
-    trades_df = trades_df.dropna(subset=["Date", "Ticker", "Side", "EntryPrice", "ExitPrice", "PnL"])
+    trades_df = trades_df.dropna(subset=["Exit Date", "OpenDate", "Ticker", "Side", "EntryPrice", "ExitPrice", "PnL"])
     if trades_df.empty:
         return "<p>No trades available.</p>"
-    trades_df = trades_df.sort_values(by="Date", ascending=False)
+    trades_df = trades_df.sort_values(by="Exit Date", ascending=False)
 
     name_map = {}
     if sector_industry_df is not None and not sector_industry_df.empty:
@@ -120,7 +120,8 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
     <table id="trades-table">
         <thead>
             <tr class="trades-header-row">
-                <th>Date</th>
+                <th>Open Date</th>
+                <th>Exit Date</th>
                 <th>Ticker</th>
                 <th>Name</th>
                 <th>Side</th>
@@ -135,13 +136,17 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
     for orig_idx, row in trades_df.iterrows():
         side = row["Side"]
         side_class = "trades-side-buy" if side == "BUY" else "trades-side-sell"
-        date_val = row["Date"]
-        if pd.isna(date_val):
-            date_str = "-"
-        elif hasattr(date_val, 'strftime'):
-            date_str = date_val.strftime("%Y-%m-%d")
-        else:
-            date_str = str(date_val)[:10]
+
+        def _fmt_date(val):
+            if pd.isna(val):
+                return "-"
+            if hasattr(val, 'strftime'):
+                return val.strftime("%Y-%m-%d")
+            return str(val)[:10]
+
+        open_date_str = _fmt_date(row.get("OpenDate"))
+        exit_date_str = _fmt_date(row["Exit Date"])
+
         ticker = row["Ticker"]
         name = row.get("Name") or name_map.get(ticker, ticker)
 
@@ -157,7 +162,8 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
 
         table_html += f"""
             <tr>
-                <td>{date_str}</td>
+                <td>{open_date_str}</td>
+                <td>{exit_date_str}</td>
                 <td>{ticker}</td>
                 <td>{name}</td>
                 <td class="trades-side-cell">

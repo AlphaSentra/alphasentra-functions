@@ -1,6 +1,7 @@
 import re
 import pandas as pd
 import numpy as np
+from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
 
 from config import (
     ATTENTION_TABLE_CELL_BORDER,
@@ -1501,15 +1502,21 @@ def _security_composite_flags(holdings_df, prices, returns_series, risk_free_rat
         ma_200 = series.rolling(days_200).mean().iloc[-1] if days_200 >= 1 else np.nan
         mean_reversion = -(series.iloc[-1] / ma_200 - 1) if pd.notna(ma_200) and ma_200 != 0 else np.nan
         arima_contrib = np.nan
-        if len(series.dropna()) >= 10:
-            try:
-                from statsmodels.tsa.arima.model import ARIMA
-                model = ARIMA(series.dropna(), order=(1, 1, 1))
-                fitted = model.fit()
-                forecast = fitted.forecast(steps=1).iloc[0]
-                arima_contrib = forecast / series.iloc[-1] - 1
-            except Exception:
-                pass
+        series_for_arima = series.dropna()
+        if len(series_for_arima) >= 10:
+            cached = arima_cache_get(series_for_arima)
+            if cached is not None:
+                arima_contrib = cached / series.iloc[-1] - 1
+            else:
+                try:
+                    from statsmodels.tsa.arima.model import ARIMA
+                    model = ARIMA(series_for_arima, order=(1, 1, 1))
+                    fitted = model.fit()
+                    forecast = fitted.forecast(steps=1).iloc[0]
+                    arima_contrib = forecast / series.iloc[-1] - 1
+                    arima_cache_set(series_for_arima, forecast)
+                except Exception:
+                    pass
         expected_ret = w1 * ret_12m + w2 * ret_3m + w3 * mean_reversion + w4 * arima_contrib
         direction = holdings_df.loc[ticker, 'type'] if 'type' in holdings_df.columns else 'active'
         if direction == 'S':

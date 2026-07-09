@@ -1,4 +1,5 @@
 from statsmodels.tsa.arima.model import ARIMA
+from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
 import os
 import pandas as pd
 import numpy as np
@@ -238,14 +239,20 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
             ma_200 = ticker_prices.rolling(days_200).mean().iloc[-1] if days_200 >= 1 else np.nan
             mean_reversion = -(end_price / ma_200 - 1) if pd.notna(ma_200) and ma_200 != 0 else np.nan
             arima_contrib = np.nan
-            if len(ticker_prices.dropna()) >= 10:
-                try:
-                    model = ARIMA(ticker_prices.dropna(), order=(1, 1, 1))
-                    fitted = model.fit()
-                    forecast = fitted.forecast(steps=1).iloc[0]
-                    arima_contrib = (forecast / end_price - 1)
-                except Exception:
-                    arima_contrib = np.nan
+            series_for_arima = ticker_prices.dropna()
+            if len(series_for_arima) >= 10:
+                cached = arima_cache_get(series_for_arima)
+                if cached is not None:
+                    arima_contrib = (cached / end_price - 1)
+                else:
+                    try:
+                        model = ARIMA(series_for_arima, order=(1, 1, 1))
+                        fitted = model.fit()
+                        forecast = fitted.forecast(steps=1).iloc[0]
+                        arima_contrib = (forecast / end_price - 1)
+                        arima_cache_set(series_for_arima, forecast)
+                    except Exception:
+                        arima_contrib = np.nan
             er_vals = [v for v in [ret_12m, ret_3m, mean_reversion] if pd.notna(v)]
             if er_vals:
                 expected_return = (w1 * ret_12m if pd.notna(ret_12m) else 0.0) + \

@@ -180,36 +180,36 @@ class ETPublicClient:
 
         # --- 3. Pull from MongoDB and compare fields ---
         db_symbol_map: Dict[str, str] = {}
+        instrument_ids = list({str(item["instrumentId"]) for item in raw_positions if item.get("instrumentId")})
         symbol_fulls = list({v for v in etoro_symbol_map.values() if v})
-        if DatabaseManager is not None and symbol_fulls:
+        if DatabaseManager is not None and (instrument_ids or symbol_fulls):
             try:
                 db = DatabaseManager().get_client()
                 db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
                 tickers_collection = db[db_name]["tickers"]
 
+                query = {"$or": []}
+                if instrument_ids:
+                    query["$or"].append({"ticker_etoro": {"$in": instrument_ids}})
+                if symbol_fulls:
+                    query["$or"].append({"ticker_etoro": {"$in": symbol_fulls}})
+
                 cursor = tickers_collection.find(
-                    {"ticker_etoro": {"$in": symbol_fulls}},
+                    query,
                     {"ticker_etoro": 1, "ticker": 1},
                 )
                 for doc in cursor:
-                    sym_full = str(doc.get("ticker_etoro", ""))
+                    key = str(doc.get("ticker_etoro", ""))
                     db_ticker = doc.get("ticker")
-                    if sym_full and db_ticker is not None:
-                        db_symbol_map[sym_full] = str(db_ticker)
+                    if key and db_ticker is not None:
+                        db_symbol_map[key] = str(db_ticker)
 
-                        matched_iid = None
-                        for iid, sf in etoro_symbol_map.items():
-                            if sf == sym_full:
-                                matched_iid = iid
-                                break
-                        if matched_iid:
-                            api_symbol = etoro_symbol_map.get(matched_iid)
-                        else:
-                            api_symbol = None
-                        if api_symbol and api_symbol != str(db_ticker):
-                            logger.warning(
-                                f"Symbol mismatch detected for symbol_full '{sym_full}': "
-                                f"eToro API says '{api_symbol}', DB mapping says '{db_ticker}'."
+                        matched_symbol = etoro_symbol_map.get(key)
+                        if matched_symbol and matched_symbol != str(db_ticker):
+                            logger.info(
+                                f"Symbol mismatch for key '{key}': "
+                                f"eToro says '{matched_symbol}', DB mapping says '{db_ticker}'. "
+                                f"Using DB canonical ticker '{db_ticker}'."
                             )
             except Exception as exc:
                 logger.warning("Failed to lookup eToro instrument symbols from DB: %s", exc)
@@ -219,12 +219,25 @@ class ETPublicClient:
         for item in raw_positions:
             iid = str(item.get("instrumentId", ""))
             symbol_full = etoro_symbol_map.get(iid)
-            
+
             resolved_symbol = None
-            if symbol_full:
-                resolved_symbol = db_symbol_map.get(symbol_full)
+            if symbol_full and symbol_full in db_symbol_map:
+                resolved_symbol = db_symbol_map[symbol_full]
+            elif iid in db_symbol_map:
+                resolved_symbol = db_symbol_map[iid]
+
             if resolved_symbol is None:
-                resolved_symbol = symbol_full
+                logger.warning(
+                    "No DB mapping for instrumentId=%s or symbol_full=%s; "
+                    "position will be skipped (tickers.ticker is mandatory).",
+                    iid, symbol_full,
+                )
+                continue
+
+            logger.info(
+                "Resolved instrumentId=%s symbol_full=%s -> canonical ticker=%s",
+                iid, symbol_full, resolved_symbol,
+            )
     
             positions.append(
                 EToroPortfolioPosition(
@@ -246,7 +259,9 @@ class ETPublicClient:
 
         aggregated: Dict[str, Dict[str, Any]] = {}
         for pos in positions:
-            sym = pos.symbol or "UNKNOWN"
+            if not pos.symbol:
+                continue
+            sym = pos.symbol
             pct = pos.investment_pct or 0.0
             rate = pos.open_rate or 0.0
             if sym not in aggregated:

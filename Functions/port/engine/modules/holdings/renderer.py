@@ -99,11 +99,12 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
     if 'quantity' not in holdings.columns:
         holdings['quantity'] = 1.0
 
-    # portfolio_df['ticker'] already carries the canonical ticker from
-    # client.py (resolved via tickers.ticker_etoro → tickers.ticker).
-    # holdings.index is keyed by the same canonical value after the merge,
-    # so use it directly as the display ticker.
-    holdings['ticker'] = holdings.index
+    if 'WISE.L' in risk_contrib.index:
+        print(f"[renderer] WISE.L IN risk_contrib")
+    if 'sector_industry_df' in dir() and 'WISE.L' in sector_industry_df.index:
+        print(f"[renderer] WISE.L IN sector_industry_df")
+    if 'ticker' in portfolio_df.columns and 'WISE.L' in portfolio_df['ticker'].values:
+        print(f"[renderer] WISE.L IN portfolio_df")
 
     # Fallback: fill name/sector from the MongoDB tickers collection when
     # the market-data provider returned NaN/None/empty for either field.
@@ -485,10 +486,13 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
     holdings['accel_score'] = accel_scores
     
     # Calculate industry average Forward P/E for comparison
-    # Ensure forward_pe, eps_growth, ev_ebitda are numeric before comparison
-    holdings['forward_pe'] = pd.to_numeric(holdings['forward_pe'], errors='coerce').fillna(0.0)
-    holdings['eps_growth'] = pd.to_numeric(holdings['eps_growth'], errors='coerce').fillna(0.0)
-    holdings['ev_ebitda'] = pd.to_numeric(holdings['ev_ebitda'], errors='coerce').fillna(0.0)
+    # Ensure fundamental metrics are numeric. Keep NaN as NaN so the HTML
+    # renderer can distinguish "missing data" from a real zero value.
+    holdings['forward_pe'] = pd.to_numeric(holdings['forward_pe'], errors='coerce')
+    holdings['eps_growth'] = pd.to_numeric(holdings['eps_growth'], errors='coerce')
+    holdings['ev_ebitda'] = pd.to_numeric(holdings['ev_ebitda'], errors='coerce')
+    holdings['roe'] = pd.to_numeric(holdings['roe'], errors='coerce')
+    holdings['current_ratio'] = pd.to_numeric(holdings['current_ratio'], errors='coerce')
     
     valid_pes = holdings[holdings['forward_pe'] > 0]
     if not valid_pes.empty:

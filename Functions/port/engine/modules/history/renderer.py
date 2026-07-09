@@ -179,12 +179,10 @@ def generate_trades_table(transactions_df, sector_industry_df=None, price_data=N
     return table_html
 
 
-def render_trades_tab(transactions_df, sector_industry_df=None, price_data=None, holdings_df=None, charts=None) -> str:
+def render_trades_tab(trades_table, sector_industry_df=None, price_data=None, holdings_df=None, charts=None) -> str:
     """
     Renders the Trades tab HTML block.
     """
-    trades_table = generate_trades_table(transactions_df, sector_industry_df, price_data)
-
     template_src = """
 <div id="History" class="tab-content">
     <!-- Header strip: key trade metrics -->

@@ -149,7 +149,6 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     metrics, charts, start = analyzer.run_analysis()
 
     trades_table = getattr(analyzer, 'trades_table_html', '')
-    transactions_df = getattr(analyzer, 'transactions_df', pd.DataFrame())
     holdings_df = getattr(analyzer, 'holdings_df', pd.DataFrame())
     positions = getattr(analyzer, 'positions', pd.DataFrame())
     prices = analyzer.prices
@@ -160,7 +159,6 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         charts,
         config['title'],
         start,
-        transactions_df=transactions_df,
         include_yield=config['include_yield'],
         trades_table=trades_table,
         holdings_df=holdings_df,
@@ -242,7 +240,6 @@ def main() -> int:
 
         # Extract data for report
         trades_table = getattr(analyzer, 'trades_table_html', '')
-        transactions_df = getattr(analyzer, 'transactions_df', pd.DataFrame())
         holdings_df = getattr(analyzer, 'holdings_df', pd.DataFrame())
         positions = getattr(analyzer, 'positions', pd.DataFrame())
         prices = analyzer.prices
@@ -254,7 +251,6 @@ def main() -> int:
             charts,
             config['title'],
             start,
-            transactions_df=transactions_df,
             include_yield=config['include_yield'],
             trades_table=trades_table,
             holdings_df=holdings_df,

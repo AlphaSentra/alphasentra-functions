@@ -1,3 +1,4 @@
+import time
 import pandas as pd
 import yfinance as yf
 
@@ -6,7 +7,8 @@ from .models import AssetMetadata
 
 
 def _normalize_ticker(ticker: str) -> str:
-    return ticker.replace(".ASX", ".AX") if isinstance(ticker, str) and ticker.endswith(".ASX") else ticker
+    ticker = ticker.replace(".ASX", ".AX") if isinstance(ticker, str) and ticker.endswith(".ASX") else ticker
+    return ticker
 
 
 def _normalize_tickers(tickers):
@@ -19,6 +21,15 @@ def _normalize_dividend_yield(div_yield) -> float:
     if div_yield > 0.0:
         return div_yield / 100.0
     return float(div_yield)
+
+
+def _safe_float(val):
+    if val is None:
+        return None
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return None
 
 
 def _to_camel_case(meta: AssetMetadata) -> dict:
@@ -54,28 +65,44 @@ class YFinanceProvider(MarketDataProvider):
 
     def get_sector_industry_data(self, tickers) -> pd.DataFrame:
         normalized = _normalize_tickers(tickers)
+        print(f"[yinance] requested={list(tickers)} normalized={normalized}")
         records = []
         for ticker in normalized:
-            try:
-                info = yf.Ticker(ticker).info
-                meta = AssetMetadata(
-                    ticker=ticker,
-                    name=info.get("longName", ticker),
-                    sector=info.get("sector", "Others"),
-                    industry=info.get("industry", "Others"),
-                    dividend_yield=_normalize_dividend_yield(info.get("dividendYield")),
-                    market_cap=info.get("marketCap", 0.0),
-                    eps=info.get("trailingEps", 0.0),
-                    ev_ebitda=info.get("enterpriseToEbitda", 0.0),
-                    eps_growth=info.get("earningsGrowth", 0.0),
-                    forward_pe=info.get("forwardPE", 0.0),
-                    roe=info.get("returnOnEquity", info.get("roe", 0.0)),
-                    current_ratio=info.get("currentRatio", 0.0),
-                )
-                records.append(meta)
-            except Exception as e:
-                print(f"Warning: Could not fetch info for {ticker}: {e}")
-                records.append(AssetMetadata.default(ticker))
+            info = self._fetch_info_with_retries(ticker)
+            if info is None:
+                records.append(AssetMetadata.failed(ticker))
+                continue
+            keys_found = [k for k in ['longName','sector','industry','enterpriseToEbitda','returnOnEquity','currentRatio','forwardPE'] if info.get(k) is not None]
+            print(f"[yinance] {ticker}: {len(keys_found)}/7 core keys: {keys_found}")
+            meta = AssetMetadata(
+                ticker=ticker,
+                name=info.get("longName") or ticker,
+                sector=info.get("sector") or "Others",
+                industry=info.get("industry") or "Others",
+                dividend_yield=_normalize_dividend_yield(info.get("dividendYield")),
+                market_cap=_safe_float(info.get("marketCap")),
+                eps=_safe_float(info.get("trailingEps")),
+                ev_ebitda=_safe_float(info.get("enterpriseToEbitda")),
+                eps_growth=_safe_float(info.get("earningsGrowth")),
+                forward_pe=_safe_float(info.get("forwardPE")),
+                roe=_safe_float(info.get("returnOnEquity")) or _safe_float(info.get("roe")),
+                current_ratio=_safe_float(info.get("currentRatio")),
+            )
+            records.append(meta)
 
         df = pd.DataFrame([_to_camel_case(r) for r in records])
         return df.set_index("ticker")
+
+    @staticmethod
+    def _fetch_info_with_retries(ticker: str, max_retries: int = 3, delay: float = 2.0):
+        for attempt in range(1, max_retries + 1):
+            try:
+                info = yf.Ticker(ticker).info
+                if info and isinstance(info, dict):
+                    return info
+            except Exception as exc:
+                if attempt == max_retries:
+                    print(f"Warning: Could not fetch info for {ticker} after {max_retries} attempts: {exc}")
+                else:
+                    time.sleep(delay * attempt)
+        return None

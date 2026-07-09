@@ -24,3 +24,19 @@ class AssetMetadata:
             sector="Others",
             industry="Others",
         )
+
+    @classmethod
+    def failed(cls, ticker: str) -> "AssetMetadata":
+        return cls(
+            ticker=ticker,
+            name=ticker,
+            sector="Others",
+            industry="Others",
+            market_cap=None,
+            eps=None,
+            ev_ebitda=None,
+            eps_growth=None,
+            forward_pe=None,
+            roe=None,
+            current_ratio=None,
+        )

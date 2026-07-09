@@ -189,11 +189,9 @@ def test_etoro_trade_history_endpoint():
 
     print(f"Analyzer etoro_username: {analyzer.etoro_username}")
     print(f"Analyzer etoro_cid: {analyzer.etoro_cid}")
-    print(f"Analyzer transaction_mode before run: {analyzer.transaction_mode}")
 
     #analyzer.run_analysis()
 
-    print(f"Analyzer transaction_mode after run: {analyzer.transaction_mode}")
     print(f"transactions_df shape: {analyzer.transactions_df.shape}")
     print(f"transactions_df empty: {analyzer.transactions_df.empty}")
     print(f"trades_table_html empty: {not getattr(analyzer, 'trades_table_html', '')}")

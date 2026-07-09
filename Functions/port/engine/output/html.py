@@ -225,7 +225,6 @@ def generate_portfolio_ai_commentary(metrics, charts, title, start, **kwargs):
 
 
 def generate_html_report(metrics, charts, title, start, **kwargs):
-    transactions_df = kwargs.get('transactions_df')
     include_yield = kwargs.get('include_yield', True)
     trades_table = kwargs.get('trades_table', '')
     holdings_df = kwargs.get('holdings_df')
@@ -435,10 +434,10 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
         tabs_content += '<div id="Stats" class="tab-content"></div>'
 
     # History
-    if ENABLED_MODULES.get("history", True) and trades_table and transactions_df is not None and not transactions_df.empty:
+    if ENABLED_MODULES.get("history", True) and trades_table:
         from engine.modules.history.renderer import render_trades_tab
         tabs_content += render_trades_tab(
-            transactions_df=transactions_df,
+            trades_table=trades_table,
             sector_industry_df=sector_industry_df,
             price_data=price_data,
             holdings_df=holdings_df,

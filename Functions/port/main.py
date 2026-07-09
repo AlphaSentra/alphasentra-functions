@@ -10,6 +10,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import logging
 import pandas as pd
 import argparse
+import time
 
 # Configure logging
 logging.basicConfig(
@@ -22,6 +23,11 @@ logger = logging.getLogger(__name__)
 from engine.analyzer import PortfolioAnalyzer, PortfolioFunctionsError
 from data.provider_factory import get_market_data_provider
 from engine.output.html import generate_html_report
+
+
+def _log_report_time(label: str, start_time: float):
+    elapsed = time.perf_counter() - start_time
+    logger.info(f"{label} completed in {elapsed:.2f}s")
 
 
 def parse_flags() -> argparse.Namespace:
@@ -141,6 +147,7 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     Returns:
         HTML string of the portfolio report.
     """
+    report_start = time.perf_counter()
     config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
@@ -172,6 +179,8 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         benchmark_ticker=analyzer.benchmark_ticker,
     )
 
+    _log_report_time("Portfolio HTML report", report_start)
+
     return html
 
 
@@ -187,6 +196,7 @@ def generate_ai_commentary_text(etoro_username: str = "", benchmark_ticker: str 
     Returns:
         str: Combined commentary text suitable for sending to an AI prompt.
     """
+    report_start = time.perf_counter()
     config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
@@ -210,6 +220,8 @@ def generate_ai_commentary_text(etoro_username: str = "", benchmark_ticker: str 
         benchmark_ticker=analyzer.benchmark_ticker,
     )
 
+    _log_report_time("Portfolio AI commentary", report_start)
+
     return commentary
 
 
@@ -229,6 +241,7 @@ def main() -> int:
         return 0
 
     try:
+        report_start = time.perf_counter()
         # Collect input from user (interactive)
         config = get_interactive_input(flags.no_browser)
 
@@ -265,6 +278,7 @@ def main() -> int:
         )
 
         logger.info("Analysis complete.")
+        _log_report_time("Portfolio report (CLI)", report_start)
         print("\nAnalysis complete.")
 
         return 0

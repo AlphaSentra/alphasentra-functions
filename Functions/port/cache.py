@@ -24,7 +24,7 @@ except Exception:
     except Exception:
         _CACHE_DIR = Path("/tmp")
 
-_REPORT_TTL = 30 * 60    # 30 minutes
+_REPORT_TTL = 2 * 60 * 60   # 2 hours
 _PRICE_TTL = 6 * 60 * 60  # 6 hours
 _SECTOR_TTL = 24 * 60 * 60  # 24 hours
 _ETORO_TTL = 5 * 60      # 5 minutes

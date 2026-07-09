@@ -8,7 +8,10 @@ from Functions.themes import (
     _BG_SUBTLE, _NEUTRAL_0, font as _font_module
 )
 
+import logging
 from Functions.port.cache import get as cache_get, set as cache_set, _REPORT_TTL
+
+logger = logging.getLogger(__name__)
 
 FONT_FAMILY = _font_module.FONT_PRIMARY
 
@@ -89,7 +92,9 @@ def handle_portfolio_input():
         cache_key = (etoro_username, benchmark_ticker, etoro_cid)
         cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
         if cached_html is not None:
+            logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
             return cached_html
+        logger.info("Portfolio cache miss username=%s benchmark=%s", etoro_username, benchmark_ticker)
         from Functions.port.main import generate_portfolio_html
         html = generate_portfolio_html(etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
         cache_set(cache_key, html, ext=".html")

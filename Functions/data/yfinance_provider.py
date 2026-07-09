@@ -1,4 +1,7 @@
+import logging
 import time
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 import pandas as pd
 import yfinance as yf
 
@@ -53,7 +56,7 @@ def _to_camel_case(meta: AssetMetadata) -> dict:
 class YFinanceProvider(MarketDataProvider):
     def download_price_data(self, tickers, start_date, end_date) -> pd.DataFrame:
         normalized = _normalize_tickers(tickers)
-        cache_key = (tuple(sorted(normalized)), str(start_date), str(end_date))
+        cache_key = (tuple(sorted(normalized)), str(start_date))
         cached = cache_get(cache_key, _PRICE_TTL, ext=".pkl")
         if cached is not None:
             return cached
@@ -76,9 +79,25 @@ class YFinanceProvider(MarketDataProvider):
         if cached is not None:
             return cached
         print(f"[yinance] requested={list(tickers)} normalized={normalized}")
+
+        _MAX_WORKERS = min(10, len(normalized) or 1)
+        with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
+            future_map = {
+                executor.submit(self._fetch_info_with_retries, ticker): ticker
+                for ticker in normalized
+            }
+            results = {}
+            for future in as_completed(future_map):
+                ticker = future_map[future]
+                try:
+                    results[ticker] = future.result()
+                except Exception as exc:
+                    logging.getLogger(__name__).warning("Failed to fetch info for %s: %s", ticker, exc)
+                    results[ticker] = None
+
         records = []
         for ticker in normalized:
-            info = self._fetch_info_with_retries(ticker)
+            info = results.get(ticker)
             if info is None:
                 records.append(AssetMetadata.failed(ticker))
                 continue

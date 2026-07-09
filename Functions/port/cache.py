@@ -14,6 +14,13 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Optional
 
+from config import (
+    CACHE_TTL_REPORT,
+    CACHE_TTL_PRICE,
+    CACHE_TTL_SECTOR,
+    CACHE_TTL_ETORO,
+)
+
 _CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 try:
     _CACHE_DIR.mkdir(exist_ok=True)
@@ -24,10 +31,10 @@ except Exception:
     except Exception:
         _CACHE_DIR = Path("/tmp")
 
-_REPORT_TTL = 2 * 60 * 60   # 2 hours
-_PRICE_TTL = 6 * 60 * 60  # 6 hours
-_SECTOR_TTL = 24 * 60 * 60  # 24 hours
-_ETORO_TTL = 5 * 60      # 5 minutes
+_REPORT_TTL = CACHE_TTL_REPORT
+_PRICE_TTL = CACHE_TTL_PRICE
+_SECTOR_TTL = CACHE_TTL_SECTOR
+_ETORO_TTL = CACHE_TTL_ETORO
 
 _lock = Lock()
 

@@ -15,6 +15,12 @@ MIN_POSITION_SIZE = 0.50
 OPT_LONG_SHORT = False
 OPT_GROSS_EXPOSURE = 2.0
 
+# Cache TTLs (in seconds)
+CACHE_TTL_REPORT = 24 * 60 * 60  # 24 hours
+CACHE_TTL_PRICE = 6 * 60 * 60    # 6 hours
+CACHE_TTL_SECTOR = 24 * 60 * 60  # 24 hours
+CACHE_TTL_ETORO = 5 * 60         # 5 minutes
+
 # Default market data provider
 DATA_PROVIDER = "yfinance"
 

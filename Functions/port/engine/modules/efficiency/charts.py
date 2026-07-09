@@ -3,7 +3,7 @@ import pandas as pd
 import numpy as np
 import plotly.graph_objects as go
 from statsmodels.tsa.arima.model import ARIMA
-from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
+from Functions.port.cache import arima_get as arima_cache_get, arima_set as arima_cache_set
 from config import (
     EFFICIENCY_LABEL_FONT,
     EFFICIENCY_SHARPE_LINE, EFFICIENCY_SORTINO_LINE, EFFICIENCY_IR_LINE,
@@ -547,16 +547,24 @@ def generate_rolling_metrics_table(returns_series, benchmark_returns, risk_free_
     if not df.empty and _one_year:
         most_recent_date = df.iloc[0]['Date']
         most_recent_corr = df.iloc[0]['Correlation']
+        pinned_alpha = _one_year.get('Alpha (Risk-Adj) Annualized', np.nan) * 100
+        pinned_beta = _one_year.get('Beta', np.nan)
+        if len(df) > 1:
+            alpha_diff = pinned_alpha - df.iloc[1]['Alpha (%)']
+            beta_diff = pinned_beta - df.iloc[1]['Beta']
+        else:
+            alpha_diff = np.nan
+            beta_diff = np.nan
         pinned = {
             'Date': most_recent_date,
             'Sharpe Ratio': _one_year.get('Sharpe Ratio', np.nan),
             'Sortino Ratio': _one_year.get('Sortino Ratio', np.nan),
             'Information Ratio': _one_year.get('Information Ratio', np.nan),
-            'Alpha (%)': _one_year.get('Alpha (Risk-Adj) Annualized', np.nan) * 100,
-            'Beta': _one_year.get('Beta', np.nan),
+            'Alpha (%)': pinned_alpha,
+            'Beta': pinned_beta,
             'Correlation': most_recent_corr,
-            'Alpha_diff': df.iloc[0]['Alpha_diff'],
-            'Beta_diff': df.iloc[0]['Beta_diff'],
+            'Alpha_diff': alpha_diff,
+            'Beta_diff': beta_diff,
         }
         df.iloc[0] = pinned
     

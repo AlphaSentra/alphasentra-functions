@@ -15,6 +15,8 @@ from pathlib import Path
 from threading import Lock
 from typing import Any, Optional
 
+import pandas as pd
+
 from config import (
     CACHE_TTL_REPORT,
     CACHE_TTL_PRICE,
@@ -118,4 +120,37 @@ def clear() -> None:
             except Exception as exc:
                 _logger.warning("Cache clear error path=%s error=%s", f, exc)
     _logger.info("Portfolio cache cleared directory=%s", _CACHE_DIR)
+
+
+_arima_cache: dict[str, float] = {}
+
+
+def _series_key(series: pd.Series) -> str:
+    values = series.dropna()
+    if values.empty:
+        return ""
+    name = str(values.name or "")
+    length = len(values)
+    try:
+        digest = hashlib.md5(values.values.tobytes()).hexdigest()
+    except Exception:
+        digest = hashlib.md5(str(values.values).encode("utf-8")).hexdigest()
+    return f"{name}:{length}:{digest}"
+
+
+def arima_get(series: pd.Series) -> Optional[float]:
+    key = _series_key(series)
+    if not key:
+        return None
+    return _arima_cache.get(key)
+
+
+def arima_set(series: pd.Series, value: float) -> None:
+    key = _series_key(series)
+    if key:
+        _arima_cache[key] = value
+
+
+def arima_clear() -> None:
+    _arima_cache.clear()
 

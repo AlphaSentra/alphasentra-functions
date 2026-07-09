@@ -2,7 +2,7 @@ import re
 import warnings
 import pandas as pd
 import numpy as np
-from Functions.port.arima_cache import get as arima_cache_get, set as arima_cache_set
+from Functions.port.cache import arima_get as arima_cache_get, arima_set as arima_cache_set
 
 from config import (
     ATTENTION_TABLE_CELL_BORDER,

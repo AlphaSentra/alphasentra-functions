@@ -19,44 +19,6 @@ from config import (
 )
 
 
-try:
-    from helpers import DatabaseManager
-    _DB_MANAGER_AVAILABLE = True
-except ImportError:
-    _DB_MANAGER_AVAILABLE = False
-
-
-def _load_name_sector_from_db(tickers):
-    """
-    Load name and sector from the MongoDB `tickers` collection for tickers
-    where the market-data-provider value is missing.
-
-    Returns a dict keyed by canonical ticker with values:
-        {"name": "...", "sector": "..."}
-    """
-    if not _DB_MANAGER_AVAILABLE:
-        return {}
-    try:
-        db = DatabaseManager().get_client()
-        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
-        tickers_collection = db[db_name]["tickers"]
-        result = {}
-        for ticker in tickers:
-            doc = tickers_collection.find_one(
-                {"ticker": ticker},
-                {"name": 1, "sector": 1, "_id": 0},
-            )
-            if doc:
-                result[ticker] = {
-                    "name": doc.get("name"),
-                    "sector": doc.get("sector"),
-                }
-        return result
-    except Exception as exc:
-        print(f"[holdings-renderer] MongoDB name/sector fallback failed: {exc}")
-        return {}
-
-
 def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price_data, portfolio_df):
     """
     Generates a table of portfolio holdings sorted by weight from largest to lowest.
@@ -108,25 +70,6 @@ def generate_portfolio_holdings_analysis(risk_contrib, sector_industry_df, price
     if 'ticker' in portfolio_df.columns and 'WISE.L' in portfolio_df['ticker'].values:
         print(f"[renderer] WISE.L IN portfolio_df")
 
-    # Fallback: fill name/sector from the MongoDB tickers collection when
-    # the market-data provider returned NaN/None/empty for either field.
-    if 'name' in holdings.columns or 'sector' in holdings.columns:
-        needs_name = set()
-        needs_sector = set()
-        for ticker, row in holdings.iterrows():
-            if 'name' not in holdings.columns or (row.get('name') is None or (isinstance(row.get('name'), float) and np.isnan(row.get('name'))) or str(row.get('name', '')).strip() == ''):
-                needs_name.add(ticker)
-            if 'sector' not in holdings.columns or (row.get('sector') is None or (isinstance(row.get('sector'), float) and np.isnan(row.get('sector'))) or str(row.get('sector', '')).strip() == '' or str(row.get('sector', '')) == 'Unknown'):
-                needs_sector.add(ticker)
-        if needs_name or needs_sector:
-            db_fallback = _load_name_sector_from_db(needs_name | needs_sector)
-            if db_fallback:
-                for ticker, fields in db_fallback.items():
-                    if ticker in holdings.index:
-                        if ticker in needs_name and fields.get('name'):
-                            holdings.at[ticker, 'name'] = fields['name']
-                        if ticker in needs_sector and fields.get('sector'):
-                            holdings.at[ticker, 'sector'] = fields['sector']
 
     # Calculate percentage growth and momentum spread
     # price_data columns are tickers, index are dates

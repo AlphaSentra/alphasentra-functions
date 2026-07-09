@@ -89,7 +89,11 @@ def handle_portfolio_input():
         benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
     if etoro_username:
-        cache_key = (etoro_username, benchmark_ticker, etoro_cid)
+        cache_key = (
+            etoro_username.strip().lower(),
+            (benchmark_ticker or "").strip().upper(),
+            etoro_cid.strip().lower(),
+        )
         cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
         if cached_html is not None:
             logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)

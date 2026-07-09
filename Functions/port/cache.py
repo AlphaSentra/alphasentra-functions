@@ -8,6 +8,7 @@ Cache keys are hashed tuples. Value serialization:
 """
 
 import hashlib
+import logging
 import pickle
 import time
 from pathlib import Path
@@ -21,15 +22,20 @@ from config import (
     CACHE_TTL_ETORO,
 )
 
+_logger = logging.getLogger(__name__)
+
 _CACHE_DIR = Path(__file__).resolve().parent / ".cache"
 try:
-    _CACHE_DIR.mkdir(exist_ok=True)
-except Exception:
+    _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+except Exception as exc:
+    _logger.warning("Portfolio cache dir %s unusable (%s); falling back to /tmp/portfolio_cache", _CACHE_DIR, exc)
     _CACHE_DIR = Path("/tmp") / "portfolio_cache"
     try:
-        _CACHE_DIR.mkdir(exist_ok=True)
-    except Exception:
+        _CACHE_DIR.mkdir(parents=True, exist_ok=True)
+    except Exception as exc:
+        _logger.warning("Fallback portfolio cache dir %s unusable (%s); using system tmp", _CACHE_DIR, exc)
         _CACHE_DIR = Path("/tmp")
+_logger.info("Portfolio cache directory: %s", _CACHE_DIR)
 
 _REPORT_TTL = CACHE_TTL_REPORT
 _PRICE_TTL = CACHE_TTL_PRICE
@@ -51,18 +57,28 @@ def get(key: tuple, ttl: int, ext: str = ".pkl") -> Optional[Any]:
     key_str = _key_str(key)
     p = _path(key_str, ext)
     if not p.exists():
+        _logger.debug("Cache miss key=%s path=%s", key_str, p)
         return None
     try:
         mtime = p.stat().st_mtime
         if time.time() - mtime > ttl:
+            _logger.debug("Cache expired key=%s path=%s age=%ss ttl=%s", key_str, p, int(time.time() - mtime), ttl)
             p.unlink(missing_ok=True)
             return None
         if ext == ".pkl":
             with open(p, "rb") as f:
-                return pickle.load(f)
-        with open(p, "r", encoding="utf-8") as f:
-            return f.read()
-    except Exception:
+                value = pickle.load(f)
+        else:
+            with open(p, "r", encoding="utf-8") as f:
+                value = f.read()
+        _logger.debug("Cache hit key=%s path=%s", key_str, p)
+        return value
+    except Exception as exc:
+        _logger.warning("Cache read error key=%s path=%s error=%s", key_str, p, exc)
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
         return None
 
 
@@ -80,8 +96,9 @@ def set(key: tuple, value: Any, ext: str = ".pkl") -> None:
             else:
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(str(value))
-        except Exception:
-            pass
+            _logger.debug("Cache write key=%s path=%s", key_str, p)
+        except Exception as exc:
+            _logger.warning("Cache write error key=%s path=%s error=%s", key_str, p, exc)
 
 
 def invalidate(key: tuple) -> None:
@@ -90,12 +107,15 @@ def invalidate(key: tuple) -> None:
         for ext in [".pkl", ".html", ".json"]:
             p = _path(key_str, ext)
             p.unlink(missing_ok=True)
+        _logger.debug("Cache invalidated key=%s", key_str)
 
 
 def clear() -> None:
     with _lock:
-        for f in _CACHE_DIR.glob("*"):
+        for f in list(_CACHE_DIR.glob("*")):
             try:
                 f.unlink()
-            except Exception:
-                pass
+            except Exception as exc:
+                _logger.warning("Cache clear error path=%s error=%s", f, exc)
+    _logger.info("Portfolio cache cleared directory=%s", _CACHE_DIR)
+

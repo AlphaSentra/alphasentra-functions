@@ -4,6 +4,7 @@ import logging
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
+from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
@@ -165,30 +166,49 @@ class ETPublicClient:
         etoro_symbol_map: Dict[str, str] = {}
         try:
             search_url = "https://public-api.etoro.com/api/v1/market-data/search"
-            for iid in instrument_ids:
-                inst_resp = session.get(search_url, params={"instrumentId": iid}, timeout=self._timeout)
-                inst_resp.raise_for_status()
-                for item in inst_resp.json().get("items", []):
-                    sid = str(item.get("internalInstrumentId", ""))
-                    symbol = item.get("internalSymbolFull")
-                    if sid and symbol:
-                        etoro_symbol_map[sid] = str(symbol)
+            with ThreadPoolExecutor(max_workers=min(10, len(instrument_ids) or 1)) as executor:
+                def _fetch_symbol(iid):
+                    try:
+                        resp = session.get(search_url, params={"instrumentId": iid}, timeout=self._timeout)
+                        resp.raise_for_status()
+                        return {
+                            str(item["internalInstrumentId"]): item["internalSymbolFull"]
+                            for item in resp.json().get("items", [])
+                            if item.get("internalInstrumentId") and item.get("internalSymbolFull")
+                        }
+                    except Exception:
+                        return {}
+
+                futures = {executor.submit(_fetch_symbol, iid): iid for iid in instrument_ids}
+                for future in as_completed(futures):
+                    result = future.result()
+                    etoro_symbol_map.update(result)
         except Exception as exc:
             logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
 
         # --- 2b. Verify symbols by reverse lookup (internalSymbolFull -> ID) ---
         try:
             search_url = "https://public-api.etoro.com/api/v1/market-data/search"
-            for iid, symbol in list(etoro_symbol_map.items()):
-                inst_resp = session.get(search_url, params={"internalSymbolFull": symbol}, timeout=self._timeout)
-                inst_resp.raise_for_status()
-                for item in inst_resp.json().get("items", []):
-                    sid = str(item.get("internalInstrumentId", ""))
-                    if sid and sid != iid:
-                        logger.info(
-                            f"Symbol ambiguity detected for '{symbol}': "
-                            f"expected ID {iid} but search returned ID {sid}."
-                        )
+            items = list(etoro_symbol_map.items())
+            with ThreadPoolExecutor(max_workers=min(10, len(items) or 1)) as executor:
+                def _check_ambiguity(iid_symbol):
+                    iid, symbol = iid_symbol
+                    try:
+                        resp = session.get(search_url, params={"internalSymbolFull": symbol}, timeout=self._timeout)
+                        resp.raise_for_status()
+                        for item in resp.json().get("items", []):
+                            sid = str(item.get("internalInstrumentId", ""))
+                            if sid and sid != iid:
+                                logger.info(
+                                    f"Symbol ambiguity detected for '{symbol}': "
+                                    f"expected ID {iid} but search returned ID {sid}."
+                                )
+                    except Exception:
+                        pass
+
+                futures = [executor.submit(_check_ambiguity, item) for item in items]
+                for future in as_completed(futures):
+                    future.result()
         except Exception as exc:
             logger.warning("Failed to verify symbols via eToro search API: %s", exc)
 

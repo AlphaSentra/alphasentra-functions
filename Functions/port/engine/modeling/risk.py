@@ -46,48 +46,24 @@ def calculate_var_cvar(returns, confidence=0.95):
 
 
 def run_monte_carlo_simulation(initial_value, returns_series, num_simulations=10000, forecast_days=252):
-    """
-    Runs a Monte Carlo simulation to forecast future portfolio values.
-
-    Args:
-        initial_value (float): The starting value of the portfolio for the simulation.
-        returns_series (pd.Series): Historical daily returns of the portfolio.
-        num_simulations (int): The number of simulation paths to generate.
-        forecast_days (int): The number of trading days to forecast into the future.
-
-    Returns:
-        pd.DataFrame: A DataFrame where each column represents a single simulation path
-                      of cumulative portfolio values.
-    """
-    # Calculate daily drift and volatility from historical returns
-    # Drift represents the average daily return
     drift = returns_series.mean()
     if pd.isna(drift):
         drift = 0.0
-    # Volatility represents the standard deviation of daily returns
     volatility = returns_series.std()
     if pd.isna(volatility):
-        volatility = 0.01  # Small default volatility if none can be calculated
+        volatility = 0.01
 
-    # Generate random daily returns for each simulation path
-    # The formula used here is based on Geometric Brownian Motion:
-    # daily_returns = exp(drift - 0.5 * volatility^2 + volatility * Z)
-    # where Z is a random variable from a standard normal distribution.
-    # We use norm.ppf to get the inverse of the cumulative distribution function
-    # for generating random numbers based on a normal distribution.
-    # np.random.rand generates uniform random numbers between 0 and 1.
     random_shocks = norm.ppf(np.random.rand(forecast_days, num_simulations))
     daily_returns = np.exp(drift - 0.5 * volatility**2 + volatility * random_shocks)
 
-    # Initialize a DataFrame to store all simulation paths
-    simulation_df = pd.DataFrame(index=range(forecast_days + 1), columns=range(num_simulations))
-    simulation_df.iloc[0] = initial_value
+    cumulative_returns = np.cumprod(daily_returns, axis=0)
+    simulation_values = initial_value * cumulative_returns
 
-    # Generate each simulation path
-    for i in range(num_simulations):
-        # Calculate cumulative simulated values for the current path
-        # Each column represents a simulation path
-        simulation_df.iloc[1:, i] = initial_value * daily_returns[:, i].cumprod()
+    simulation_df = pd.DataFrame(
+        np.vstack([np.full(num_simulations, initial_value), simulation_values]),
+        index=range(forecast_days + 1),
+        columns=range(num_simulations),
+    )
 
     return simulation_df
 

@@ -780,13 +780,10 @@ class PortfolioAnalyzer:
         mc_returns_percentage = (mc_simulations.iloc[-1] / mc_simulations.iloc[0] - 1)
 
         # Forward Expected Drawdown (average of max drawdowns across paths)
-        drawdowns = []
-        for col in mc_simulations.columns:
-            cumulative = mc_simulations[col]
-            peak = cumulative.cummax()
-            drawdown = (cumulative - peak) / peak  # Negative values
-            drawdowns.append(drawdown.min())
-        mc_expected_drawdown = np.mean(drawdowns)
+        values = mc_simulations.values
+        cummax = np.maximum.accumulate(values, axis=0)
+        drawdowns = (values - cummax) / cummax
+        mc_expected_drawdown = drawdowns.min(axis=0).mean()
 
         # Store Monte Carlo metrics in 'total' layer
         total_metrics = self.metrics.get("total", {})

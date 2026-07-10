@@ -4,12 +4,15 @@
 
 # AlphaSentra Functions App
 
-This is the **Functions App** for the **AlphaSentra Project** — a Flask backend that serves and renders the outputs of various analytical functions.
+This is the **Functions App** for the **AlphaSentra Project** — a Flask backend that serves and renders the outputs of various analytical functions. It acts as a unified gateway for portfolio analytics and AI-powered screening tools, with most modules rendering live HTML reports or redirecting to the AlphaSentra web application.
 
-- **PORT (Portfolio & Risk Analytics)** — Connects eToro users and delivers portfolio analytics via the eToro API.
-- **EQS (Stocks AI Screener)** — AI-powered stock screening analysis.
-- **WCR (Forex AI Screener)** — AI-powered forex screening analysis.
-- **CRYP (Cryptocurrency AI Screener)** — AI-powered cryptocurrency screening analysis.
+- **PORT (Portfolio & Risk Analytics)** — Connects to eToro accounts and delivers deep portfolio analytics via the eToro API. Runs a full `PortfolioAnalyzer` pipeline that computes performance metrics, generates charts, evaluates risk, analyzes sector/industry exposure, and produces a rendered HTML report. Supports AI commentary generation powered by Google Gemini.
+- **EQS (Stocks AI Screener)** — Redirects to the AlphaSentra stock screener (`/screener?asset_class=EQ`) for AI-powered equity screening.
+- **WCR (Forex AI Screener)** — Redirects to the AlphaSentra forex screener (`/screener?asset_class=FX`) for AI-powered currency screening.
+- **CRYP (Cryptocurrency AI Screener)** — Redirects to the AlphaSentra crypto screener (`/screener?asset_class=CR`) for AI-powered digital asset screening.
+- **ANA (Analyse)** — Redirects to the AlphaSentra analysis search page for general asset analysis.
+
+The app uses a **route registry** pattern where each function module is loaded dynamically from the `Functions/` directory via `importlib.util`, allowing modules to remain gitignored while still being discoverable and documented at runtime. Supporting utilities include MongoDB-backed data lookups (ticker resolution, settings), Gemini AI integration with usage tracking, Fernet-based encryption for sensitive strings, and structured file/console logging with unique error codes.
 
 ## Setup
 
@@ -18,6 +21,63 @@ python3 -m venv venv
 source venv/bin/activate
 pip install -r requirements.txt
 ```
+
+## Environment Variables
+
+Create a `.env` file in the project root with the following variables:
+
+```env
+# MongoDB Connection
+USE_MONGODB_SRV=true
+MONGODB_SRV=your_mongodb_srv_connection_string
+MONGODB_HOST=your_mongodb_host
+MONGODB_PORT=your_mongodb_port
+MONGODB_DATABASE=your_database_name
+MONGODB_USERNAME=your_mongodb_username
+MONGODB_PASSWORD=your_mongodb_password
+MONGODB_AUTH_SOURCE=your_auth_source
+
+# Gemini AI
+GEMINI_API_KEY=your_gemini_api_key
+GEMINI_DEFAULT=default_gemini_model
+GEMINI_FLASH_MODEL=flash_model_name
+GEMINI_FLASH_LITE_MODEL=flash_lite_model_name
+GEMINI_PRO_MODEL=pro_model_name
+
+# Security
+ENCRYPTION_SECRET=your_encryption_secret
+
+# eToro API credentials (required for /port)
+ETORO_PUBLIC_KEY=your_public_key
+ETORO_PRIVATE_KEY=your_private_key
+
+# Optional: Override default market data provider (default: yfinance)
+# MARKET_DATA_PROVIDER=yfinance
+```
+
+| Variable | Required | Description |
+|----------|----------|-------------|
+| `USE_MONGODB_SRV` | No | Set to `true` to use MongoDB SRV connection string format |
+| `MONGODB_SRV` | Yes* | Full MongoDB SRV connection string (used when `USE_MONGODB_SRV=true`) |
+| `MONGODB_HOST` | Yes* | MongoDB server hostname (used when `USE_MONGODB_SRV=false`) |
+| `MONGODB_PORT` | Yes* | MongoDB server port (used when `USE_MONGODB_SRV=false`) |
+| `MONGODB_DATABASE` | Yes | MongoDB database name |
+| `MONGODB_USERNAME` | Yes | MongoDB authentication username |
+| `MONGODB_PASSWORD` | Yes | MongoDB authentication password |
+| `MONGODB_AUTH_SOURCE` | Yes | MongoDB authentication database (usually `admin`) |
+| `GEMINI_API_KEY` | Yes | Google Gemini AI API key for AI-powered analysis |
+| `GEMINI_DEFAULT` | No | Default Gemini model to use |
+| `GEMINI_FLASH_MODEL` | No | Gemini Flash model identifier |
+| `GEMINI_FLASH_LITE_MODEL` | No | Gemini Flash Lite model identifier |
+| `GEMINI_PRO_MODEL` | No | Gemini Pro model identifier |
+| `ENCRYPTION_SECRET` | Yes | Secret key used for data encryption |
+| `ETORO_PUBLIC_KEY` | Yes | eToro public API key |
+| `ETORO_PRIVATE_KEY` | Yes | eToro private API key |
+| `MARKET_DATA_PROVIDER` | No | Market data provider (`yfinance` is default) |
+
+\* Either `MONGODB_SRV` (when `USE_MONGODB_SRV=true`) or `MONGODB_HOST` + `MONGODB_PORT` (when `USE_MONGODB_SRV=false`) is required.
+
+**Note**: The `/port` endpoint requires valid eToro API credentials. Without them, the portfolio analysis will fail with a `PortfolioFunctionsError`.
 
 ## Running the App
 

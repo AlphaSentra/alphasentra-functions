@@ -19,9 +19,9 @@ graph LR
 
 ## Data Provider Architecture
 
-Market data is abstracted behind a provider interface (`data/protocols.py`) to support pluggable data sources. The default provider is **Yahoo Finance** (`data/yfinance_provider.py`), selected via the `DATA_PROVIDER` config key (`config.py:20`) or the `MARKET_DATA_PROVIDER` environment variable. The facade `data/market.py` preserves existing function signatures while delegating to the chosen provider.
+Market data is abstracted behind a provider interface (`data/protocols.py`) to support pluggable data sources. The default provider is **Yahoo Finance** (`data/yfinance_provider.py`), selected via the `DATA_PROVIDER` config key (`config.py:25`) or the `MARKET_DATA_PROVIDER` environment variable. The facade `data/market.py` preserves existing function signatures while delegating to the chosen provider.
 
-See [data/DATA_PROVIDER.md](data/DATA_PROVIDER.md) for details.
+See [../data/DATA_PROVIDER.md](../data/DATA_PROVIDER.md) for details.
 
 ## Prerequisites
 
@@ -99,9 +99,16 @@ Default portfolio settings are defined centrally in `config.py`:
 | Setting | Default |
 |---|---|
 | Initial capital | $10,000 |
-| Sharpe target | 1.0 |
-| Sortino target | 1.5 |
-| Information Ratio target | 0.5 |
-| Maximum position size per asset | 20% |
-| Maximum sector size per sector | 30% |
-| Default benchmark ticker | Dynamically selected from `BENCHMARK_CANDIDATES` (`^AXJO`, `^GSPC`, `^STOXX50E`, `BTC-USD`, `^990100-USD-STRD`) |
+| Maximum position size per asset | 30% |
+| Maximum short size per asset | 30% |
+| Minimum position size per asset | 0.50% |
+| Long/short optimization | Disabled |
+| Gross exposure limit | 2.0x |
+| Cache TTL (report) | 12 hours |
+| Cache TTL (price) | 6 hours |
+| Cache TTL (sector/industry) | 12 hours |
+| Cache TTL (eToro) | 6 hours |
+| Default market data provider | `yfinance` |
+| Default benchmark candidates | `^AXJO`, `^GSPC`, `^STOXX50E`, `^FTSE`, `BTC-USD`, `^990100-USD-STRD` |
+
+Benchmark selection is automatic: the first candidate present in the downloaded price data is used, with preference ordered by the portfolio's inferred primary market (`AU` → `^AXJO`, `US` → `^GSPC`, `EU` → `^STOXX50E`, `UK` → `^FTSE`, `CRYPTO` → `BTC-USD`).

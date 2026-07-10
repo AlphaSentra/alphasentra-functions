@@ -27,7 +27,7 @@ with open(index_template_path, 'r') as f:
 
 
 
-from Functions.port.input import handle_portfolio_input
+from Functions.port.input import handle_portfolio_input, get_portfolio_cache_status # Import get_portfolio_cache_status
 
 
 def index():
@@ -36,6 +36,9 @@ def index():
 
 def port():
     return handle_portfolio_input()
+
+def port_cache_status(): # New route function
+    return get_portfolio_cache_status()
 
 
 def eqs():

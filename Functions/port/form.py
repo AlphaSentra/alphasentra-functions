@@ -63,40 +63,48 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             background-color: #080c10; /* Very dark blue/grey from image */
             z-index: 9999;
             flex-direction: column;
-            padding: 48px 64px;
-            font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-            overflow-y: auto;
+            padding: clamp(1rem, 3vh, 2.5rem) clamp(1rem, 3vw, 4rem);
+            font-family: {FONT_FAMILY};
+            overflow: hidden;
             color: {_TEXT_PRIMARY};
+            height: 100vh;
+            box-sizing: border-box;
         }}
         #status-overlay.active {{
             display: flex;
         }}
         #status-header {{
-            font-size: 1.15em;
+            font-size: clamp(0.9rem, 1.2vw, 1.15em);
             color: #5ce0d8; /* Teal from image */
-            margin-bottom: 0.8em;
+            margin-bottom: clamp(0.5rem, 1vh, 0.8em);
             letter-spacing: 0.03em;
-            line-height: 1.4;
+            line-height: 1.3;
+            flex-shrink: 0;
         }}
         #status-divider {{
             height: 1px;
             background-color: #1e2730; /* Dark grey line from image */
-            margin-bottom: 2em;
+            margin-bottom: clamp(0.75rem, 1.5vh, 2em);
+            flex-shrink: 0;
         }}
         #status-list {{
             display: flex;
             flex-direction: column;
-            gap: 1.75em; /* Spacing between steps from image */
+            gap: clamp(0.5rem, 1.2vh, 1.75em); /* Spacing between steps from image */
             padding-left: 0;
             list-style: none;
+            flex: 1;
+            overflow-y: auto;
+            min-height: 0;
         }}
         .status-item {{
             display: flex;
             align-items: flex-start;
-            gap: 1.2em;
+            gap: clamp(0.6rem, 1.2vw, 1.2em);
             opacity: 0;
             transform: translateY(10px);
             transition: opacity 0.5s ease-out, transform 0.5s ease-out;
+            flex-shrink: 0;
         }}
         .status-item.visible {{
             opacity: 1;
@@ -110,23 +118,23 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             color: #5ce0d8; /* Teal for completed title */
         }}
         .status-icon {{
-            width: 1.2em;
-            height: 1.2em;
+            width: clamp(0.9rem, 1.2vw, 1.2em);
+            height: clamp(0.9rem, 1.2vw, 1.2em);
             flex-shrink: 0;
             display: flex;
             align-items: center;
             justify-content: center;
             margin-top: 0.1em;
-            font-size: 0.9em; /* Smaller icon size */
+            font-size: clamp(0.7rem, 0.9vw, 0.9em); /* Smaller icon size */
         }}
         .status-icon .check {{
             color: #5ce0d8; /* Teal checkmark */
-            font-size: 1.1em; /* Adjust size */
+            font-size: clamp(0.8rem, 1vw, 1.1em); /* Adjust size */
             line-height: 1;
         }}
         .status-icon .spinner {{
-            width: 0.8em;
-            height: 0.8em;
+            width: clamp(0.6rem, 0.8vw, 0.8em);
+            height: clamp(0.6rem, 0.8vw, 0.8em);
             border: 2px solid #1e2730; /* Dark grey spinner border */
             border-top-color: #5ce0d8; /* Teal spinner top */
             border-radius: 50%;
@@ -139,17 +147,17 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             flex: 1;
         }}
         .status-title {{
-            font-size: 1.05em; /* Slightly larger than description */
+            font-size: clamp(0.85rem, 1.1vw, 1.05em); /* Slightly larger than description */
             font-weight: bold;
             color: #c5c8c6; /* Default light grey for title */
-            margin-bottom: 0.4em;
+            margin-bottom: clamp(0.2rem, 0.4vh, 0.4em);
             letter-spacing: 0.02em;
-            line-height: 1.3;
+            line-height: 1.25;
         }}
         .status-desc {{
-            font-size: 1em;
+            font-size: clamp(0.8rem, 1vw, 1em);
             color: #6b7a88; /* Lighter grey for description */
-            line-height: 1.5;
+            line-height: 1.35;
             max-width: 640px;
         }}
         @keyframes pulse-text {{
@@ -182,42 +190,42 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             const submitBtn = document.getElementById('submit-btn');
 
             const steps = [
-                {{
-                    title: 'Initializing generation...',
-                    desc: 'Starting the analysis engine, loading configurations, and preparing secure connections to data providers.',
-                    duration: 1000
-                }},
-                {{
-                    title: 'Collecting eToro & Market Data',
-                    desc: 'Fetching eToro portfolio holdings, transaction history, and downloading real-time market data for all assets and benchmarks.',
-                    duration: 3000
-                }},
-                {{
-                    title: 'Processing Market Data & Timeseries',
-                    desc: 'Building synchronized price series, calculating historical returns, and inferring market structure for all positions.',
-                    duration: 3500
-                }},
-                {{
-                    title: 'Running Risk & Performance Analysis',
-                    desc: 'Executing Monte Carlo simulations, calculating VaR/ES, and assessing portfolio risk exposure across various scenarios.',
-                    duration: 3000
-                }},
-                {{
-                    title: 'Normalizing & Cleaning Datasets',
-                    desc: 'Validating data integrity, handling anomalies like re-listed stocks, and standardizing all inputs for robust analysis.',
-                    duration: 2500
-                }},
-                {{
-                    title: 'Generating AI Insights...',
-                    desc: 'Leveraging advanced artificial intelligence to analyze patterns and generate unique insights for portfolio analysis.',
-                    duration: 2500
-                }},
-                {{
-                    title: 'Generating Report & Insights',
-                    desc: 'Assembling interactive charts, detailed tables, and generating AI-driven commentary for comprehensive portfolio analysis.',
-                    duration: 2000
-                }}
-            ];
+                            {{
+                                title: 'Initializing generation...',
+                                desc: 'Spinning up the analysis engine, loading configuration files, and establishing secure connections to data providers.',
+                                duration: 2000
+                            }},
+                            {{
+                                title: 'Collecting eToro & Market Data',
+                                desc: 'Calling the eToro API to pull portfolio holdings and transaction history, then fetching real-time market data for all assets and benchmarks.',
+                                duration: 5000
+                            }},
+                            {{
+                                title: 'Processing Market Data & Timeseries',
+                                desc: 'Aligning price series across assets, computing historical returns, and reconstructing market structure for each position.',
+                                duration: 5000
+                            }},
+                            {{
+                                title: 'Running Risk & Performance Analysis',
+                                desc: 'Running Monte Carlo simulations, computing VaR and Expected Shortfall, and stress-testing the portfolio across multiple scenarios.',
+                                duration: 5000
+                            }},
+                            {{
+                                title: 'Normalizing & Cleaning Datasets',
+                                desc: 'Cross-checking data integrity, flagging anomalies such as re-listed tickers, and normalizing all inputs into a consistent format.',
+                                duration: 5000
+                            }},
+                            {{
+                                title: 'Generating Report & Insights',
+                                desc: 'Compiling interactive charts and tables, then finalizing the AI-generated commentary for the report.',
+                                duration: 2000
+                            }},
+                            {{
+                                title: 'Thinking...',
+                                desc: 'Reasoning... Almost done. Hang tight!',
+                                duration: 1000
+                            }}
+                        ];
 
             let cancelled = false;
             let currentStepIndex = -1;

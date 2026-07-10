@@ -2,7 +2,7 @@
 
 ## Overview
 
-The portfolio functions system uses a layered data architecture where raw inputs flow through preprocessing stages to produce the final metrics and visualizations. This document explains the complete data pipeline, starting from the **CLI input selection** that determines the entire analysis path.
+The portfolio functions system uses a layered data architecture where raw inputs flow through preprocessing stages to produce the final metrics and visualizations. This document explains the complete data pipeline, starting from the **eToro API data sources** that feed the analysis.
 
 ---
 
@@ -16,8 +16,7 @@ The portfolio functions system uses a layered data architecture where raw inputs
 6. [Dataset Usage Matrix](#dataset-usage-matrix)
 7. [Detailed Dataset Descriptions](#detailed-dataset-descriptions)
 8. [Complete Pipeline Flow](#complete-pipeline-flow)
-9. [Input Mode Decision Tree](#input-mode-decision-tree)
-10. [Holdings Status & Scoring Loop](#holdings-status--scoring-loop)
+9. [Holdings Status & Scoring Loop](#holdings-status--scoring-loop)
 
 ---
 
@@ -31,207 +30,126 @@ The system converts **static holdings or transaction history** + **market data**
 
 ## Input Method Selection
 
-### The Three Execution Paths
+### eToro API (Single Path)
 
-When you run `python main.py`, the first interactive question determines the **entire data pipeline**:
+The system fetches portfolio and transaction data directly from the eToro public API. There is no file-based input method.
 
 ```
-Select portfolio input method:
-1. Load from Excel files (core_portfolio.xlsx, active_portfolio.xlsx)
-2. Load active portfolio only (active_portfolio.xlsx)
+eToro Public API (portfolio + trade history)
+           ↓
+      portfolio_df (live positions)
+           ↓
+      transactions_df (trade history, for Trades tab only)
+           ↓
+      build_portfolio_timeseries(portfolio_df=...)
+           ↓
+      ts = {
+          'total': portfolio value series,
+          'positions': individual position values
+      }
+           ↓
+      calculate_returns
+           ↓
+      Metrics, risk, charts, HTML report
 ```
 
-This choice is stored in `config['input_method']` and affects:
+**Key code**: `analyzer.py:91-150` (`_load_etoro_portfolio_path`), `analyzer.py:389-403` (`build_timeseries`), `data/loader.py:182` (`load_transactions_from_etoro`)
 
-| Aspect | Method 1 (Excel Both) | Method 2 (Active Only) |
-|--------|----------------------|------------------------|
-| **Source files** | `core_portfolio.xlsx` + `active_portfolio.xlsx` | `active_portfolio.xlsx` only |
-| **Defensive layer** | ✓ From core_portfolio | ✗ No defensive layer |
-| **Mode** | Static portfolio | Static portfolio (active only) |
-| **Time series** | Direct position value calculation | Direct position value |
-| **Cash accounting** | Not tracked | Not tracked |
-| **Rebalancing** | Optional (quarterly) | Optional (quarterly) |
-| **Multi-layer metrics** | Defensive, Active, Total | Active, Total only |
+**Note**: `transactions_df` is loaded from the eToro trade history API and is used exclusively for the **Trades** tab (blotter and statistics). It is **not** used to construct the portfolio time series.
 
 ---
 
-### Input Method Branching Logic
+### Input Method Flow
 
 ```mermaid
 flowchart TD
-    A[Start: main.py] --> B[Interactive CLI Input]
-    B --> C{Input Method Choice}
+    A[Start: main.py] --> B[PortfolioAnalyzer.run_analysis]
+    B --> C[_load_etoro_portfolio_path]
+    C --> D{API Success?}
+    D -->|Yes| E[portfolio_df from eToro]
+    D -->|No| F[PortfolioFunctionsError]
 
-    C -->|1. Excel Both| M1[Method 1\nStatic Full Portfolio]
-    C -->|2. Active Only| M2[Method 2\nStatic Active-only]
-
-    %% Method 1 Path
-    subgraph Path1 [Method 1 - Excel Both Layers]
-        direction TB
-        M1 --> L1[load_portfolio\ninclude_core = True]
-        L1 --> P1[portfolio_df\ncombined: defensive + active rows]
-        P1 --> T1[build_portfolio_timeseries\nstatic mode\nsplits into def / act / total]
-        T1 --> TS1[ts dict\n3 layers:]
-        TS1 --> TS1A[ts.defensive\ncore tickers from portfolio_df]
-        TS1 --> TS1B[ts.active\nactive tickers from portfolio_df]
-        TS1 --> TS1C[ts.total\ncombined]
-        TS1A & TS1B & TS1C --> CALC1[calculate_metrics\nmetrics.defensive\nmetrics.active\nmetrics.total]
-    end
-
-    %% Method 3 Path
-    subgraph Path2 [Method 2 - Active Only]
-        direction TB
-        M3 --> L3[load_portfolio\ninclude_core = False]
-        L3 --> F3[portfolio_df\nactive rows only\nno defensive layer]
-        F3 --> T3[build_portfolio_timeseries\nstatic mode]
-        T3 --> TS3[ts dict\n2 layers:]
-        TS3 --> TS3A[ts.active\nall positions]
-        TS3 --> TS3B[ts.total\n= active]
-        TS3A & TS3B --> CALC3[calculate_metrics\nmetrics.active\nmetrics.total]
-    end
-
-    %% converge
-    CALC1 & CALC2 & CALC3 --> COMMON[Common downstream:\nsector/industry data, risk_df,\nmc_simulations, holdings_df, charts]
-
-    %% Styling
-    classDef choice fill:#ffe0b2,stroke:#ef6c00,stroke-width:3px,stroke-dasharray:5 5
-    classDef path1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-    classDef path2 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    classDef path3 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef common fill:#fff3e0,stroke:#ff9800,stroke-width:2px
-
-    class B,C choice
-    class Path1 path1
-    class Path2 path2
-    class Path3 path3
-    class COMMON common
+    E --> G[load_transactions_from_etoro]
+    G --> H[transactions_df for Trades tab]
+    E --> I[build_portfolio_timeseries\nportfolio_df only]
+    I --> TS[ts dict\n- total\n- positions]
+    TS --> CALC[calculate_returns\ncalculate_metrics\nrisk, charts, report]
+    H --> CHARTS[generate_trades_table\ngenerate_trades_metrics_strip]
 ```
 
 ---
 
 ## How Input Selection Affects the Pipeline
 
-### Method 1 (Excel Both): Full Multi-Layer Analysis
+### eToro Portfolio Path
 
 **Data flow**:
 
 ```
-core_portfolio.xlsx (defensive)
-active_portfolio.xlsx (active)
+eToro API (get_investor_portfolio)
           ↓
-     combined in portfolio_df with 'type' column
+     portfolio_df (ticker, quantity, avg_price, type)
           ↓
-     build_portfolio_timeseries(portfolio_df, rebalance=?)
+     build_portfolio_timeseries(portfolio_df=...)
           ↓
      ts = {
-         'defensive': <defensive tickers split by type>,
-         'active': <active tickers split by type>,
-         'total': defensive + active,
-         'positions': all tickers
+         'total': portfolio value series,
+         'positions': individual position values
      }
           ↓
-     Layer-specific metrics for all 3 layers
+     calculate_returns
+          ↓
+     Metrics, risk, charts, HTML report
 ```
 
-**Key code**: `analyzer.py:90-95`, `timeseries.py:325-339` (static mode splits core_cols/active_cols, returns dict with 5 keys)
+**Key code**: `analyzer.py:91-150` (`_load_etoro_portfolio_path`), `analyzer.py:389-403` (`build_timeseries`)
 
 ---
 
-### Method 2 (Active Only): Static Active Portfolio
+### Transaction History (Trades Tab Only)
 
 **Data flow**:
 
 ```
-active_portfolio.xlsx (active rows only)
-         ↓
-    transactions_df (sorted by date)
-         ↓
-    build_portfolio_timeseries(transactions_df=...)
-         ↓ Day-by-day simulation:
-    - Track cash balance
-    - Apply buys/sells
-    - Calculate daily returns from transaction cash flows
-         ↓
-    ts = {
-        'defensive': from core_portfolio.xlsx,
-        'active': from transaction positions,
-        'total': defensive + active,
-        'positions': computed from holdings_over_time
-    }
-         ↓
-    Two-stage metrics:
-    1. Defensive metrics from core portfolio
-    2. Active metrics from transaction-derived positions
+eToro API (get_trade_history)
+          ↓
+     transactions_df (Date, Ticker, Side, EntryPrice, ExitPrice, PnL)
+          ↓
+     generate_trades_table
+     generate_trades_metrics_strip
 ```
 
-**Key code**: `analyzer.py:74-78`, `timeseries.py:71-174` (transaction simulation loop), `analyzer.py:435-546` (defensive + active metrics)
+**Key code**: `data/loader.py:182` (`load_transactions_from_etoro`), `engine/modules/history/renderer.py:92`, `engine/modules/history/charts.py:27`
 
----
-
-### Method 3 (Active Only): Single-Layer Analysis
-
-**Data flow**:
-
-```
-active_portfolio.xlsx only
-         ↓
-     portfolio_df (all rows type='active')
-         ↓
-     build_portfolio_timeseries(portfolio_df)
-         ↓
-     ts = {
-         'active': <all positions>,
-         'total': = active (no defensive layer),
-         'positions': active tickers only
-     }
-         ↓
-     Metrics computed only for 'active' and 'total' layers
-```
-
-**Key code**: `analyzer.py:85-89`, `timeseries.py:325-350` (core_cols/active_cols split and ts dict build)
-
----
-
-## Input Method Impact Summary
-
-| Configuration Setting | Method 1 | Method 2 | Method 3 |
-|----------------------|----------|----------|----------|
-| `transaction_mode` | `False` | `True` | `False` |
-| `include_core` in `load_portfolio()` | `True` | N/A (transactions used) | `False` |
-| Layers calculated | defensive, active, total | defensive + active (separate) | active, total |
-| `ts["holdings"]` populated | `None` | Yes (FIFO quantities) | `None` |
-| `portfolio_df` length | 0 | Active rows | 0 |
-| `rebalance` option | Available | Not used | Available |
-| Yield layer calculation | Per-layer (def/act) | From core + from active positions | Total only |
+**Note**: `transactions_df` is loaded from the eToro trade history API and is used exclusively for the **Trades** tab. It is **not** used to construct the portfolio time series.
 
 ---
 
 ## Input Data Sources
 
-### 1. Portfolio Holdings (Static Mode)
+### 1. Portfolio Holdings (eToro API)
 
-**Files**: `core_portfolio.xlsx`, `active_portfolio.xlsx`
+**Source**: eToro Public API via `client.get_investor_portfolio()`
 
+- `ticker`: Normalized ticker symbol (`.ASX` → `.AX`)
+- `quantity`: Portfolio weight
+- `avg_price`: Average entry price
+- `type`: Trade direction (`L` / `S` / `MIXED`)
 
+### 2. Transaction History (eToro API)
 
-- `type` column indicates `defensive` (core) or `active` (tactical) layer
-- Quantities are either **share counts** or **percentages** (auto-detected or forced via config)
+**Source**: eToro Public API via `client.get_trade_history()`
 
-### 2. Transaction History (Dynamic Mode)
-
-**File**: `active_portfolio.xlsx`
-
-
-
-- Enables true backtesting with cash flows and transaction costs
-- FIFO accounting for P&L calculation
+- Used exclusively for the **Trades** tab (blotter and statistics)
+- Columns: `Date`, `Ticker`, `Name`, `Side`, `EntryPrice`, `ExitPrice`, `PnL`
+- FIFO accounting applied in the Trades module only
 
 ### 3. Market Data (Prices)
 
 **Source**: Yahoo Finance via `yfinance` library
 
 **Downloaded tickers**:
-- All portfolio holdings (from Excel files)
+- All portfolio holdings (from eToro API)
 - Benchmark ticker (default: `^AXJO` – S&P/ASX 200 Index)
 - Market index (`^AXJO` – ASX 200 index)
 
@@ -265,28 +183,17 @@ Shape: [n_dates × n_tickers]
 
 ```python
 ts = {
-    'total':     pd.Series,  # Total portfolio value (AUD) over time
-    'defensive': pd.Series,  # Defensive layer value over time
-    'active':    pd.Series,  # Active layer value over time
-    'positions': pd.DataFrame,  # Individual position values per ticker [dates × tickers]
-    'holdings':  pd.DataFrame,  # Share quantities over time (transaction mode only)
+    'total':     pd.Series,      # Total portfolio value (AUD) over time
+    'positions': pd.DataFrame,   # Individual position values per ticker [dates × tickers]
 }
 ```
 
 **Created by**: `build_portfolio_timeseries()` in `engine/modeling/timeseries.py`
 
 **Construction logic**:
-
-#### Static Portfolio Mode (Excel)
 - **Percentage allocation**: Quantity = weight × initial capital / initial price
 - **Actual shares**: Quantity × price per share
 - If `rebalance=True`, weights are rebalanced quarterly to maintain target allocation
-
-#### Active-Only Mode
-- Simulates day-by-day portfolio evolution
-- Buys/sells adjust holdings and cash balance
-- Position values = shares held × price on that date
-- Total = sum(all positions) + cash
 
 ---
 
@@ -295,12 +202,10 @@ ts = {
 ```python
 returns = {
     'total':     pd.Series,  # Daily % returns for total portfolio
-    'defensive': pd.Series,  # Daily % returns for defensive layer
-    'active':    pd.Series,  # Daily % returns for active layer
 }
 ```
 
-**Calculation**: `ts[k].pct_change().dropna()`
+**Calculation**: `ts['total'].pct_change().dropna()` (or eToro gain timeseries when available)
 
 **Example**:
 ```
@@ -450,7 +355,7 @@ holdings_df = pd.DataFrame({
 
 ### Dataset 8: `metrics` (Performance & Risk Metrics Dictionary)
 
-Nested dictionary organized by layer (`'total'`, `'defensive'`, `'active'`, `'benchmark'`):
+Nested dictionary organized by horizon and layer (`'total'`, `'benchmark'`):
 
 ```python
 metrics = {
@@ -490,15 +395,20 @@ metrics = {
         'MC_Expected_Upside_95_Pct': float,# 95th percentile
         'Shock_Beta':             float,  # Portfolio beta (for shock curves)
     },
-    'defensive': { ... same structure ... },
-    'active': { ... same structure ... },
-    'benchmark': { ... same structure ... },
+    'benchmark_1W': { ... same structure ... },
+    'benchmark_1M': { ... same structure ... },
+    'benchmark_3M': { ... same structure ... },
+    'benchmark_1Y': { ... same structure ... },
+    'benchmark_5Y': { ... same structure ... },
+    'benchmark_All': { ... same structure ... },
 }
 ```
 
-**Created by**: `calculate_performance_metrics()` (lines 122–262) + `calculate_var_cvar()` + Monte Carlo post-processing
+**Created by**: `calculate_performance_metrics()` + `calculate_var_cvar()` + Monte Carlo post-processing in `analyzer.py:528-577`
 
-**Shared ratio engine** — `_calc_ratios()` (`metrics.py:14–57`): a single function that computes Sharpe, Sortino, and Information Ratio using a shared parameter base. Called by `calculate_performance_metrics()` for the full-period look and by `_ratio_metrics_1y()` (lines 86–119) for the 1-year look, ensuring identical formula semantics everywhere.
+**Horizons**: `1W`, `1M`, `3M`, `1Y`, `5Y`, `All`
+
+**Shared ratio engine** — `_calc_ratios()` (`metrics.py:14–57`): a single function that computes Sharpe, Sortino, and Information Ratio using a shared parameter base.
 
 ---
 
@@ -560,27 +470,25 @@ Diagonal: Masked with sentinel value (-2.0)
 ```mermaid
 graph TB
     %% Input Layer
-    F1["Excel Files\ncore_portfolio.xlsx\nactive_portfolio.xlsx"] -->|load_portfolio| D1
-    D2["portfolio_df\nTicker, Weight, Type"] -->|load_portfolio| P2[Active positions only]
+    F1["eToro Public API\nPortfolio + Trade History"] -->|get_investor_portfolio| D1
     F3["Yahoo Finance API\nReal-time market data + metadata"] -->|download_price_data\nget_sector_industry_data| D3
 
     %% Layer 1: Raw DataFrames
-    D1["portfolio_df\nticker, quantity, type\nmerged defensive + active"]:::df
+    D1["portfolio_df\nticker, quantity, avg_price\ntype from eToro"]:::df
+    D2["transactions_df\nDate, Ticker, Side, PnL"]:::df
     D3["prices_full_df\nOHLCV MultiIndex\n+ sector_industry_df"]:::df
 
-    D1 & D2 --> TS["build_portfolio_timeseries\nstatic / transaction mode"]:::proc
+    D1 --> TS["build_portfolio_timeseries\nstatic mode"]:::proc
     D3 --> TS
 
     %% Layer 2: Time Series
     TS --> TS1[Portfolio Time Series\nts dict]
     TS1 --> TSa[ts.total\nPortfolio Value Series]
-    TS1 --> TSb[ts.defensive\nDefensive Layer Value]
-    TS1 --> TSc[ts.active\nActive Layer Value]
     TS1 --> TSd[ts.positions\nPosition Values by Ticker]
 
     %% Layer 3: Returns Calculation
     TS1 --> RC1[calculate_returns]
-    RC1 --> RETS["Returns Dictionary\nreturns.{total, defensive, active}"]
+    RC1 --> RETS["Returns Dictionary\nreturns.total"]
 
     %% Branch A: Portfolio-Level Analysis
     RETS --> PM[calculate_performance_metrics]:::proc
@@ -611,14 +519,17 @@ graph TB
     D3 --> HE
     RC1 --> HE
 
+    %% Trades Branch
+    D2 --> TT["generate_trades_table\ngenerate_trades_metrics_strip"]:::proc
+    TT --> TT1["trades_table\ntrades_metrics_strip"]
+
     %% OUTPUT
-    %% Metrics
-    CORR & PM1 & RC1 & MC1 --> M["metrics dict\n{total, defensive, active, benchmark}"]
-    %% Charts
+    CORR & PM1 & RC1 & MC1 --> M["metrics dict\n{total, benchmark}"]
     VCCOMP["Correlation, risk,\nMonte Carlo, shock,\nVaR/ES, A/D strips"]:::group --> CH["Chart Data Structures\nfor output"]
     HE --> HE1["holdings_df\nwith z-score, RSI,\nmomentum, alerts, beta"]
     HE1 --> CH
     M --> CH
+    TT1 --> CH
 
     CH & M --> OUT["HTML Report\nAll tabs and visualizations"]
 
@@ -628,7 +539,7 @@ graph TB
     classDef group fill:#fff3e0,stroke:#ef6c00,stroke-width:1px,stroke-dasharray:5 5
 
     class D1,D2,D3,TS1,AR1,CORR,RC1,RETS,SI1,HE1,VCCOMP df
-    class TS,PM,MC,RC,CR,HE,SI,VD,PM1,MC1 proc
+    class TS,PM,MC,RC,CR,HE,SI,VD,PM1,MC1,TT proc
     class M,CH,OUT output
 ```
 
@@ -777,8 +688,7 @@ flowchart LR
     %% PHASE 1: Data Ingestion
     subgraph P1 [Phase 1 - Input Data]
         direction LR
-        F1[(Excel Files\ncore/active_portfolio.xlsx)]
-        F2[(active_portfolio.xlsx)]
+        F1[(eToro Public API\nPortfolio + Trade History)]
         F3[(Yahoo Finance API\nPrice and Metadata)]
     end
 
@@ -794,16 +704,12 @@ flowchart LR
         TS[build_portfolio_timeseries\n-> ts dict]:::proc
         TS --> TS1[ts.total\nPortfolio Value Series]
         TS --> TS2[ts.positions\nPosition Values by Ticker]
-        TS --> TS3[ts.defensive\nDefensive Layer Value]
-        TS --> TS4[ts.active\nActive Layer Value]
     end
 
     %% PHASE 4: Returns & Risk Inputs
     subgraph P4 [Phase 4 - Returns and Risk Prep]
         R[calculate_returns\n-> returns dict]:::proc
         R --> R1[returns.total\nDAILY PORTFOLIO RETURNS]:::key
-        R --> R2[returns.defensive]:::data
-        R --> R3[returns.active]:::data
 
         AR[asset_returns =\nprices.pct_change]:::proc
         AR -.-> AR1[asset_returns\nMatrix dates x tickers]:::key
@@ -833,13 +739,19 @@ flowchart LR
         SI --> SI1[sector_industry_df\nsector, industry,\ndividendYield, PE]:::data
     end
 
+    %% PHASE 8: Trades
+    subgraph P8 [Phase 8 - Trades]
+        TT[generate_trades_table\ngenerate_trades_metrics_strip]:::proc
+        TT --> TT1[trades_table\ntrades_metrics_strip]:::data
+    end
+
     %% CONNECTIONS
-    F1 -->|reads both Excel files\nmerged into portfolio_df| D1
-    D2 -->|active portfolio| P2
+    F1 -->|eToro API| D1
+    F1 -->|eToro API| D2
     F3 -->|prices + metadata| D3
 
-    D1 & D2 -->|portfolio_df + transactions_df| TS
-    D3 -->|price data; used in both modes| TS
+    D1 -->|portfolio_df| TS
+    D3 -->|price data| TS
 
     TS -->|ts dict| R
     D3 --> AR
@@ -848,7 +760,6 @@ flowchart LR
     R1 -->|daily portfolio returns| MC
     AR1 -->|asset returns matrix| RC
     TS2 -->|position values by ticker| RC
-    R1 -->|returns series| RC
 
     RC1 & PM1 & MC1 --> GEN[Chart Generation\nand HTML Report]:::proc
 
@@ -861,6 +772,8 @@ flowchart LR
 
     RC1 --> SHOCK[Shock Analysis\nShock Curve and Tables]:::proc
     HE1 -.-> SHOCK
+
+    D2 --> TT
 
     classDef df fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
     classDef proc fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
@@ -1045,9 +958,7 @@ This layer enables pluggable data sources without changing downstream callers th
 ## Quick Reference: Input → Output Map
 
 ```
-Input Files (Excel)
-    ↓
-Portfolio/Transaction DataFrame
+eToro API (portfolio + trade history)
     ↓
 Market Data (prices) ─────┐
     ↓                     │
@@ -1072,7 +983,7 @@ Asset Returns Matrix ─────┘
 
 ---
 
-## Input Mode Decision Tree
+## eToro API Execution Flow
 
 ### Complete Flowchart
 
@@ -1080,284 +991,119 @@ Asset Returns Matrix ─────┘
 flowchart TD
     %% START
     S[Start: python main.py] --> P1[Parse CLI Flags\n--no-browser, --help]
-    P1 --> P2[Interactive Prompts\nreport title, input method choice]
+    P1 --> P2[Create PortfolioAnalyzer\nrun_analysis]
 
-    %% Main Decision Point
-    P2 --> D{Select Input Method}
+    %% Main Path
+    P2 --> M1[_load_etoro_portfolio_path\nFetch eToro portfolio]
+    M1 --> D{API Success?}
+    D -->|Yes| E[portfolio_df from eToro]
+    D -->|No| F[PortfolioFunctionsError]
 
-    %% ========== METHOD 1: EXCEL BOTH ==========
-    D -->|1. Excel Both| M1[Method 1 Selected\nStatic Full Portfolio]
-
-    subgraph M1_Flow [Method 1 Execution Flow]
-        direction TB
-        M1 --> L1_1[load_portfolio\ninclude_core=True]
-        L1_1 --> L1_2[Read core_portfolio.xlsx\nRead active_portfolio.xlsx]
-        L1_2 --> L1_3[Concatenate DataFrames\nAdd type column\ndefensive from core, active from active]
-        L1_3 --> L1_4[portfolio_df ready\ncolumns: ticker, quantity, type]
-        L1_4 --> L1_5[build_portfolio_timeseries\nmode: static\nrebalance: optional]
-        L1_5 --> L1_6[ts dict with 3 layers\ndefensive, active, total]
-        L1_6 --> L1_7[calculate_metrics\nmetrics.defensive\nmetrics.active\nmetrics.total]
-    end
-
-    %% ========== METHOD 2: ACTIVE ONLY ==========
-    D -->|2. Active Only| M2[Method 2 Selected\nStatic Active Portfolio]
-
-    subgraph M2_Flow [Method 2 Execution Flow]
-        direction TB
-        M2 --> L2_1[load_portfolio\ninclude_core = False]
-        L2_1 --> L2_2[Parse dates, sides, qty, price\nSort by date ascending]
-        L2_2 --> L2_3[Determine inception date\nfrom earliest transaction]
-        L2_3 --> L2_4[build_portfolio_timeseries\nmode: transaction\nwith transactions_df]
-        L2_4 --> L2_5[Day-by-day simulation\nTrack: holdings, cash, positions\nApply each transaction]
-        L2_6[ts dict with layers:\n- defensive from core file\n- active from transactions\n- total = both]
-        L2_5 --> L2_6
-        L2_6 --> L2_7[calculate_defensive_metrics\nSeparate from core file]
-        L2_6 --> L2_8[calculate_active_metrics\nFrom transaction positions]
-        L2_7 & L2_8 --> L2_9[metrics.defensive\nmetrics.active\nmetrics.total]
-    end
-
-    %% ========== METHOD 3: ACTIVE ONLY ==========
-    D -->|3. Active Only| M3[Method 3 Selected\nStatic Active-Only]
-
-    subgraph M3_Flow [Method 3 Execution Flow]
-        direction TB
-        M3 --> L3_1[load_portfolio\ninclude_core=False]
-        L3_1 --> L3_2[Read active_portfolio.xlsx only\nSet all type active]
-        L3_2 --> L3_3[portfolio_df with active rows only\nno defensive layer]
-        L3_3 --> L3_4[build_portfolio_timeseries\nmode: static]
-        L3_4 --> L3_5[ts dict with 2 layers\nactive, total\ndefensive is empty]
-        L3_5 --> L3_6[calculate_metrics\nmetrics.active\nmetrics.total\nno defensive]
-    end
-
-    %% COMMON PATH (after method-specific)
-    L1_7 & L2_9 & L3_6 --> COMMON[Common Pipeline]
-
-    subgraph COMMON_Flow [Common Post-Processing]
-        direction TB
-        COMMON --> C1[load_sector_industry_data\nYahoo Finance metadata]
-        C1 --> C2[calculate_risk_contribution\nactive tickers only]
-        C2 --> C3[calculate_yields\nper layer if applicable]
-        C3 --> C4[run_monte_carlo\r\nfrom returns]
-        C4 --> C5[generate_charts\nall visualization tabs]
-        C5 --> C6[generate_html_report\nportfolio_report.html]
-    end
+    E --> G[load_transactions_from_etoro\nFetch trade history]
+    G --> H[transactions_df for Trades tab]
+    E --> I[build_portfolio_timeseries\nportfolio_df only]
+    I --> TS[ts dict\n- total\n- positions]
+    TS --> CALC[calculate_returns\ncalculate_metrics\nrisk, charts, report]
+    H --> CHARTS[generate_trades_table\ngenerate_trades_metrics_strip]
 
     %% Market Data (independent branch)
     P2 --> MD[Download Market Data\nYahoo Finance API]
     MD --> PRICES[Prices DataFrame\nOHLCV for all tickers]
-    PRICES -.-> L1_5
-    PRICES -.-> L2_4
-    PRICES -.-> L3_4
-    PRICES --> C1
+    PRICES -.-> I
+    PRICES --> CALC
 
     %% Final Output
-    C6 --> OUT[Report Complete\nportfolio_report.html]
+    CALC --> OUT[Report Complete\nportfolio_report.html]
+    CHARTS --> OUT
 
     %% Styling
     classDef start fill:#e1f5e1,stroke:#4caf50,stroke-width:3px
     classDef decision fill:#ffe0b2,stroke:#ef6c00,stroke-width:3px
     classDef method1 fill:#e8f5e9,stroke:#2e7d32,stroke-width:2px
-    classDef method2 fill:#e3f2fd,stroke:#1565c0,stroke-width:2px
-    classDef method3 fill:#f3e5f5,stroke:#7b1fa2,stroke-width:2px
-    classDef common fill:#fff3e0,stroke:#ff9800,stroke-width:2px
     classDef market fill:#ffebee,stroke:#c62828,stroke-width:2px
     classDef output fill:#e1f5e1,stroke:#4caf50,stroke-width:3px
 
-    class S,P1,OUT start
+    class S,OUT start
     class P2,D decision
     class M1_Flow method1
-    class M2_Flow method2
-    class M3_Flow method3
-    class COMMON_Flow common
     class MD,PRICES market
 ```
 
 ---
 
-### Key Branching Points
+### Key Execution Points
 
-#### 1. **Data Loading Stage**
+#### 1. **Portfolio Loading Stage**
 
 ```python
-# analyzer.py:74-93
-def load_data(self):
-    method = self.config['input_method']
-
-    if method == '2':           # Active only
-        self.transaction_mode = True
-        self.portfolio = load_portfolio(include_core=False)
-    elif method == '3':         # Active only
-        self.portfolio = load_portfolio(include_core=False)
-        self.portfolio = self.portfolio[self.portfolio['type'] != 'defensive']
-    else:                       # Method 1: Excel both
-        self.portfolio = load_portfolio()
+# analyzer.py:91-150
+def _load_etoro_portfolio_path(self) -> Tuple[bool, Optional[str]]:
+    portfolio = client.get_investor_portfolio(self.etoro_username)
+    self.portfolio = pd.DataFrame([...])  # ticker, quantity, avg_price, type
 ```
 
----
-
-#### 2. **Time Series Construction Stage**
+#### 2. **Transaction History Loading Stage**
 
 ```python
-# analyzer.py:205-252
-def build_timeseries(self):
-    if self.transaction_mode:  # Method 2
-        # Transaction mode: load core + simulate trades
-        core_portfolio_temp = pd.read_excel("core_portfolio.xlsx") if exists else ...
-        self.ts = build_portfolio_timeseries(
-            self.prices,
-            portfolio_df=core_portfolio_temp,  # defensive layer
-            transactions_df=self.transactions_df,  # active layer
-            start_date=self.start,
-            total_investment=self.initial_investment
-        )
-    else:  # Methods 1 & 3: static portfolio
-        self.ts = build_portfolio_timeseries(
-            self.prices,
-            portfolio_df=self.portfolio,
-            rebalance=rebalance,
-            force_percentage=force_percentage,
-            percentage_format=percentage_format
-        )
+# analyzer.py:904-915
+if self.etoro_cid:
+    self.transactions_df = load_transactions_from_etoro(self.etoro_username, self.etoro_cid)
 ```
 
----
+`transactions_df` is used exclusively for the **Trades** tab. It does not affect portfolio time series construction.
 
-#### 3. **Metrics Calculation Stage** (Methods 1 & 3 vs Method 2)
-
-```python
-# analyzer.py:369-433
-def calculate_metrics(self):
-    layers_to_calculate = ["total"]
-    if not self.transaction_mode and self.config['input_method'] != '3':
-        layers_to_calculate.extend(["defensive", "active"])
-
-    for layer in layers_to_calculate:
-        # Standard calculation for each layer
-
-    # Transaction mode: compute defensive and active separately via dedicated methods
-    if self.transaction_mode and Path("core_portfolio.xlsx").exists():
-        self._calculate_defensive_metrics()  # Separate call
-        self._calculate_active_metrics()     # Separate call
-```
-
-**Difference**: In Method 2, defensive metrics are computed from a **separate timeseries** built from `core_portfolio.xlsx` only, not from the combined `ts`. In Methods 1 & 3, defensive metrics come directly from `ts['defensive']`.
-
----
-
-## Why Method 2 is Different
-
-Method 2 (Active Only) provides a simplified static portfolio analysis using only the active holdings:
-
-### Key Distinctions
-
-| Aspect | Methods 1 & 3 (Static) | Method 2 (Transaction) |
-|--------|------------------------|------------------------|
-| **Portfolio construction** | Direct weight → shares conversion | FIFO simulation with cash flows |
-| **Time alignment** | Simultaneous holdings from inception | Holdings evolve over time based on trades |
-| **Defensive layer** | Static defensive positions | Defensive layer is **separate** (core file) + time-invariant |
-| **Active layer** | Derived as `total - defensive` | Derived from transaction P&L only |
-| **Cash tracking** | Implicit (unallocated cash) | Explicit cash_balance series tracked daily |
-| **Transaction costs** | Ignored | Fees column deducts from cash |
-| **Inception date** | Config or default (5yr) | Config or default (5yr) |
-
-### Transaction Mode Simulation Logic
+#### 3. **Time Series Construction Stage**
 
 ```python
-# timeseries.py:71-186 (transaction mode simulation loop, simplified)
-for each trading_date:
-    # 1. Calculate pre-transaction portfolio value
-    pre_trans_value = sum(qty[t] * price[t] for all tickers)
-
-    # 2. Apply any transactions on or before this date
-    for transaction where date <= current_date:
-        if BUY:  cash -= (qty * price + fees);  holdings[ticker] += qty
-        if SELL: cash += (qty * price - fees);  holdings[ticker] -= qty
-
-    # 3. Calculate daily return
-    post_trans_value = sum(holdings[t] * price[t])
-    daily_return = (post_trans_value + cash) / prev_total_eod - 1
-
-    # 4. Update tracking
-    prev_total_eod = post_trans_value + cash
-```
-
-This produces a **realistic NAV (Net Asset Value) series** that accounts for:
-- Timing of cash inflows/outflows
-- Trading frictions (fees)
-- Position sizing changes
-
----
-
-## Dataset Differences by Method
-
-### `ts["defensive"]` Construction
-
-| Method | Source | Calculation |
-|--------|--------|-------------|
-| **1** | `core_portfolio.xlsx` | Direct position tracking same as active |
-| **2** | `core_portfolio.xlsx` (separate) | `build_portfolio_timeseries()` called with core_df only in `_calculate_defensive_metrics()` (analyzer.py:435-454) |
-| **3** | N/A | All positions classified as active |
-
-### `holdings_df` Generation (Transaction Mode Special Handling)
-
-```python
-# analyzer.py:725-793  (_generate_holdings_table - builds temp_portfolio_df from ts["holdings"])
-if transaction_mode:
-    # Holdings from transaction simulation
-    latest_holdings_qty = ts["holdings"].iloc[-1]  # from simulation
-    # Average cost from FIFO: _calculate_average_costs()
-    # Weights from latest position values
-    temp_portfolio_df = DataFrame({
-        'ticker': latest_holdings_qty.index.astype(str),
-        'quantity': latest_holdings_qty.values,
-        'type': 'active'
-    })
-else:
-    # Holdings from original portfolio_df
-    holdings_df = generate_portfolio_holdings_analysis(
-        risk_df, sector_industry_df, prices_full, portfolio_df, ...
+# analyzer.py:389-403
+def build_timeseries(self) -> None:
+    self.ts = build_portfolio_timeseries(
+        self.prices,
+        portfolio_df=portfolio_for_ts,
+        total_investment=self.initial_investment,
     )
 ```
 
+`build_portfolio_timeseries` takes `portfolio_df` only. There is no `transactions_df` parameter.
+
+#### 4. **Returns Calculation Stage**
+
+```python
+# analyzer.py:405-440
+def calculate_returns(self) -> None:
+    if self.etoro_username:
+        self.returns["total"], self.ts["total"] = self._load_etoro_gain_timeseries()
+    else:
+        self.returns = calculate_returns(self.ts)
+```
+
+When eToro is configured, the system prefers the eToro gain timeseries for returns. It falls back to local price-derived returns if the API call fails.
+
 ---
 
-## Summary: The Input Method is the Root Decision
+## Summary: Single-Path eToro Architecture
 
 ```
-User selects input method at CLI
-         ↓
+User runs python main.py
+          ↓
+PortfolioAnalyzer.run_analysis()
+          ↓
 Determines:
-├─ Which files are read (Excel)
-├─ Whether transaction simulation runs
-├─ How defensive layer is constructed
-├─ What layers appear in metrics dict
-├─ Whether cash is explicitly tracked
-└─ Inception date source
+├─ Portfolio data from eToro API (required)
+├─ Transaction history from eToro API (optional, for Trades tab)
+├─ Market data from Yahoo Finance
+├─ Single portfolio time series (no defensive/active split)
+└─ Returns from eToro gains API or local prices
 
-         ↓
+          ↓
 All downstream calculations adapt accordingly
 ```
 
 **Practical implications**:
-
-- **Transaction mode (Method 2)** provides the most accurate historical performance (accounts for cash drag, fees, timing)
-- **Static Excel (Method 1)** is best for "what-if" allocation analysis or when you don't have trade history
-- **Active-only (Method 3)** is useful for tactical overlay analysis or when defensive holdings are managed separately
-
----
-
-## Quick Reference: Method Impacts
-
-| What changes? | Method 1 | Method 2 | Method 3 |
-|---------------|----------|----------|----------|
-| **`self.transaction_mode`** | `False` | `True` | `False` |
-| **Files required** | Both Excel files | active_portfolio.xlsx only |
-| **Defensive metrics** | ✓ From ts['defensive'] | ✓ Separately from core file | ✗ |
-| **Active metrics** | ✓ From ts['active'] | ✓ From transaction simulation | ✓ From ts['active'] |
-| **Total metrics** | ✓ Combined | ✓ Combined | ✓ Combined |
-| **Trades tab** | Hidden | ✓ Visible with blotter | Hidden |
-| **Holdings table** | From portfolio_df | From transaction simulation | From portfolio_df |
-| **Rebalancing** | Optional quarterly | N/A (trades define weights) | Optional quarterly |
+- **eToro API** is the sole portfolio data source; no Excel files are read
+- **Transaction history** is available only for display in the Trades tab
+- **Defensive/active layer splitting** is not applicable in the current eToro mode
+- **Rebalancing** is configurable but not tied to input method selection
 
 ---
 

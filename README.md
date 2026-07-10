@@ -6,7 +6,7 @@
 
 This is the **Functions App** for the **AlphaSentra Project** — a Flask backend that serves and renders the outputs of various analytical functions.
 
-- **PORT (Portfolio & Risk Analytics)** — Connects eToro users and delivers portfolio analytics.
+- **PORT (Portfolio & Risk Analytics)** — Connects eToro users and delivers portfolio analytics via the eToro API.
 - **EQS (Stocks AI Screener)** — AI-powered stock screening analysis.
 - **WCR (Forex AI Screener)** — AI-powered forex screening analysis.
 - **CRYP (Cryptocurrency AI Screener)** — AI-powered cryptocurrency screening analysis.

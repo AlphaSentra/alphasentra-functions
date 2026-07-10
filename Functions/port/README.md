@@ -71,7 +71,7 @@ Functions/port/
 
 ## Key Features
 
-- **eToro Portfolio Import:** Consumes transaction history exported from eToro and handles FIFO accounting.
+- **eToro Portfolio Import:** Fetches live portfolio data and trade history from the eToro API and handles FIFO accounting for the Trades tab.
 - **Advanced Risk Metrics:** Value at Risk (VaR), Conditional VaR (CVaR/Expected Shortfall), Jensen's Alpha, Information Ratio, max drawdowns at multiple horizons.
 - **Statistical Analysis:** 1-Year Z-Score tracking; negative-Z-score attention table.
 - **Momentum & Reversal Signals:** Momentum Spread vs SMA200, 14-day RSI Overbought/Oversold.

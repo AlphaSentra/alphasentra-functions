@@ -29,27 +29,27 @@ Create a `.env` file in the project root with the following variables:
 ```env
 # MongoDB Connection
 USE_MONGODB_SRV=true
-MONGODB_SRV=your_mongodb_srv_connection_string
-MONGODB_HOST=your_mongodb_host
-MONGODB_PORT=your_mongodb_port
-MONGODB_DATABASE=your_database_name
-MONGODB_USERNAME=your_mongodb_username
-MONGODB_PASSWORD=your_mongodb_password
-MONGODB_AUTH_SOURCE=your_auth_source
+MONGODB_SRV=mongodb_srv_connection_string
+MONGODB_HOST=mongodb_host
+MONGODB_PORT=mongodb_port
+MONGODB_DATABASE=database_name
+MONGODB_USERNAME=mongodb_username
+MONGODB_PASSWORD=mongodb_password
+MONGODB_AUTH_SOURCE=auth_source
 
 # Gemini AI
-GEMINI_API_KEY=your_gemini_api_key
+GEMINI_API_KEY=gemini_api_key
 GEMINI_DEFAULT=default_gemini_model
 GEMINI_FLASH_MODEL=flash_model_name
 GEMINI_FLASH_LITE_MODEL=flash_lite_model_name
 GEMINI_PRO_MODEL=pro_model_name
 
 # Security
-ENCRYPTION_SECRET=your_encryption_secret
+ENCRYPTION_SECRET=encryption_secret
 
 # eToro API credentials (required for /port)
-ETORO_PUBLIC_KEY=your_public_key
-ETORO_PRIVATE_KEY=your_private_key
+ETORO_PUBLIC_KEY=public_key
+ETORO_PRIVATE_KEY=private_key
 
 # Optional: Override default market data provider (default: yfinance)
 # MARKET_DATA_PROVIDER=yfinance

@@ -16,9 +16,9 @@ OPT_LONG_SHORT = False
 OPT_GROSS_EXPOSURE = 2.0
 
 # Cache TTLs (in seconds)
-CACHE_TTL_REPORT = 24 * 60 * 60  # 24 hours
+CACHE_TTL_REPORT = 12 * 60 * 60  # 12 hours
 CACHE_TTL_PRICE = 6 * 60 * 60    # 6 hours
-CACHE_TTL_SECTOR = 24 * 60 * 60  # 24 hours
+CACHE_TTL_SECTOR = 12 * 60 * 60  # 12 hours
 CACHE_TTL_ETORO = 6 * 60 * 60    # 6 hours
 
 # Default market data provider

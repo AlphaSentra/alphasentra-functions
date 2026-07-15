@@ -28,7 +28,7 @@ with open(index_template_path, 'r') as f:
 
 
 from Functions.port.input import handle_portfolio_input, get_portfolio_cache_status # Import get_portfolio_cache_status
-from Functions.port.selection import PORTFOLIO_SELECTION_HTML
+from Functions.port.selection import get_portfolio_selection_html
 
 
 def index():
@@ -42,7 +42,7 @@ def port_cache_status(): # New route function
     return get_portfolio_cache_status()
 
 def sel():
-    return PORTFOLIO_SELECTION_HTML
+    return get_portfolio_selection_html()
 
 
 def eqs():

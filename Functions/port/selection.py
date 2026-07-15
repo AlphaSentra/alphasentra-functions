@@ -2,6 +2,15 @@
 Portfolio Pro Investor selection interface HTML template.
 """
 
+import os
+import uuid
+from concurrent.futures import ThreadPoolExecutor, as_completed
+from datetime import datetime, timedelta, timezone
+from typing import Any, Dict, List, Optional
+
+import requests
+from dotenv import load_dotenv
+
 from Functions.themes import (
     _TEXT_PRIMARY, _TEXT_HEADING, _BRAND_PRIMARY, _HOVER_SURFACE, _BORDER_DEFAULT,
     _BG_SUBTLE, _NEUTRAL_0, _BG_DEFAULT, _TEXT_MUTED, _GRID_LINE, BORDER_DIVIDER,
@@ -12,13 +21,480 @@ from Functions.themes import (
 
 FONT_FAMILY = _font_module.FONT_PRIMARY
 
-PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
+_BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+_ENV_PATH = os.path.join(_BASE_DIR, "..", "..", ".env")
+load_dotenv(dotenv_path=_ENV_PATH, override=False)
+
+_ETORO_API_KEY = os.getenv("ETORO_PUBLIC_KEY", "")
+_ETORO_USER_KEY = os.getenv("ETORO_PRIVATE_KEY", "")
+_RANKINGS_URL = "https://public-api.etoro.com/api/v1/user-info/people/search"
+_USER_INFO_URL = "https://public-api.etoro.com/api/v1/user-info/people"
+_AVATAR_CACHE: Dict[str, Optional[str]] = {}
+_TREND_CACHE: Dict[str, List[float]] = {}
+
+
+def _get_session() -> requests.Session:
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
+        "Accept": "application/json",
+        "x-api-key": _ETORO_API_KEY,
+        "x-user-key": _ETORO_USER_KEY,
+        "x-request-id": str(uuid.uuid4()),
+    })
+    return session
+
+
+def _get_trend_session() -> requests.Session:
+    return _get_session()
+
+
+def _get_user_avatar(username: str) -> Optional[str]:
+    if not username:
+        return None
+    if username in _AVATAR_CACHE:
+        return _AVATAR_CACHE[username]
+
+    session = _get_session()
+    try:
+        resp = session.get(_USER_INFO_URL, params={"usernames": username}, timeout=20)
+        if resp.status_code == 200:
+            data = resp.json()
+            users = data.get("users", [])
+            if users:
+                avatars = users[0].get("avatars") or []
+                for av in avatars:
+                    url = av.get("url")
+                    if url:
+                        _AVATAR_CACHE[username] = url
+                        return url
+    except requests.RequestException:
+        pass
+    _AVATAR_CACHE[username] = None
+    return None
+
+
+def _get_trend_data(username: str) -> List[float]:
+    if not username:
+        return []
+    if username in _TREND_CACHE:
+        return _TREND_CACHE[username]
+
+    session = requests.Session()
+    session.headers.update({
+        "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
+        "Accept": "application/json",
+        "x-api-key": _ETORO_API_KEY,
+        "x-user-key": _ETORO_USER_KEY,
+        "x-request-id": str(uuid.uuid4()),
+    })
+    min_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
+    max_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
+    try:
+        resp = session.get(
+            url,
+            params={"minDate": min_date, "maxDate": max_date, "type": "Daily"},
+            timeout=20,
+        )
+        if resp.status_code == 200:
+            data = resp.json()
+            if not isinstance(data, list):
+                if isinstance(data, dict):
+                    data = data.get("dailyExample", data.get("daily", []))
+                else:
+                    data = []
+            points = []
+            cumulative = 0.0
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                gain = entry.get("gain")
+                if gain is not None:
+                    cumulative += float(gain)
+                    points.append(cumulative)
+            if points:
+                _TREND_CACHE[username] = points
+                return points
+    except requests.RequestException:
+        pass
+    _TREND_CACHE[username] = []
+    return []
+    if username in _TREND_CACHE:
+        return _TREND_CACHE[username]
+
+    session = public_api_session(_ETORO_API_KEY, _ETORO_USER_KEY, timeout=20)
+    min_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
+    try:
+        resp = session.get(url, params={"type": "Daily", "minDate": min_date}, timeout=20)
+        if resp.status_code == 200:
+            data = resp.json()
+            if not isinstance(data, list):
+                if isinstance(data, dict):
+                    data = data.get("dailyExample", data.get("daily", []))
+                else:
+                    data = []
+            points = []
+            for entry in data:
+                if not isinstance(entry, dict):
+                    continue
+                gain = entry.get("gain")
+                if gain is not None:
+                    points.append(float(gain))
+            if points:
+                _TREND_CACHE[username] = points
+                return points
+    except requests.RequestException:
+        pass
+    _TREND_CACHE[username] = []
+    return []
+
+
+def _trend_svg_from_points(points: List[float], width: int = 100, height: int = 28) -> str:
+    if not points:
+        return _trend_svg(positive=True)
+
+    min_val = min(points)
+    max_val = max(points)
+    if max_val == min_val:
+        normed = [height / 2 for _ in points]
+    else:
+        normed = [
+            height - ((value - min_val) / (max_val - min_val)) * height
+            for value in points
+        ]
+
+    step = width / (len(points) - 1) if len(points) > 1 else 0
+    point_str = " ".join(
+        f"{i * step:.2f},{value:.2f}" for i, value in enumerate(normed)
+    )
+
+    last = points[-1]
+    color = _SEMANTIC_POSITIVE if last >= 0 else _SEMANTIC_NEGATIVE
+
+    return (
+        f"<svg class=\"trend-chart\" viewBox=\"0 0 {width} {height}\" preserveAspectRatio=\"none\">"
+        f"<polyline fill=\"none\" stroke=\"{color}\" stroke-width=\"1.5\" points=\"{point_str}\"/></svg>"
+    )
+
+
+def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float], year_gain: Optional[float]) -> str:
+    if week_gain is None and month_gain is None and year_gain is None:
+        return _trend_svg(positive=True)
+
+    latest = week_gain if week_gain is not None else month_gain
+    if latest is None:
+        latest = year_gain
+
+    return _trend_svg(positive=latest >= 0)
+
+
+def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20) -> Dict[str, Any]:
+    session = _get_session()
+    params: Dict[str, Any] = {
+        "period": period,
+        "sort": sort,
+        "copiersMin": 10,
+    }
+    if page_size is not None:
+        params["pageSize"] = page_size
+
+    try:
+        resp = session.get(_RANKINGS_URL, params=params, timeout=30)
+        resp.raise_for_status()
+        data = resp.json()
+    except requests.RequestException as exc:
+        return {"results": [], "pagination": {}, "error": str(exc)}
+
+    return {
+        "results": data.get("items", []),
+        "pagination": data.get("pagination", {}),
+    }
+
+
+def _build_gain_map(items: List[Dict[str, Any]], gain_key: str) -> Dict[str, float]:
+    result: Dict[str, float] = {}
+    for item in items:
+        username = str(item.get("userName", item.get("cid", "")))
+        if username:
+            result[username] = item.get(gain_key)
+    return result
+
+
+def _safe_gain(value: Optional[float]) -> str:
+    if value is None:
+        return "<span class=\"performance-neutral\">N/A</span>"
+    css = "performance-positive" if value >= 0 else "performance-negative"
+    sign = "+" if value >= 0 else ""
+    return f"<span class=\"{css}\">{sign}{value:.2f}%</span>"
+
+
+def _safe_aum(value: Optional[Any]) -> str:
+    if value is None:
+        return "N/A"
+    if isinstance(value, str):
+        return value
+    if isinstance(value, (int, float)):
+        if value >= 1_000_000:
+            return f"${value / 1_000_000:.1f}M"
+        if value >= 1_000:
+            return f"${value / 1_000:.1f}K"
+        return f"${value:.0f}"
+    return str(value)
+
+
+def _safe_int(value: Optional[int]) -> str:
+    if value is None:
+        return "N/A"
+    return f"{value:,}"
+
+
+def _copiers_change(copiers: Optional[int], base: Optional[int]) -> str:
+    if copiers is None or base is None or base == 0:
+        return ""
+    change_pct = ((copiers - base) / base) * 100
+    sign = "+" if change_pct >= 0 else ""
+    arrow = "&#x25B2;" if change_pct >= 0 else "&#x25BC;"
+    return f"{arrow} {sign}{change_pct:.1f}% 1M"
+
+
+def _badge_for_subtype(subtype: Optional[str]) -> str:
+    if not subtype:
+        return ""
+    normalized = subtype.lower()
+    if normalized == "pi-elite-pro":
+        label = "ELITE PRO"
+        css = "badge-elite-pro"
+    elif normalized == "pi-elite":
+        label = "ELITE"
+        css = "badge-elite"
+    elif normalized == "pi-champion":
+        label = "CHAMPION"
+        css = "badge-champion"
+    elif normalized == "pi-rising-star":
+        label = "RISING STAR"
+        css = "badge-elite"
+    elif normalized == "pi-certified":
+        label = "CERTIFIED"
+        css = "badge-elite"
+    else:
+        return ""
+    return f"<span class=\"badge {css}\">{label}</span>"
+
+
+def _trend_svg(positive: bool = True) -> str:
+    color = _SEMANTIC_POSITIVE if positive else _SEMANTIC_NEGATIVE
+    points = "0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"
+    return (
+        f"<svg class=\"trend-chart\" viewBox=\"0 0 100 28\" preserveAspectRatio=\"none\">"
+        f"<polyline fill=\"none\" stroke=\"{color}\" stroke-width=\"1.5\" points=\"{points}\"/></svg>"
+    )
+
+
+def _avatar_html(avatar_url: Optional[str], name: str) -> str:
+    if avatar_url:
+        return (
+            f"<img class=\"investor-avatar\" src=\"{avatar_url}\" alt=\"avatar\" "
+            f"onerror=\"this.style.display='none'\">"
+        )
+    initials = "".join(part[0] for part in name.split()[:2]).upper()
+    return f"<div class=\"investor-avatar\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex-shrink:0;\">{initials}</div>"
+
+
+def _country_html(country: Optional[str]) -> str:
+    if not country:
+        return "<span class=\"country-badge\">N/A</span>"
+    flag_map = {
+        "US": "&#x1F1FA&#x1F1F8;",
+        "GB": "&#x1F1EC&#x1F1E7;",
+        "AU": "&#x1F1E6&#x1F1FA;",
+        "DE": "&#x1F1E9&#x1F1EA;",
+        "FR": "&#x1F1EB&#x1F1F7;",
+        "ES": "&#x1F1EA&#x1F1F8;",
+        "SE": "&#x1F1F8&#x1F1EA;",
+        "NO": "&#x1F1F3&#x1F1F4;",
+        "DK": "&#x1F1E9&#x1F1F0;",
+        "JP": "&#x1F1EF&#x1F1F5;",
+        "IN": "&#x1F1EE&#x1F1F3;",
+        "SG": "&#x1F1F8&#x1F1EC;",
+        "BR": "&#x1F1E7&#x1F1F7;",
+    }
+    flag = flag_map.get(country.upper(), "")
+    return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{country.upper()}</span>"
+
+
+def _render_row(item: Dict[str, Any], week_map: Dict[str, float], month_map: Dict[str, float], year_map: Dict[str, float]) -> str:
+    cid = str(item.get("userName", item.get("cid", item.get("realCID", item.get("gcid", "")))))
+    username = item.get("userName", item.get("username", ""))
+    full_name = item.get("fullName") or item.get("displayName") or username
+    avatar_url = item.get("avatarUrl")
+    if not avatar_url:
+        avatar_url = _get_user_avatar(username)
+    subtype = item.get("subType")
+    country = item.get("country")
+    country_id = item.get("countryId")
+    copiers = item.get("copiers")
+    aum_value = item.get("aumValue")
+    aum_tier_desc = item.get("aumTierDesc")
+    base_line_copiers = item.get("baseLineCopiers")
+
+    week_gain = week_map.get(cid)
+    month_gain = month_map.get(cid)
+    year_gain = year_map.get(cid)
+
+    if not country and country_id is not None:
+        country = str(country_id)
+
+    aum_display = aum_tier_desc if aum_tier_desc else _safe_aum(aum_value)
+
+    trend_points = _get_trend_data(username)
+    if trend_points:
+        trend_svg = _trend_svg_from_points(trend_points)
+    else:
+        trend_svg = _trend_svg_for_gains(week_gain, month_gain, year_gain)
+
+    search_text = (
+        f"{full_name} @{username} {country or ''}".lower()
+    )
+
+    return (
+        f"<tr data-search=\"{search_text}\">"
+        f"<td>"
+        f"<div class=\"investor-info\">"
+        f"{_avatar_html(avatar_url, full_name)}"
+        f"<div class=\"investor-details\">"
+        f"<div class=\"investor-name-row\">"
+        f"<span class=\"investor-name\">{full_name}</span>"
+        f"{_badge_for_subtype(subtype)}"
+        f"</div>"
+        f"<span class=\"investor-username\">@{username}</span>"
+        f"</div>"
+        f"</div>"
+        f"</td>"
+        f"<td>{_country_html(country)}</td>"
+        f"<td><span class=\"aum-value\">{_safe_aum(aum_display)}</span></td>"
+        f"<td>"
+        f"<div class=\"copiers-value\">{_safe_int(copiers)}</div>"
+        f"<div class=\"copiers-change\">{_copiers_change(copiers, base_line_copiers)}</div>"
+        f"</td>"
+        f"<td>{_safe_gain(week_gain)}</td>"
+        f"<td>{_safe_gain(month_gain)}</td>"
+        f"<td>{_safe_gain(year_gain)}</td>"
+        f"<td>{trend_svg}</td>"
+        f"</tr>"
+    )
+
+
+def _fetch_rankings() -> List[Dict[str, Any]]:
+    with ThreadPoolExecutor(max_workers=4) as executor:
+        future_base = executor.submit(_get_rankings, "OneMonthAgo", "-copiersGain", 20)
+        future_month = executor.submit(_get_rankings, "ThreeMonthsAgo", "-copiersGain", 20)
+        future_year = executor.submit(_get_rankings, "OneYearAgo", "-copiersGain", 20)
+
+        base_data = future_base.result()
+        month_data = future_month.result()
+        year_data = future_year.result()
+
+    base_results = base_data.get("results", [])
+    if not base_results and base_data.get("error"):
+        raise RuntimeError(base_data["error"])
+
+    merged: List[Dict[str, Any]] = []
+    seen = set()
+    for item in base_results:
+        if item.get("copiers", 0) <= 10:
+            continue
+        cid = str(item.get("userName", item.get("cid", "")))
+        if cid and cid not in seen:
+            seen.add(cid)
+            merged.append(item)
+
+    week_map: Dict[str, float] = {}
+    month_map: Dict[str, float] = {}
+    year_map: Dict[str, float] = {}
+
+    for item in merged:
+        cid = str(item.get("userName", item.get("cid", "")))
+        if cid:
+            week_map[cid] = item.get("gain")
+
+    month_map = _build_gain_map(month_data.get("results", []), "gain")
+    year_map = _build_gain_map(year_data.get("results", []), "gain")
+
+    if merged:
+        usernames = [str(item.get("userName", "")) for item in merged if item.get("userName")]
+        with ThreadPoolExecutor(max_workers=8) as executor:
+            future_avatars = {executor.submit(_get_user_avatar, u): u for u in usernames}
+            future_trends = {executor.submit(_get_trend_data, u): u for u in usernames}
+            for future in as_completed(future_avatars):
+                future.result()
+            for future in as_completed(future_trends):
+                future.result()
+
+    return merged, week_map, month_map, year_map
+
+
+_FALLBACK_INVESTORS = [
+    {"cid": "1", "username": "CompoundValue", "fullName": "Sarah Miller", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "US", "copiers": 32800, "aumValue": 14500000.0, "baseLineCopiers": 31850, "gain": 0.0042},
+    {"cid": "2", "username": "GreenMacro_Vance", "fullName": "Helena Vance", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 24100, "aumValue": 12200000.0, "baseLineCopiers": 22900, "gain": 0.0072},
+    {"cid": "3", "username": "TechBull_Sanchez", "fullName": "Ruben Sanchez", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "ES", "copiers": 18450, "aumValue": 8400000.0, "baseLineCopiers": 16080, "gain": 0.0284},
+    {"cid": "4", "username": "NordicCap_Nielsen", "fullName": "Line Nielsen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DK", "copiers": 14200, "aumValue": 7900000.0, "baseLineCopiers": 13020, "gain": 0.0165},
+    {"cid": "5", "username": "CryptoQuantum", "fullName": "Yuki Sato", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 11350, "aumValue": 4100000.0, "baseLineCopiers": 8820, "gain": -0.0432},
+    {"cid": "6", "username": "ShenzhenVanguard", "fullName": "Lin Wong", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SG", "copiers": 10800, "aumValue": 6700000.0, "baseLineCopiers": 9130, "gain": 0.0342},
+    {"cid": "7", "username": "AlphaDividends", "fullName": "Maximilian Weber", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 9200, "aumValue": 5800000.0, "baseLineCopiers": 8480, "gain": 0.0115},
+    {"cid": "8", "username": "TrendRider_Chloe", "fullName": "Chloe Laurent", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "FR", "copiers": 8700, "aumValue": 6200000.0, "baseLineCopiers": 7820, "gain": 0.0214},
+    {"cid": "9", "username": "QuantumEdge", "fullName": "Marcus Chen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 21500, "aumValue": 9300000.0, "baseLineCopiers": 20150, "gain": 0.0128},
+    {"cid": "10", "username": "NordicGrowth", "fullName": "Sofia Andersson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SE", "copiers": 16800, "aumValue": 7600000.0, "baseLineCopiers": 15360, "gain": 0.0095},
+    {"cid": "11", "username": "QuantumAlpha", "fullName": "James Wilson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "GB", "copiers": 28300, "aumValue": 11800000.0, "baseLineCopiers": 27080, "gain": 0.0115},
+    {"cid": "12", "username": "EmergingMarkets", "fullName": "Aisha Patel", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 12100, "aumValue": 5400000.0, "baseLineCopiers": 11220, "gain": 0.0188},
+    {"cid": "13", "username": "AsiaTech_Kim", "fullName": "David Kim", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "KR", "copiers": 19700, "aumValue": 8900000.0, "baseLineCopiers": 18600, "gain": 0.0205},
+    {"cid": "14", "username": "GreenBond_Emma", "fullName": "Emma Thompson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 14500, "aumValue": 6300000.0, "baseLineCopiers": 13650, "gain": 0.0065},
+    {"cid": "15", "username": "LatamGrowth", "fullName": "Lucas Silva", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "BR", "copiers": 9800, "aumValue": 4700000.0, "baseLineCopiers": 8710, "gain": -0.0125},
+    {"cid": "16", "username": "EuroValue_Nina", "fullName": "Nina Kowalski", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 15600, "aumValue": 7100000.0, "baseLineCopiers": 14780, "gain": 0.0088},
+    {"cid": "17", "username": "DeepSea_Oliver", "fullName": "Oliver Brown", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 22400, "aumValue": 9600000.0, "baseLineCopiers": 20910, "gain": 0.0155},
+    {"cid": "18", "username": "IndiaRising", "fullName": "Priya Sharma", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 8200, "aumValue": 3900000.0, "baseLineCopiers": 7420, "gain": 0.0235},
+    {"cid": "19", "username": "NordicBond_Thomas", "fullName": "Thomas Anderson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "NO", "copiers": 13100, "aumValue": 5800000.0, "baseLineCopiers": 12570, "gain": 0.0055},
+    {"cid": "20", "username": "JapanNext", "fullName": "Yuki Tanaka", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 16900, "aumValue": 6900000.0, "baseLineCopiers": 15540, "gain": -0.0075},
+]
+
+_WEEK_MAP = {str(item["cid"]): item["gain"] for item in _FALLBACK_INVESTORS}
+_MONTH_MAP = {
+    "1": 0.0185, "2": 0.0245, "3": 0.0812, "4": 0.0524, "5": 0.145,
+    "6": 0.0955, "7": 0.041, "8": 0.068, "9": 0.039, "10": 0.042,
+    "11": 0.054, "12": 0.068, "13": 0.062, "14": 0.029, "15": -0.0125,
+    "16": 0.0325, "17": 0.0475, "18": 0.082, "19": 0.021, "20": 0.051,
+}
+_YEAR_MAP = {
+    "1": 0.142, "2": 0.1685, "3": 0.4265, "4": 0.284, "5": 0.892,
+    "6": 0.328, "7": 0.194, "8": 0.269, "9": 0.185, "10": 0.213,
+    "11": 0.198, "12": 0.241, "13": 0.312, "14": 0.157, "15": 0.453,
+    "16": 0.179, "17": 0.224, "18": 0.385, "19": 0.138, "20": 0.276,
+}
+
+
+def get_portfolio_selection_html() -> str:
+    try:
+        merged, week_map, month_map, year_map = _fetch_rankings()
+    except Exception as exc:
+        print(f"Failed to fetch eToro rankings: {exc}")
+        merged, week_map, month_map, year_map = [], {}, {}, {}
+
+    if not merged:
+        merged = _FALLBACK_INVESTORS
+        week_map = _WEEK_MAP
+        month_map = _MONTH_MAP
+        year_map = _YEAR_MAP
+
+    rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
+
+    return f"""<!DOCTYPE html>
 <html>
 <head>
     <title>Portfolio Function - Select Investor</title>
-    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
-    <meta http-equiv="Pragma" content="no-cache">
-    <meta http-equiv="Expires" content="0">
+    <meta http-equiv=\"Cache-Control\" content=\"no-cache, no-store, must-revalidate\">
+    <meta http-equiv=\"Pragma\" content=\"no-cache\">
+    <meta http-equiv=\"Expires\" content=\"0\">
     <style>
         :root {{
             --brand-primary: {_BRAND_PRIMARY};
@@ -480,10 +956,10 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
                                 <th>Country</th>
                                 <th>AUM</th>
                                 <th>Copiers</th>
-                                <th>Week</th>
-                                <th>Month</th>
-                                <th>Year</th>
-                                <th>7D Trend</th>
+                                <th>1M</th>
+                                <th>3M</th>
+                                <th>1Y</th>
+                                <th>1M Trend</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -525,22 +1001,22 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
                         </tbody>
                     </table>
                 </div>
-                <div class="selection-container">
-                    <div class="selection-header">
-                        <h2 class="selection-title">
+                <div class=\"selection-container\">
+                    <div class=\"selection-header\">
+                        <h2 class=\"selection-title\">
                             Top 20 Pro Investors Trending This Week
                         </h2>
                     </div>
-                    <table class="investor-table">
+                    <table class=\"investor-table\">
                         <colgroup>
-                            <col style="width: 35%">
-                            <col style="width: 10%">
-                            <col style="width: 10%">
-                            <col style="width: 13%">
-                            <col style="width: 7%">
-                            <col style="width: 7%">
-                            <col style="width: 8%">
-                            <col style="width: 10%">
+                            <col style=\"width: 35%\">
+                            <col style=\"width: 10%\">
+                            <col style=\"width: 10%\">
+                            <col style=\"width: 13%\">
+                            <col style=\"width: 7%\">
+                            <col style=\"width: 7%\">
+                            <col style=\"width: 8%\">
+                            <col style=\"width: 10%\">
                         </colgroup>
                         <thead>
                             <tr>
@@ -548,691 +1024,32 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
                                 <th>Country</th>
                                 <th>AUM</th>
                                 <th>Copiers</th>
-                                <th>Week</th>
-                                <th>Month</th>
-                                <th>Year</th>
-                                <th>7D Trend</th>
+                                <th>1M</th>
+                                <th>3M</th>
+                                <th>1Y</th>
+                                <th>1M Trend</th>
                             </tr>
                         </thead>
                     </table>
                 </div>
             </div>
-            <div class="selection-container">
-                <table class="investor-table">
+            <div class=\"selection-container\">
+                <table class=\"investor-table\">
                     <colgroup>
-                        <col style="width: 35%">
-                        <col style="width: 10%">
-                        <col style="width: 10%">
-                        <col style="width: 13%">
-                        <col style="width: 7%">
-                        <col style="width: 7%">
-                        <col style="width: 8%">
-                        <col style="width: 10%">
+                        <col style=\"width: 35%\">
+                        <col style=\"width: 10%\">
+                        <col style=\"width: 10%\">
+                        <col style=\"width: 13%\">
+                        <col style=\"width: 7%\">
+                        <col style=\"width: 7%\">
+                        <col style=\"width: 8%\">
+                        <col style=\"width: 10%\">
                     </colgroup>
-                    <tbody id="investor-table-body">
-                        <tr data-search="sarah miller @compoundvalue healthcare consumer elite pro us">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Sarah Miller</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@CompoundValue</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1FA&#x1F1F8;</span>
-                                    US
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$14.5M</span></td>
-                            <td>
-                                <div class="copiers-value">32,800</div>
-                                <div class="copiers-change">&#x25B2; 3.1% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.42%</span></td>
-                            <td><span class="performance-positive">+1.85%</span></td>
-                            <td><span class="performance-positive">+14.20%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="helena vance @greenmacro_vance clean energy infrastr elite gb">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Helena Vance</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@GreenMacro_Vance</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EC&#x1F1E7;</span>
-                                    GB
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$12.2M</span></td>
-                            <td>
-                                <div class="copiers-value">24,100</div>
-                                <div class="copiers-change">&#x25B2; 5.2% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.72%</span></td>
-                            <td><span class="performance-positive">+2.45%</span></td>
-                            <td><span class="performance-positive">+16.85%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,21 36,18 48,17 60,15 72,12 84,10 100,6"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="ruben sanchez @techbull_sanchez tech ai elite pro es">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Ruben Sanchez</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@TechBull_Sanchez</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EA&#x1F1F8;</span>
-                                    ES
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$8.4M</span></td>
-                            <td>
-                                <div class="copiers-value">18,450</div>
-                                <div class="copiers-change">&#x25B2; 14.8% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+2.84%</span></td>
-                            <td><span class="performance-positive">+8.12%</span></td>
-                            <td><span class="performance-positive">+42.65%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,24 12,22 24,20 36,21 48,18 60,16 72,14 84,10 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="line nielsen @nordiccap_nielsen healthcare logistics elite dk">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Line Nielsen</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@NordicCap_Nielsen</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E9&#x1F1F0;</span>
-                                    DK
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$7.9M</span></td>
-                            <td>
-                                <div class="copiers-value">14,200</div>
-                                <div class="copiers-change">&#x25B2; 9.1% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.65%</span></td>
-                            <td><span class="performance-positive">+5.24%</span></td>
-                            <td><span class="performance-positive">+28.40%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,21 36,19 48,17 60,15 72,12 84,9 100,5"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="yuki sato @cryptoquantum cryptocurrency blockc champion jp">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Yuki Sato</span>
-                                            <span class="badge badge-champion">CHAMPION</span>
-                                        </div>
-                                        <span class="investor-username">@CryptoQuantum</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EF&#x1F1F5;</span>
-                                    JP
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$4.1M</span></td>
-                            <td>
-                                <div class="copiers-value">11,350</div>
-                                <div class="copiers-change">&#x25B2; 28.6% 1M</div>
-                            </td>
-                            <td><span class="performance-negative">-4.32%</span></td>
-                            <td><span class="performance-positive">+14.50%</span></td>
-                            <td><span class="performance-positive">+89.20%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,14 12,10 24,12 36,8 48,6 60,10 72,8 84,6 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="lin wong @shenzhenvanguard asian tech evs elite sg">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Lin Wong</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@ShenzhenVanguard</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1F8&#x1F1EC;</span>
-                                    SG
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$6.7M</span></td>
-                            <td>
-                                <div class="copiers-value">10,800</div>
-                                <div class="copiers-change">&#x25B2; 18.2% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+3.42%</span></td>
-                            <td><span class="performance-positive">+9.55%</span></td>
-                            <td><span class="performance-positive">+32.80%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,18 36,19 48,16 60,14 72,12 84,8 100,5"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="maximilian weber @alphadividends financials consumer elite de">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Maximilian Weber</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@AlphaDividends</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E9&#x1F1EA;</span>
-                                    DE
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$5.8M</span></td>
-                            <td>
-                                <div class="copiers-value">9,200</div>
-                                <div class="copiers-change">&#x25B2; 8.4% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.15%</span></td>
-                            <td><span class="performance-positive">+4.10%</span></td>
-                            <td><span class="performance-positive">+19.40%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,19 24,18 36,17 48,16 60,14 72,12 84,10 100,7"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="chloe laurent @trendrider_chloe luxury brand saas elite fr">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Chloe Laurent</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@TrendRider_Chloe</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EB&#x1F1F7;</span>
-                                    FR
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$6.2M</span></td>
-                            <td>
-                                <div class="copiers-value">8,700</div>
-                                <div class="copiers-change">&#x25B2; 11.2% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+2.14%</span></td>
-                            <td><span class="performance-positive">+6.80%</span></td>
-                            <td><span class="performance-positive">+26.90%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,19 36,18 48,16 60,14 72,11 84,8 100,5"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="marcus chen @quantumedge global macro commodities elite pro au">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Marcus Chen</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@QuantumEdge</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E6&#x1F1FA;</span>
-                                    AU
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$9.3M</span></td>
-                            <td>
-                                <div class="copiers-value">21,500</div>
-                                <div class="copiers-change">&#x25B2; 6.7% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.28%</span></td>
-                            <td><span class="performance-positive">+3.90%</span></td>
-                            <td><span class="performance-positive">+18.50%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,17 36,16 48,14 60,12 72,10 84,7 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="sofia andersson @nordicgrowth renewable energy healthcare elite se">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Sofia Andersson</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@NordicGrowth</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1F8&#x1F1EA;</span>
-                                    SE
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$7.6M</span></td>
-                            <td>
-                                <div class="copiers-value">16,800</div>
-                                <div class="copiers-change">&#x25B2; 9.4% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.95%</span></td>
-                            <td><span class="performance-positive">+4.20%</span></td>
-                            <td><span class="performance-positive">+21.30%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,19 36,17 48,15 60,13 72,11 84,8 100,5"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="james wilson @quantumalpha global macro commodities elite pro gb">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">James Wilson</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@QuantumAlpha</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EC&#x1F1E7;</span>
-                                    GB
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$11.8M</span></td>
-                            <td>
-                                <div class="copiers-value">28,300</div>
-                                <div class="copiers-change">&#x25B2; 4.5% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.15%</span></td>
-                            <td><span class="performance-positive">+3.60%</span></td>
-                            <td><span class="performance-positive">+19.80%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,17 36,16 48,14 60,12 72,10 84,7 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="aisha patel @emergingmarkets india growth elite in">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Aisha Patel</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@EmergingMarkets</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EE&#x1F1F3;</span>
-                                    IN
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$5.4M</span></td>
-                            <td>
-                                <div class="copiers-value">12,100</div>
-                                <div class="copiers-change">&#x25B2; 7.8% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.88%</span></td>
-                            <td><span class="performance-positive">+5.40%</span></td>
-                            <td><span class="performance-positive">+24.10%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,19 36,17 48,15 60,13 72,10 84,7 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="david kim @asiatech_kim south korea tech elite pro kr">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">David Kim</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@AsiaTech_Kim</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1F0&#x1F1F7;</span>
-                                    KR
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$8.9M</span></td>
-                            <td>
-                                <div class="copiers-value">19,700</div>
-                                <div class="copiers-change">&#x25B2; 5.9% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+2.05%</span></td>
-                            <td><span class="performance-positive">+6.80%</span></td>
-                            <td><span class="performance-positive">+31.20%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,16 36,15 48,13 60,11 72,9 84,6 100,3"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="emma thompson @greenbond_emma fixed income green elite gb">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Emma Thompson</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@GreenBond_Emma</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EC&#x1F1E7;</span>
-                                    GB
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$6.3M</span></td>
-                            <td>
-                                <div class="copiers-value">14,500</div>
-                                <div class="copiers-change">&#x25B2; 6.2% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.65%</span></td>
-                            <td><span class="performance-positive">+2.90%</span></td>
-                            <td><span class="performance-positive">+15.70%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,19 24,18 36,17 48,16 60,14 72,12 84,9 100,5"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="lucas silva @latamgrowth brazil commodities elite br">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Lucas Silva</span>
-                                            <span class="badge badge-champion">CHAMPION</span>
-                                        </div>
-                                        <span class="investor-username">@LatamGrowth</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E7&#x1F1F7;</span>
-                                    BR
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$4.7M</span></td>
-                            <td>
-                                <div class="copiers-value">9,800</div>
-                                <div class="copiers-change">&#x25B2; 12.3% 1M</div>
-                            </td>
-                            <td><span class="performance-negative">-1.25%</span></td>
-                            <td><span class="performance-positive">+7.60%</span></td>
-                            <td><span class="performance-positive">+45.30%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,16 12,12 24,14 36,10 48,8 60,12 72,9 84,6 100,3"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="nina kowalski @eurovalue_nina europe financials elite de">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Nina Kowalski</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@EuroValue_Nina</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E9&#x1F1EA;</span>
-                                    DE
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$7.1M</span></td>
-                            <td>
-                                <div class="copiers-value">15,600</div>
-                                <div class="copiers-change">&#x25B2; 5.5% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.88%</span></td>
-                            <td><span class="performance-positive">+3.25%</span></td>
-                            <td><span class="performance-positive">+17.90%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,19 24,18 36,17 48,16 60,14 72,12 84,10 100,6"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="oliver brown @deepsea_oliver australia resources elite pro au">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Oliver Brown</span>
-                                            <span class="badge badge-elite-pro">ELITE PRO</span>
-                                        </div>
-                                        <span class="investor-username">@DeepSea_Oliver</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1E6&#x1F1FA;</span>
-                                    AU
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$9.6M</span></td>
-                            <td>
-                                <div class="copiers-value">22,400</div>
-                                <div class="copiers-change">&#x25B2; 7.1% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+1.55%</span></td>
-                            <td><span class="performance-positive">+4.75%</span></td>
-                            <td><span class="performance-positive">+22.40%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,17 36,16 48,14 60,12 72,10 84,7 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="priya sharma @indiarising india consumer tech elite in">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Priya Sharma</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@IndiaRising</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EE&#x1F1F3;</span>
-                                    IN
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$3.9M</span></td>
-                            <td>
-                                <div class="copiers-value">8,200</div>
-                                <div class="copiers-change">&#x25B2; 10.5% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+2.35%</span></td>
-                            <td><span class="performance-positive">+8.20%</span></td>
-                            <td><span class="performance-positive">+38.50%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,18 36,16 48,14 60,11 72,9 84,6 100,3"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="thomas anderson @nordicbond_thomas scandinavia fixed income elite no">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Thomas Anderson</span>
-                                            <span class="badge badge-elite">ELITE</span>
-                                        </div>
-                                        <span class="investor-username">@NordicBond_Thomas</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1F3&#x1F1F4;</span>
-                                    NO
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$5.8M</span></td>
-                            <td>
-                                <div class="copiers-value">13,100</div>
-                                <div class="copiers-change">&#x25B2; 4.1% 1M</div>
-                            </td>
-                            <td><span class="performance-positive">+0.55%</span></td>
-                            <td><span class="performance-positive">+2.10%</span></td>
-                            <td><span class="performance-positive">+13.80%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,19 24,18 36,17 48,16 60,15 72,13 84,11 100,8"/>
-                                </svg>
-                            </td>
-                        </tr>
-                        <tr data-search="yuki tanaka @japanext japan tech robotics champion jp">
-                            <td>
-                                <div class="investor-info">
-                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
-                                    <div class="investor-details">
-                                        <div class="investor-name-row">
-                                            <span class="investor-name">Yuki Tanaka</span>
-                                            <span class="badge badge-champion">CHAMPION</span>
-                                        </div>
-                                        <span class="investor-username">@JapanNext</span>
-                                    </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="country-badge">
-                                    <span class="country-flag">&#x1F1EF&#x1F1F5;</span>
-                                    JP
-                                </span>
-                            </td>
-                            <td><span class="aum-value">$6.9M</span></td>
-                            <td>
-                                <div class="copiers-value">16,900</div>
-                                <div class="copiers-change">&#x25B2; 8.8% 1M</div>
-                            </td>
-                            <td><span class="performance-negative">-0.75%</span></td>
-                            <td><span class="performance-positive">+5.10%</span></td>
-                            <td><span class="performance-positive">+27.60%</span></td>
-                            <td>
-                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,14 12,10 24,12 36,8 48,6 60,10 72,7 84,5 100,3"/>
-                                </svg>
-                            </td>
-                        </tr>
+                    <tbody id=\"investor-table-body\">
+                        {rows_html}
                     </tbody>
                 </table>
-                <div class="no-results hidden" id="no-results">No investors match your search.</div>
+                <div class=\"no-results hidden\" id=\"no-results\">No investors match your search.</div>
             </div>
         </div>
     </div>

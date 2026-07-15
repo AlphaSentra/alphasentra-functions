@@ -50,7 +50,6 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
 
         .selection-background-wrapper {{
           position: relative;
-          overflow: hidden;
           background-color: {_NEUTRAL_0};
         }}
 
@@ -90,6 +89,13 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
 
         .my-portfolio-container {{
             padding: 20px;
+        }}
+
+        .selection-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
         }}
 
         .my-portfolio-row {{
@@ -212,12 +218,6 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
             flex-shrink: 0;
         }}
 
-        .selection-container {{
-            font-family: {FONT_FAMILY};
-            padding: 20px;
-            color: {_TEXT_PRIMARY};
-        }}
-
         .selection-header {{
             display: flex;
             align-items: center;
@@ -272,6 +272,12 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
 
         .investor-table col:nth-child(8) {{
             width: 10%;
+        }}
+
+        .selection-container {{
+            font-family: {FONT_FAMILY};
+            padding: 20px;
+            color: {_TEXT_PRIMARY};
         }}
 
         .investor-table thead th {{
@@ -433,90 +439,125 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
         .hidden {{
             display: none !important;
         }}
+
+        .frozen-top {{
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--neutral-0);
+        }}
     </style>
 </head>
 <body>
     <div class="selection-background-wrapper">
         <div class="selection-foreground">
-            <div class="search-container">
-                <input
-                    type="text"
-                    class="search-input"
-                    id="investor-search"
-                    placeholder="Search Pro Investors..."
-                    autocomplete="off"
-                    autofocus
-                >
-            </div>
-            <div class="my-portfolio-container">
-                <table class="investor-table">
-                    <colgroup>
-                        <col style="width: 35%">
-                        <col style="width: 10%">
-                        <col style="width: 10%">
-                        <col style="width: 13%">
-                        <col style="width: 7%">
-                        <col style="width: 7%">
-                        <col style="width: 8%">
-                        <col style="width: 10%">
-                    </colgroup>
-                    <thead>
-                        <tr>
-                            <th>My Portfolio</th>
-                            <th>Country</th>
-                            <th>AUM</th>
-                            <th>Copiers</th>
-                            <th>Week</th>
-                            <th>Month</th>
-                            <th>Year</th>
-                            <th>7D Trend</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr class="my-portfolio-row">
-                            <td>
-                                <div class="my-portfolio-investor">
-                                    <div class="my-portfolio-avatar">&#x1F4B0;</div>
-                                    <div class="my-portfolio-info">
-                                        <div class="my-portfolio-name-row">
-                                            <span class="my-portfolio-name">My Portfolio</span>
-                                            <span class="my-portfolio-badge">CURRENT</span>
+            <div class="frozen-top">
+                <div class="search-container">
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="investor-search"
+                        placeholder="Search Pro Investors..."
+                        autocomplete="off"
+                        autofocus
+                    >
+                </div>
+                <div class="my-portfolio-container">
+                    <table class="investor-table">
+                        <colgroup>
+                            <col style="width: 35%">
+                            <col style="width: 10%">
+                            <col style="width: 10%">
+                            <col style="width: 13%">
+                            <col style="width: 7%">
+                            <col style="width: 7%">
+                            <col style="width: 8%">
+                            <col style="width: 10%">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>My Portfolio</th>
+                                <th>Country</th>
+                                <th>AUM</th>
+                                <th>Copiers</th>
+                                <th>Week</th>
+                                <th>Month</th>
+                                <th>Year</th>
+                                <th>7D Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody>
+                            <tr class="my-portfolio-row">
+                                <td>
+                                    <div class="my-portfolio-investor">
+                                        <div class="my-portfolio-avatar">&#x1F4B0;</div>
+                                        <div class="my-portfolio-info">
+                                            <div class="my-portfolio-name-row">
+                                                <span class="my-portfolio-name">My Portfolio</span>
+                                                <span class="my-portfolio-badge">CURRENT</span>
+                                            </div>
+                                            <span class="my-portfolio-username">@MyPortfolio</span>
                                         </div>
-                                        <span class="my-portfolio-username">@MyPortfolio</span>
                                     </div>
-                                </div>
-                            </td>
-                            <td>
-                                <span class="my-portfolio-country">
-                                    <span class="my-portfolio-country-flag">&#x1F1FA&#x1F1F8;</span>
-                                    US
-                                </span>
-                            </td>
-                            <td><span class="my-portfolio-aum">$14.5M</span></td>
-                            <td>
-                                <div>
-                                    <div class="my-portfolio-copiers-value">32,800</div>
-                                    <div class="my-portfolio-copiers-change">&#x25B2; 3.1% 1M</div>
-                                </div>
-                            </td>
-                            <td><span class="my-portfolio-performance my-portfolio-performance-positive">+0.42%</span></td>
-                            <td><span class="my-portfolio-performance my-portfolio-performance-positive">+1.85%</span></td>
-                            <td><span class="my-portfolio-performance my-portfolio-performance-positive">+14.20%</span></td>
-                            <td>
-                                <svg class="my-portfolio-trend" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"/>
-                                </svg>
-                            </td>
-                        </tr>
-                    </tbody>
-                </table>
+                                </td>
+                                <td>
+                                    <span class="my-portfolio-country">
+                                        <span class="my-portfolio-country-flag">&#x1F1FA&#x1F1F8;</span>
+                                        US
+                                    </span>
+                                </td>
+                                <td><span class="my-portfolio-aum">$14.5M</span></td>
+                                <td>
+                                    <div>
+                                        <div class="my-portfolio-copiers-value">32,800</div>
+                                        <div class="my-portfolio-copiers-change">&#x25B2; 3.1% 1M</div>
+                                    </div>
+                                </td>
+                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+0.42%</span></td>
+                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+1.85%</span></td>
+                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+14.20%</span></td>
+                                <td>
+                                    <svg class="my-portfolio-trend" viewBox="0 0 100 28" preserveAspectRatio="none">
+                                        <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"/>
+                                    </svg>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="selection-container">
+                    <div class="selection-header">
+                        <h2 class="selection-title">
+                            Pro Investors Trending This Week
+                        </h2>
+                    </div>
+                    <table class="investor-table">
+                        <colgroup>
+                            <col style="width: 35%">
+                            <col style="width: 10%">
+                            <col style="width: 10%">
+                            <col style="width: 13%">
+                            <col style="width: 7%">
+                            <col style="width: 7%">
+                            <col style="width: 8%">
+                            <col style="width: 10%">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Pro Investor</th>
+                                <th>Country</th>
+                                <th>AUM</th>
+                                <th>Copiers</th>
+                                <th>Week</th>
+                                <th>Month</th>
+                                <th>Year</th>
+                                <th>7D Trend</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
             </div>
             <div class="selection-container">
-                <div class="selection-header">
-                    <h2 class="selection-title">
-                        Pro Investors Trending This Week
-                    </h2>
-                </div>
                 <table class="investor-table">
                     <colgroup>
                         <col style="width: 35%">
@@ -528,18 +569,6 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
                         <col style="width: 8%">
                         <col style="width: 10%">
                     </colgroup>
-                    <thead>
-                        <tr>
-                            <th>Pro Investor</th>
-                            <th>Country</th>
-                            <th>AUM</th>
-                            <th>Copiers</th>
-                            <th>Week</th>
-                            <th>Month</th>
-                            <th>Year</th>
-                            <th>7D Trend</th>
-                        </tr>
-                    </thead>
                     <tbody id="investor-table-body">
                         <tr data-search="sarah miller @compoundvalue healthcare consumer elite pro us">
                             <td>
@@ -802,6 +831,72 @@ PORTFOLIO_SELECTION_HTML = f"""<!DOCTYPE html>
                             <td>
                                 <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
                                     <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,19 36,18 48,16 60,14 72,11 84,8 100,5"/>
+                                </svg>
+                            </td>
+                        </tr>
+                        <tr data-search="marcus chen @quantumedge global macro commodities elite pro au">
+                            <td>
+                                <div class="investor-info">
+                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
+                                    <div class="investor-details">
+                                        <div class="investor-name-row">
+                                            <span class="investor-name">Marcus Chen</span>
+                                            <span class="badge badge-elite-pro">ELITE PRO</span>
+                                        </div>
+                                        <span class="investor-username">@QuantumEdge</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="country-badge">
+                                    <span class="country-flag">&#x1F1E6&#x1F1FA;</span>
+                                    AU
+                                </span>
+                            </td>
+                            <td><span class="aum-value">$9.3M</span></td>
+                            <td>
+                                <div class="copiers-value">21,500</div>
+                                <div class="copiers-change">&#x25B2; 6.7% 1M</div>
+                            </td>
+                            <td><span class="performance-positive">+1.28%</span></td>
+                            <td><span class="performance-positive">+3.90%</span></td>
+                            <td><span class="performance-positive">+18.50%</span></td>
+                            <td>
+                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
+                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,17 36,16 48,14 60,12 72,10 84,7 100,4"/>
+                                </svg>
+                            </td>
+                        </tr>
+                        <tr data-search="sofia andersson @nordicgrowth renewable energy healthcare elite se">
+                            <td>
+                                <div class="investor-info">
+                                    <img class="investor-avatar" src="https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850" alt="avatar" onerror="this.style.display='none'">
+                                    <div class="investor-details">
+                                        <div class="investor-name-row">
+                                            <span class="investor-name">Sofia Andersson</span>
+                                            <span class="badge badge-elite">ELITE</span>
+                                        </div>
+                                        <span class="investor-username">@NordicGrowth</span>
+                                    </div>
+                                </div>
+                            </td>
+                            <td>
+                                <span class="country-badge">
+                                    <span class="country-flag">&#x1F1F8&#x1F1EA;</span>
+                                    SE
+                                </span>
+                            </td>
+                            <td><span class="aum-value">$7.6M</span></td>
+                            <td>
+                                <div class="copiers-value">16,800</div>
+                                <div class="copiers-change">&#x25B2; 9.4% 1M</div>
+                            </td>
+                            <td><span class="performance-positive">+0.95%</span></td>
+                            <td><span class="performance-positive">+4.20%</span></td>
+                            <td><span class="performance-positive">+21.30%</span></td>
+                            <td>
+                                <svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none">
+                                    <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,22 12,20 24,19 36,17 48,15 60,13 72,11 84,8 100,5"/>
                                 </svg>
                             </td>
                         </tr>

@@ -391,6 +391,17 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                         cancelled = false;
                         clearAllTimeouts();
                         setTimeout(() => activateStep(0), 50);
+
+                        fetch('/port', {{
+                            method: 'POST',
+                            body: formData
+                        }}).then(response => response.text()).then(html => {{
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        }}).catch(error => {{
+                            console.error('Error generating report:', error);
+                        }});
                     }}
                 }} catch (error) {{
                     console.error('Error checking cache status:', error);
@@ -400,6 +411,17 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                     cancelled = false;
                     clearAllTimeouts();
                     setTimeout(() => activateStep(0), 50);
+
+                    fetch('/port', {{
+                        method: 'POST',
+                        body: formData
+                    }}).then(response => response.text()).then(html => {{
+                        document.open();
+                        document.write(html);
+                        document.close();
+                    }}).catch(error => {{
+                        console.error('Error generating report:', error);
+                    }});
                 }}
             }});
 

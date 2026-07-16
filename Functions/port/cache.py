@@ -84,6 +84,28 @@ def get(key: tuple, ttl: int, ext: str = ".pkl") -> Optional[Any]:
         return None
 
 
+def exists(key: tuple, ttl: int, ext: str = ".pkl") -> bool:
+    key_str = _key_str(key)
+    p = _path(key_str, ext)
+    if not p.exists():
+        _logger.debug("Cache exists miss key=%s path=%s", key_str, p)
+        return False
+    try:
+        if time.time() - p.stat().st_mtime > ttl:
+            _logger.debug("Cache exists expired key=%s path=%s", key_str, p)
+            p.unlink(missing_ok=True)
+            return False
+        _logger.debug("Cache exists hit key=%s path=%s", key_str, p)
+        return True
+    except Exception as exc:
+        _logger.warning("Cache exists error key=%s path=%s error=%s", key_str, p, exc)
+        try:
+            p.unlink(missing_ok=True)
+        except Exception:
+            pass
+        return False
+
+
 def set(key: tuple, value: Any, ext: str = ".pkl") -> None:
     key_str = _key_str(key)
     p = _path(key_str, ext)

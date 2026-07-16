@@ -4,7 +4,7 @@ Portfolio input handler - form display and request processing.
 
 from flask import request, jsonify # Import jsonify
 import logging
-from Functions.port.cache import get as cache_get, set as cache_set, _REPORT_TTL
+from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _REPORT_TTL
 from Functions.port.form import PORTFOLIO_FORM_HTML
 
 logger = logging.getLogger(__name__)
@@ -20,6 +20,8 @@ def _get_cached_portfolio_html(etoro_username: str, etoro_cid: str, benchmark_ti
         (benchmark_ticker or "").strip().upper(),
         etoro_cid.strip().lower(),
     )
+    if not cache_exists(cache_key, _REPORT_TTL, ext=".html"):
+        return None
     cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
     if cached_html is not None:
         logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
@@ -34,7 +36,15 @@ def get_portfolio_cache_status():
     etoro_cid = request.form.get("etoro_cid", "").strip()
     benchmark_ticker = request.form.get("benchmark_ticker", "").strip()
 
-    is_cached = _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker) is not None
+    if not etoro_username:
+        return jsonify({"cached": False})
+
+    cache_key = (
+        etoro_username.strip().lower(),
+        (benchmark_ticker or "").strip().upper(),
+        etoro_cid.strip().lower(),
+    )
+    is_cached = cache_exists(cache_key, _REPORT_TTL, ext=".html")
     return jsonify({"cached": is_cached})
 
 def handle_portfolio_input():

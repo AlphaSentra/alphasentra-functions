@@ -11,6 +11,8 @@ from typing import Any, Dict, List, Optional
 import requests
 from dotenv import load_dotenv
 
+from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _ETORO_PI_TTL
+
 from Functions.themes import (
     _TEXT_PRIMARY, _TEXT_HEADING, _BRAND_PRIMARY, _HOVER_SURFACE, _BORDER_DEFAULT,
     _BG_SUBTLE, _NEUTRAL_0, _BG_DEFAULT, _TEXT_MUTED, _GRID_LINE, BORDER_DIVIDER,
@@ -447,6 +449,11 @@ _YEAR_MAP = {
 
 
 def get_portfolio_selection_html() -> str:
+    cache_key = ("portfolio_selection",)
+    cached_html = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
+    if cached_html is not None:
+        return cached_html
+
     try:
         merged, week_map, month_map, year_map = _fetch_rankings()
     except Exception as exc:
@@ -461,7 +468,7 @@ def get_portfolio_selection_html() -> str:
 
     rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
 
-    return f"""<!DOCTYPE html>
+    html = f"""<!DOCTYPE html>
 <html>
 <head>
     <title>Portfolio Function - Select Investor</title>
@@ -922,9 +929,50 @@ def get_portfolio_selection_html() -> str:
             z-index: 10;
             background: var(--neutral-0);
         }}
+
+        .loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: {_NEUTRAL_0};
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.2s ease;
+        }}
+
+        .loading-overlay.hidden {{
+            opacity: 0;
+            pointer-events: none;
+        }}
+
+        .loading-spinner {{
+            width: 40px;
+            height: 40px;
+            border: 3px solid {_BORDER_DEFAULT};
+            border-top-color: {_BRAND_PRIMARY};
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }}
+
+        .loading-text {{
+            margin-top: 12px;
+            font-size: 14px;
+            color: {_TEXT_MUTED};
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
     </style>
 </head>
 <body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
     <div class="selection-background-wrapper">
         <div class="selection-foreground">
             <div class="frozen-top">
@@ -1119,6 +1167,28 @@ def get_portfolio_selection_html() -> str:
             }});
         }})();
     </script>
+
+    <script>
+        (function() {{
+            const overlay = document.getElementById('loading-overlay');
+            if (!overlay) return;
+
+            function hideOverlay() {{
+                overlay.classList.add('hidden');
+            }}
+
+            if (document.readyState === 'complete') {{
+                setTimeout(hideOverlay, 400);
+            }} else {{
+                window.addEventListener('load', function() {{
+                    setTimeout(hideOverlay, 400);
+                }});
+            }}
+        }})();
+    </script>
 </body>
 </html>
 """
+
+    cache_set(cache_key, html, ext=".html")
+    return html

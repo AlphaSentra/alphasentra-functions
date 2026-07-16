@@ -22,6 +22,7 @@ from config import (
     CACHE_TTL_PRICE,
     CACHE_TTL_SECTOR,
     CACHE_TTL_ETORO,
+    CACHE_TTL_ETORO_PI,
 )
 
 _logger = logging.getLogger(__name__)
@@ -43,6 +44,7 @@ _REPORT_TTL = CACHE_TTL_REPORT
 _PRICE_TTL = CACHE_TTL_PRICE
 _SECTOR_TTL = CACHE_TTL_SECTOR
 _ETORO_TTL = CACHE_TTL_ETORO
+_ETORO_PI_TTL = CACHE_TTL_ETORO_PI
 
 _lock = Lock()
 

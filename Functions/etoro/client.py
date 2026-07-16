@@ -1,5 +1,7 @@
+import json
 import os
 import sys
+import time
 import logging
 from datetime import datetime, timezone
 from pathlib import Path
@@ -32,6 +34,59 @@ from .models import (
     EToroUser,
     EToroUserLookupResult,
 )
+
+_INSTRUMENT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / ".etoro_instrument_cache.json"
+_INSTRUMENT_CACHE_TTL = 24 * 60 * 60
+
+
+def _load_instrument_cache() -> Dict[str, Dict[str, str]]:
+    if not _INSTRUMENT_CACHE_PATH.exists():
+        return {}
+    try:
+        with open(_INSTRUMENT_CACHE_PATH, "r", encoding="utf-8") as f:
+            cache: Dict[str, Any] = json.load(f)
+        now = time.time()
+        return {k: v for k, v in cache.items() if now - v.get("_ts", 0) < _INSTRUMENT_CACHE_TTL}
+    except Exception:
+        return {}
+
+
+def _save_instrument_cache(metadata: Dict[str, Dict[str, str]]) -> None:
+    try:
+        cache = _load_instrument_cache()
+        for k, v in metadata.items():
+            cache[k] = {"_ts": time.time(), **v}
+        with open(_INSTRUMENT_CACHE_PATH, "w", encoding="utf-8") as f:
+            json.dump(cache, f)
+    except Exception as exc:
+        logger.debug("Failed to save instrument metadata cache: %s", exc)
+
+
+def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: str) -> Optional[Dict[str, str]]:
+    try:
+        resp = session.get(search_url, params={"instrumentId": iid}, timeout=30)
+        resp.raise_for_status()
+        items = resp.json().get("items", [])
+        if not items:
+            return None
+        item = items[0]
+        symbol = item.get("internalSymbolFull") or item.get("internalSymbol") or item.get("symbol")
+        name = (
+            item.get("internalInstrumentDisplayName")
+            or item.get("displayname")
+            or item.get("displayName")
+            or item.get("instrumentDisplayName")
+            or item.get("name")
+            or item.get("instrumentName")
+            or item.get("title")
+            or ""
+        )
+        if symbol:
+            return {"symbol": str(symbol), "name": str(name)}
+    except Exception as exc:
+        logger.debug("Failed to resolve instrument %s: %s", iid, exc)
+    return None
+
 
 logger = logging.getLogger(__name__)
 
@@ -165,52 +220,14 @@ class ETPublicClient:
         # --- 2. Identify symbols directly from eToro search API ---
         etoro_symbol_map: Dict[str, str] = {}
         try:
-            search_url = "https://public-api.etoro.com/api/v1/market-data/search"
-            with ThreadPoolExecutor(max_workers=min(10, len(instrument_ids) or 1)) as executor:
-                def _fetch_symbol(iid):
-                    try:
-                        resp = session.get(search_url, params={"instrumentId": iid}, timeout=self._timeout)
-                        resp.raise_for_status()
-                        return {
-                            str(item["internalInstrumentId"]): item["internalSymbolFull"]
-                            for item in resp.json().get("items", [])
-                            if item.get("internalInstrumentId") and item.get("internalSymbolFull")
-                        }
-                    except Exception:
-                        return {}
-
-                futures = {executor.submit(_fetch_symbol, iid): iid for iid in instrument_ids}
-                for future in as_completed(futures):
-                    result = future.result()
-                    etoro_symbol_map.update(result)
+            metadata = self.resolve_instrument_metadata(instrument_ids)
+            etoro_symbol_map = {
+                iid: meta["symbol"]
+                for iid, meta in metadata.items()
+                if meta.get("symbol")
+            }
         except Exception as exc:
             logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
-
-        # --- 2b. Verify symbols by reverse lookup (internalSymbolFull -> ID) ---
-        try:
-            search_url = "https://public-api.etoro.com/api/v1/market-data/search"
-            items = list(etoro_symbol_map.items())
-            with ThreadPoolExecutor(max_workers=min(10, len(items) or 1)) as executor:
-                def _check_ambiguity(iid_symbol):
-                    iid, symbol = iid_symbol
-                    try:
-                        resp = session.get(search_url, params={"internalSymbolFull": symbol}, timeout=self._timeout)
-                        resp.raise_for_status()
-                        for item in resp.json().get("items", []):
-                            sid = str(item.get("internalInstrumentId", ""))
-                            if sid and sid != iid:
-                                logger.info(
-                                    f"Symbol ambiguity detected for '{symbol}': "
-                                    f"expected ID {iid} but search returned ID {sid}."
-                                )
-                    except Exception:
-                        pass
-
-                futures = [executor.submit(_check_ambiguity, item) for item in items]
-                for future in as_completed(futures):
-                    future.result()
-        except Exception as exc:
-            logger.warning("Failed to verify symbols via eToro search API: %s", exc)
 
         # --- 3. Pull from MongoDB and compare fields ---
         db_symbol_map: Dict[str, str] = {}
@@ -488,6 +505,47 @@ class ETPublicClient:
         cache_set(cache_key, result, ext=".pkl")
         return result
     
+    def resolve_instrument_metadata(self, instrument_ids: list) -> Dict[str, Dict[str, str]]:
+        """
+        Resolve eToro InstrumentIDs to full symbol and display name via the search API.
+        Results are cached on disk for 24 hours.
+
+        Returns a dict keyed by InstrumentID with values like:
+            {"symbol": "AAPL", "name": "Apple Inc."}
+        """
+        result: Dict[str, Dict[str, str]] = {}
+        if not instrument_ids:
+            return result
+
+        cache = _load_instrument_cache()
+        remaining = [iid for iid in instrument_ids if str(iid) not in cache]
+        for iid in instrument_ids:
+            iid_str = str(iid)
+            if iid_str in cache:
+                result[iid_str] = {k: v for k, v in cache[iid_str].items() if k != "_ts"}
+
+        if not remaining:
+            return result
+
+        session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
+        search_url = "https://public-api.etoro.com/api/v1/market-data/search"
+
+        with ThreadPoolExecutor(max_workers=min(10, len(remaining) or 1)) as executor:
+            futures = {executor.submit(_fetch_instrument_metadata, session, search_url, iid): iid for iid in remaining}
+            for future in as_completed(futures):
+                iid = futures[future]
+                try:
+                    meta = future.result()
+                    if meta:
+                        result[str(iid)] = meta
+                except Exception as exc:
+                    logger.debug("Instrument resolution future failed for %s: %s", iid, exc)
+
+        if result:
+            _save_instrument_cache(result)
+
+        return result
+
     def get_users_by_cid(self, cids: List[str]) -> EToroUserLookupResult:
         """
         Resolve eToro usernames and account IDs from customer IDs.

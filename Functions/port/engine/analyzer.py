@@ -88,7 +88,7 @@ class PortfolioAnalyzer:
             raise PortfolioFunctionsError("eToro username is required for portfolio analysis.")
         logger.info("Loading eToro portfolio data...")
 
-    def _load_etoro_portfolio_path(self) -> Tuple[bool, Optional[str]]:
+    def _load_etoro_portfolio_path(self, client=None) -> Tuple[bool, Optional[str]]:
         """
         Attempt to build the analysis from the live eToro portfolio API
         instead of running the full transaction-mode backtest.
@@ -101,7 +101,7 @@ class PortfolioAnalyzer:
 
         try:
             from Functions.etoro.client import get_public_client_from_env
-            client = get_public_client_from_env()
+            client = client or get_public_client_from_env()
             portfolio = client.get_investor_portfolio(self.etoro_username)
 
             agg_positions = [
@@ -892,7 +892,9 @@ class PortfolioAnalyzer:
             Tuple of (metrics dict, charts dict, start date).
         """
         # Step-by-step execution
-        portfolio_loaded, portfolio_error = self._load_etoro_portfolio_path()
+        from Functions.etoro.client import get_public_client_from_env
+        client = get_public_client_from_env()
+        portfolio_loaded, portfolio_error = self._load_etoro_portfolio_path(client=client)
         if not portfolio_loaded:
             raise PortfolioFunctionsError(
                 "eToro portfolio failed to load. "
@@ -903,8 +905,6 @@ class PortfolioAnalyzer:
         self.start = self.parse_inception_date()
         if not self.etoro_cid:
             try:
-                from Functions.etoro.client import get_public_client_from_env
-                client = get_public_client_from_env()
                 self.etoro_cid = client.resolve_cid(self.etoro_username)
                 logger.info("Auto-resolved eToro CID=%s for username=%s", self.etoro_cid, self.etoro_username)
             except Exception as exc:
@@ -912,7 +912,7 @@ class PortfolioAnalyzer:
                 self.etoro_cid = None
 
         if self.etoro_cid:
-            self.transactions_df = load_transactions_from_etoro(self.etoro_username, self.etoro_cid)
+            self.transactions_df = load_transactions_from_etoro(self.etoro_username, self.etoro_cid, client=client)
         else:
             logger.warning("eToro username is set but etoro_cid is missing; trade history will not be loaded.")
 

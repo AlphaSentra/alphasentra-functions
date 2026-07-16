@@ -2,117 +2,15 @@
 Data loading utilities for portfolio and transaction data.
 """
 
-import json
 import logging
 import os
-import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
-from pathlib import Path
 from typing import Any, Dict, Optional
 
 import pandas as pd
-import requests
 
 from Functions.etoro.client import EToroClientError, ETPublicClient
-from Functions.etoro.auth import public_api_session
 
 logger = logging.getLogger(__name__)
-
-_CACHE_PATH = Path(__file__).resolve().parent / ".etoro_instrument_cache.json"
-_CACHE_TTL_SECONDS = 24 * 60 * 60
-_MAX_WORKERS = 10
-
-
-def _load_cache() -> Dict[str, Dict[str, str]]:
-    if not _CACHE_PATH.exists():
-        return {}
-    try:
-        with open(_CACHE_PATH, "r", encoding="utf-8") as f:
-            cache: Dict[str, Any] = json.load(f)
-        now = time.time()
-        return {k: v for k, v in cache.items() if now - v.get("_ts", 0) < _CACHE_TTL_SECONDS}
-    except Exception:
-        return {}
-
-
-def _save_cache(metadata: Dict[str, Dict[str, str]]) -> None:
-    try:
-        cache = _load_cache()
-        for k, v in metadata.items():
-            cache[k] = {"_ts": time.time(), **v}
-        with open(_CACHE_PATH, "w", encoding="utf-8") as f:
-            json.dump(cache, f)
-    except Exception as exc:
-        logger.debug("Failed to save instrument metadata cache: %s", exc)
-
-
-def _fetch_one(session: requests.Session, search_url: str, iid: str) -> Optional[Dict[str, str]]:
-    try:
-        resp = session.get(search_url, params={"instrumentId": iid}, timeout=30)
-        resp.raise_for_status()
-        items = resp.json().get("items", [])
-        if not items:
-            return None
-        item = items[0]
-        symbol = item.get("internalSymbolFull") or item.get("internalSymbol") or item.get("symbol")
-        name = (
-            item.get("internalInstrumentDisplayName")
-            or item.get("displayname")
-            or item.get("displayName")
-            or item.get("instrumentDisplayName")
-            or item.get("name")
-            or item.get("instrumentName")
-            or item.get("title")
-            or ""
-        )
-        if symbol:
-            return {"symbol": str(symbol), "name": str(name)}
-    except Exception as exc:
-        logger.debug("Failed to resolve instrument %s: %s", iid, exc)
-    return None
-
-
-def _resolve_instrument_metadata(instrument_ids: list, api_key: str, user_key: str, timeout: int = 30) -> Dict[str, Dict[str, str]]:
-    """
-    Resolve eToro InstrumentIDs to full symbol and display name via the search API.
-    
-    Returns a dict keyed by InstrumentID with values like:
-        {"symbol": "AAPL", "name": "Apple Inc."}
-    """
-    result: Dict[str, Dict[str, str]] = {}
-    if not instrument_ids:
-        return result
-
-    cache = _load_cache()
-    remaining = [iid for iid in instrument_ids if str(iid) not in cache]
-    for iid in instrument_ids:
-        iid_str = str(iid)
-        if iid_str in cache:
-            result[iid_str] = {k: v for k, v in cache[iid_str].items() if k != "_ts"}
-
-    if not remaining:
-        return result
-
-    session = public_api_session(api_key, user_key, timeout=timeout)
-    search_url = "https://public-api.etoro.com/api/v1/market-data/search"
-
-    with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
-        futures = {executor.submit(_fetch_one, session, search_url, iid): iid for iid in remaining}
-        for future in as_completed(futures):
-            iid = futures[future]
-            try:
-                meta = future.result()
-                if meta:
-                    result[str(iid)] = meta
-            except Exception as exc:
-                logger.debug("Instrument resolution future failed for %s: %s", iid, exc)
-
-    if result:
-        _save_cache(result)
-
-    return result
-
-
 def _safe_to_float(value) -> Optional[float]:
     if value is None:
         return 0.0
@@ -185,6 +83,7 @@ def load_transactions_from_etoro(
     *,
     api_key: Optional[str] = None,
     user_key: Optional[str] = None,
+    client: Optional[ETPublicClient] = None,
 ) -> pd.DataFrame:
     """
     Loads transaction data from the eToro public trade history API.
@@ -198,6 +97,7 @@ def load_transactions_from_etoro(
         cid: Optional explicit CID to skip automatic resolution.
         api_key: Optional explicit eToro public API key.
         user_key: Optional explicit eToro user key.
+        client: Optional pre-authenticated ETPublicClient to reuse.
 
     Returns:
         pd.DataFrame: A DataFrame with columns Date, Ticker, Name, Side,
@@ -206,9 +106,9 @@ def load_transactions_from_etoro(
     try:
         resolved_api_key = api_key if api_key is not None else os.getenv("ETORO_PUBLIC_KEY", "")
         resolved_user_key = user_key if user_key is not None else os.getenv("ETORO_PRIVATE_KEY", "")
-        client = ETPublicClient(api_key=resolved_api_key, user_key=resolved_user_key)
-        resolved_cid = cid or client.resolve_cid(username)
-        history = client.get_trade_history(username=username, explicit_cid=resolved_cid)
+        resolved_client = client or ETPublicClient(api_key=resolved_api_key, user_key=resolved_user_key)
+        resolved_cid = cid or resolved_client.resolve_cid(username)
+        history = resolved_client.get_trade_history(username=username, explicit_cid=resolved_cid)
 
         if not history.records:
             logger.warning("eToro trade history returned no records for %s.", username)
@@ -230,12 +130,7 @@ def load_transactions_from_etoro(
         metadata = {}
         if not df.empty:
             unique_ids = sorted({str(i) for i in instrument_ids})
-            metadata = _resolve_instrument_metadata(
-                unique_ids,
-                api_key=client._api_key,
-                user_key=client._user_key,
-                timeout=client._timeout,
-            )
+            metadata = resolved_client.resolve_instrument_metadata(unique_ids)
 
         if metadata:
             df["Ticker"] = df["_instrument_id"].map(lambda iid: metadata.get(str(iid), {}).get("symbol", str(iid)))

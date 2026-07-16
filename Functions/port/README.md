@@ -82,6 +82,66 @@ Functions/port/
 - **Modular Tab System:** Self-contained sub-packages for Overview, Correlation, Risks, Monte Carlo, Holdings, History, Breakdown, Efficiency, and Optimisation.
 - **Dynamic Charting:** Interactive Plotly charts with centralized theme colours.
 - **Automated Commentary:** AI-generated insights embedded in each report tab.
+- **Pro Investor Selection (`/port`):** Renders a searchable Top 20 Pro Investor table with flag + ISO alpha-2 country badges. Country data is resolved at runtime using the [countries.dev](https://countries.dev) API, with eToro internal `countryId` values translated to ISO codes via `Functions/etoro/countries.csv`.
+
+## Pro Investor Selection — Country Resolution
+
+The `/port` endpoint (`Functions/port/selection.py`) renders the Pro Investor selection table. Country display is resolved in three steps:
+
+### 1. eToro Internal ID → ISO Mapping
+
+The eToro API returns a `countryId` field that is eToro's own internal numeric identifier (e.g. `12`). This is **not** an ISO 3166-1 numeric code. The module loads `Functions/etoro/countries.csv` at startup to build a lookup:
+
+```
+ETORO_COUNTRYID,ISO_COUNTRYID,ISO_CODE
+1,004,AF
+12,036,AU
+36,???,(not in CSV — falls back to API)
+...
+```
+
+When rendering a row, if the `country` field is missing but `countryId` is present, the CSV map is consulted first:
+- `countryId=12` → ISO `AU` (Australia)
+- `countryId=36` → no CSV entry → falls back to raw value
+
+### 2. Country Info Lookup via countries.dev
+
+The resolved ISO alpha-2 code (e.g. `AU`) is passed to the [countries.dev](https://countries.dev) API:
+
+```
+GET https://countries.dev/alpha/{code}?fields=name,alpha2Code,flag
+```
+
+Response fields used:
+- `flag` — Unicode flag emoji (e.g. `🇦🇺`)
+- `alpha2Code` — ISO alpha-2 code (e.g. `AU`)
+
+Results are cached in `_COUNTRY_INFO_CACHE` for the lifetime of the module.
+
+### 3. Prefetch for Performance
+
+Before rendering rows, `_prefetch_country_data()` extracts all unique country values from the investor list and resolves them concurrently using `ThreadPoolExecutor(max_workers=8)`. This avoids sequential API calls during HTML generation.
+
+### Fallback Behaviour
+
+| Scenario | Result |
+|----------|--------|
+| `country` field present (ISO alpha-2) | Used directly, API returns flag + code |
+| `country` missing, `countryId` mapped in CSV | ISO code from CSV, then API lookup |
+| `country` missing, `countryId` not in CSV | Raw `countryId` string displayed without flag |
+| API request fails | Raw code displayed without flag |
+
+### CSV Reference
+
+The mapping file is located at `Functions/etoro/countries.csv`. It contains 105 rows covering all eToro-supported countries. Each row has:
+
+| Column | Description |
+|--------|-------------|
+| `ETORO_COUNTRYID` | eToro's internal numeric country identifier |
+| `ISO_COUNTRYID` | ISO 3166-1 numeric code (3 digits, zero-padded) |
+| `ISO_CODE` | ISO 3166-1 alpha-2 code (2 letters) |
+
+The module reads only `ETORO_COUNTRYID` and `ISO_CODE` for the lookup; `ISO_COUNTRYID` is retained in the CSV for reference but is not used by `selection.py`.
 
 ## Advanced Methodology: Rebalance & Gap Neutralization
 

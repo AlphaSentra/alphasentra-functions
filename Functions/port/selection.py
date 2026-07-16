@@ -33,6 +33,33 @@ _RANKINGS_URL = "https://public-api.etoro.com/api/v1/user-info/people/search"
 _USER_INFO_URL = "https://public-api.etoro.com/api/v1/user-info/people"
 _AVATAR_CACHE: Dict[str, Optional[str]] = {}
 _TREND_CACHE: Dict[str, List[float]] = {}
+_COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
+_COUNTRIES_API_BASE = "https://countries.dev"
+_ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
+
+
+def _load_etoro_country_map() -> None:
+    csv_path = os.path.join(_BASE_DIR, "..", "etoro", "countries.csv")
+    if not os.path.isfile(csv_path):
+        return
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as fh:
+            import csv
+            reader = csv.DictReader(fh)
+            for row in reader:
+                etoro_id = (row.get("ETORO_COUNTRYID") or "").strip()
+                iso_code = (row.get("ISO_CODE") or "").strip()
+                iso_numeric = (row.get("ISO_COUNTRYID") or "").strip()
+                if etoro_id and iso_code:
+                    _ETORO_COUNTRY_MAP[etoro_id] = {
+                        "isoCode": iso_code,
+                        "isoNumeric": iso_numeric,
+                    }
+    except Exception:
+        pass
+
+
+_load_etoro_country_map()
 
 
 def _get_session() -> requests.Session:
@@ -277,26 +304,68 @@ def _avatar_html(avatar_url: Optional[str], name: str) -> str:
     return f"<div class=\"investor-avatar\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex-shrink:0;\">{initials}</div>"
 
 
+def _get_country_info(code: str) -> Optional[Dict[str, str]]:
+    if not code:
+        return None
+    if code in _COUNTRY_INFO_CACHE:
+        return _COUNTRY_INFO_CACHE[code]
+
+    is_numeric = code.isdigit()
+    endpoint = "numericcode" if is_numeric else "alpha"
+    url = f"{_COUNTRIES_API_BASE}/{endpoint}/{code}"
+
+    try:
+        resp = requests.get(url, params={"fields": "name,alpha2Code,flag"}, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            result = {
+                "flag": data.get("flag", ""),
+                "alpha2": data.get("alpha2Code", ""),
+            }
+            _COUNTRY_INFO_CACHE[code] = result
+            return result
+    except requests.RequestException:
+        pass
+
+    _COUNTRY_INFO_CACHE[code] = None
+    return None
+
+
+def _prefetch_country_data(items: List[Dict[str, Any]]) -> None:
+    codes: set = set()
+    for item in items:
+        country = item.get("country")
+        if country:
+            codes.add(str(country))
+        country_id = item.get("countryId")
+        if country_id is not None:
+            mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+            if mapped:
+                codes.add(mapped["isoCode"])
+            else:
+                codes.add(str(country_id))
+
+    if not codes:
+        return
+
+    with ThreadPoolExecutor(max_workers=8) as executor:
+        futures = {executor.submit(_get_country_info, code): code for code in codes}
+        for future in as_completed(futures):
+            future.result()
+
+
 def _country_html(country: Optional[str]) -> str:
     if not country:
         return "<span class=\"country-badge\">N/A</span>"
-    flag_map = {
-        "US": "&#x1F1FA&#x1F1F8;",
-        "GB": "&#x1F1EC&#x1F1E7;",
-        "AU": "&#x1F1E6&#x1F1FA;",
-        "DE": "&#x1F1E9&#x1F1EA;",
-        "FR": "&#x1F1EB&#x1F1F7;",
-        "ES": "&#x1F1EA&#x1F1F8;",
-        "SE": "&#x1F1F8&#x1F1EA;",
-        "NO": "&#x1F1F3&#x1F1F4;",
-        "DK": "&#x1F1E9&#x1F1F0;",
-        "JP": "&#x1F1EF&#x1F1F5;",
-        "IN": "&#x1F1EE&#x1F1F3;",
-        "SG": "&#x1F1F8&#x1F1EC;",
-        "BR": "&#x1F1E7&#x1F1F7;",
-    }
-    flag = flag_map.get(country.upper(), "")
-    return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{country.upper()}</span>"
+
+    info = _get_country_info(country)
+    if info:
+        flag = info.get("flag", "")
+        alpha2 = info.get("alpha2", country.upper() if not country.isdigit() else "")
+        display = alpha2 or country.upper()
+        return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{display}</span>"
+
+    return f"<span class=\"country-badge\">{country.upper()}</span>"
 
 
 def _render_row(item: Dict[str, Any], week_map: Dict[str, float], month_map: Dict[str, float], year_map: Dict[str, float]) -> str:
@@ -319,7 +388,11 @@ def _render_row(item: Dict[str, Any], week_map: Dict[str, float], month_map: Dic
     year_gain = year_map.get(cid)
 
     if not country and country_id is not None:
-        country = str(country_id)
+        mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+        if mapped:
+            country = mapped["isoCode"]
+        else:
+            country = str(country_id)
 
     aum_display = aum_tier_desc if aum_tier_desc else _safe_aum(aum_value)
 
@@ -465,6 +538,9 @@ def get_portfolio_selection_html() -> str:
         week_map = _WEEK_MAP
         month_map = _MONTH_MAP
         year_map = _YEAR_MAP
+
+    if merged:
+        _prefetch_country_data(merged)
 
     rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
 

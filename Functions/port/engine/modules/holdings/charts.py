@@ -42,10 +42,10 @@ def generate_holdings_metrics_strip(holdings_df):
         for idx, row in df.iterrows():
             ret = row[ret_col]
             if pd.notna(ret):
-            if ret > 0:
-                pos_count += 1
-            elif ret < 0:
-                neg_count += 1
+                if ret > 0:
+                    pos_count += 1
+                elif ret < 0:
+                    neg_count += 1
     total_trades = pos_count + neg_count
     pos_pct = (pos_count / total_trades * 100) if total_trades > 0 else 0.0
     neg_pct = (neg_count / total_trades * 100) if total_trades > 0 else 0.0

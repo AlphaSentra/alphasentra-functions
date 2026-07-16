@@ -120,35 +120,6 @@ def _get_trend_data(username: str) -> List[float]:
         pass
     _TREND_CACHE[username] = []
     return []
-    if username in _TREND_CACHE:
-        return _TREND_CACHE[username]
-
-    session = public_api_session(_ETORO_API_KEY, _ETORO_USER_KEY, timeout=20)
-    min_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
-    try:
-        resp = session.get(url, params={"type": "Daily", "minDate": min_date}, timeout=20)
-        if resp.status_code == 200:
-            data = resp.json()
-            if not isinstance(data, list):
-                if isinstance(data, dict):
-                    data = data.get("dailyExample", data.get("daily", []))
-                else:
-                    data = []
-            points = []
-            for entry in data:
-                if not isinstance(entry, dict):
-                    continue
-                gain = entry.get("gain")
-                if gain is not None:
-                    points.append(float(gain))
-            if points:
-                _TREND_CACHE[username] = points
-                return points
-    except requests.RequestException:
-        pass
-    _TREND_CACHE[username] = []
-    return []
 
 
 def _trend_svg_from_points(points: List[float], width: int = 100, height: int = 28) -> str:
@@ -224,10 +195,12 @@ def _build_gain_map(items: List[Dict[str, Any]], gain_key: str) -> Dict[str, flo
 
 def _safe_gain(value: Optional[float]) -> str:
     if value is None:
-        return "<span class=\"performance-neutral\">N/A</span>"
-    css = "performance-positive" if value >= 0 else "performance-negative"
+        return ""
+    is_pos = value > 0
+    css_class = "perf-pill-pos" if is_pos else "perf-pill-neg" if value < 0 else "perf-pill-na"
+    arrow = "▲" if is_pos else "▼" if value < 0 else ""
     sign = "+" if value >= 0 else ""
-    return f"<span class=\"{css}\">{sign}{value:.2f}%</span>"
+    return f'<span class="perf-pill {css_class}">{arrow} {sign}{value:.2f}%</span>'
 
 
 def _safe_aum(value: Optional[Any]) -> str:
@@ -885,19 +858,46 @@ def get_portfolio_selection_html() -> str:
             color: {_TEXT_MUTED};
         }}
 
-        .performance-positive {{
-            color: {_SEMANTIC_POSITIVE};
+        .perf-pill {{
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
             font-size: 13px;
+            display: inline-block;
+            color: {_NEUTRAL_0};
         }}
 
-        .performance-negative {{
-            color: {_SEMANTIC_NEGATIVE};
-            font-size: 13px;
+        .perf-pill-pos {{
+            background-color: {_SEMANTIC_POSITIVE};
         }}
 
-        .performance-neutral {{
-            color: {_TEXT_MUTED};
+        .perf-pill-neg {{
+            background-color: {_SEMANTIC_NEGATIVE};
+        }}
+
+        .perf-pill-na {{
+            background-color: {_TEXT_MUTED};
+        }}
+
+        .my-portfolio-performance {{
             font-size: 13px;
+            min-width: 50px;
+        }}
+
+        .my-portfolio-performance-positive {{
+            background-color: {_SEMANTIC_POSITIVE};
+            color: {_NEUTRAL_0};
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }}
+
+        .my-portfolio-performance-negative {{
+            background-color: {_SEMANTIC_NEGATIVE};
+            color: {_NEUTRAL_0};
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
         }}
 
         .trend-chart {{
@@ -989,9 +989,9 @@ def get_portfolio_selection_html() -> str:
                                         <div class="my-portfolio-copiers-change">&#x25B2; 3.1% 1M</div>
                                     </div>
                                 </td>
-                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+0.42%</span></td>
-                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+1.85%</span></td>
-                                <td><span class="my-portfolio-performance my-portfolio-performance-positive">+14.20%</span></td>
+                                <td><span class="perf-pill perf-pill-pos">▲ +0.42%</span></td>
+                                <td><span class="perf-pill perf-pill-pos">▲ +1.85%</span></td>
+                                <td><span class="perf-pill perf-pill-pos">▲ +14.20%</span></td>
                                 <td>
                                     <svg class="my-portfolio-trend" viewBox="0 0 100 28" preserveAspectRatio="none">
                                         <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"/>

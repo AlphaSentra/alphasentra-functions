@@ -93,6 +93,7 @@ The app will start on `http://localhost:8888`.
 |-------|--------|-------------|
 | `/` | GET | Function Index — auto-generated list of all registered routes |
 | `/etopi` | GET | Portfolio & Risk Analytics (rendered live) |
+| `/port` | GET | Portfolio Investor Selection |
 | `/eqs` | GET | Stocks AI Screener (rendered live) |
 | `/wcr` | GET | Forex AI Screener (rendered live) |
 | `/cryp` | GET | Cryptocurrency AI Screener (rendered live) |

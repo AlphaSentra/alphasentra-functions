@@ -47,7 +47,7 @@ GEMINI_PRO_MODEL=pro_model_name
 # Security
 ENCRYPTION_SECRET=encryption_secret
 
-# eToro API credentials (required for /port)
+# eToro API credentials (required for /etopi)
 ETORO_PUBLIC_KEY=public_key
 ETORO_PRIVATE_KEY=private_key
 
@@ -77,7 +77,7 @@ ETORO_PRIVATE_KEY=private_key
 
 \* Either `MONGODB_SRV` (when `USE_MONGODB_SRV=true`) or `MONGODB_HOST` + `MONGODB_PORT` (when `USE_MONGODB_SRV=false`) is required.
 
-**Note**: The `/port` endpoint requires valid eToro API credentials. Without them, the portfolio analysis will fail with a `PortfolioFunctionsError`.
+**Note**: The `/etopi` endpoint requires valid eToro API credentials. Without them, the portfolio analysis will fail with a `PortfolioFunctionsError`.
 
 ## Running the App
 
@@ -92,7 +92,7 @@ The app will start on `http://localhost:8888`.
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/` | GET | Function Index — auto-generated list of all registered routes |
-| `/port` | GET | Portfolio & Risk Analytics (rendered live) |
+| `/etopi` | GET | Portfolio & Risk Analytics (rendered live) |
 | `/eqs` | GET | Stocks AI Screener (rendered live) |
 | `/wcr` | GET | Forex AI Screener (rendered live) |
 | `/cryp` | GET | Cryptocurrency AI Screener (rendered live) |
@@ -154,7 +154,7 @@ from Functions.routes import index, port, register_route
 app = Flask(__name__)
 
 register_route(app, '/', 'Function Index', index)
-register_route(app, '/port', 'Portfolio & Risk Analytics', port)
+register_route(app, '/etopi', 'Portfolio & Risk Analytics', port)
 register_route(app, '/myfunction', 'My analysis report', myfunction_handler)
 ```
 
@@ -179,7 +179,7 @@ def portfolio_metrics():
     from Functions.port.main import get_metrics_json
     return get_metrics_json()
 
-register_route(app, '/port/api/metrics', 'Portfolio metrics as JSON', portfolio_metrics)
+register_route(app, '/etopi/api/metrics', 'Portfolio metrics as JSON', portfolio_metrics)
 ```
 
 ## Notes

@@ -1151,18 +1151,7 @@ def get_portfolio_selection_html() -> str:
                 const username = usernameCell ? usernameCell.textContent.trim() : '';
 
                 if (investorName) {{
-                    const form = document.createElement('form');
-                    form.method = 'POST';
-                    form.action = '/port';
-
-                    const usernameInput = document.createElement('input');
-                    usernameInput.type = 'hidden';
-                    usernameInput.name = 'etoro_username';
-                    usernameInput.value = username.replace('@', '');
-                    form.appendChild(usernameInput);
-
-                    document.body.appendChild(form);
-                    form.submit();
+                    window.location.href = `/etopi?etoro_username=${{encodeURIComponent(username.replace('@', ''))}}`;
                 }}
             }});
         }})();
@@ -1173,7 +1162,10 @@ def get_portfolio_selection_html() -> str:
             const overlay = document.getElementById('loading-overlay');
             if (!overlay) return;
 
+            let submitted = false;
+
             function hideOverlay() {{
+                if (submitted) return;
                 overlay.classList.add('hidden');
             }}
 
@@ -1184,6 +1176,10 @@ def get_portfolio_selection_html() -> str:
                     setTimeout(hideOverlay, 400);
                 }});
             }}
+
+            window.addEventListener('beforeunload', function() {{
+                submitted = true;
+            }});
         }})();
     </script>
 </body>

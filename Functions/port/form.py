@@ -262,6 +262,15 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             const submitBtn = document.getElementById('submit-btn');
             const wrapper = document.querySelector('.form-background-wrapper');
 
+            const params = new URLSearchParams(window.location.search);
+            const prefilledUsername = params.get('etoro_username');
+            if (prefilledUsername) {{
+                document.getElementById('etoro_username').value = prefilledUsername;
+                setTimeout(() => {{
+                    form.requestSubmit();
+                }}, 100);
+            }}
+
             const steps = [
                 {{
                     title: 'Initializing generation...',
@@ -377,7 +386,7 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                 formData.append('benchmark_ticker', document.getElementById('benchmark_ticker').value.trim());
 
                 try {{
-                    const response = await fetch('/port/check_cache', {{
+                    const response = await fetch('/etopi/check_cache', {{
                         method: 'POST',
                         body: formData
                     }});
@@ -395,7 +404,7 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                         setTimeout(() => activateStep(0), 50);
 
                         submitted = true;
-                        fetch('/port', {{
+                        fetch('/etopi', {{
                             method: 'POST',
                             body: formData
                         }}).then(response => response.text()).then(html => {{
@@ -417,7 +426,7 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                     setTimeout(() => activateStep(0), 50);
 
                     submitted = true;
-                    fetch('/port', {{
+                    fetch('/etopi', {{
                         method: 'POST',
                         body: formData
                     }}).then(response => response.text()).then(html => {{

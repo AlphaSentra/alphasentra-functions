@@ -150,6 +150,7 @@ def cryp():
 
 
 
-def register_route(app, path, description, handler, methods=None):
-    ROUTES.append((path, description))
+def register_route(app, path, description, handler, methods=None, show_in_index=True):
+    if show_in_index:
+        ROUTES.append((path, description))
     app.route(path, methods=methods)(handler)

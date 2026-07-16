@@ -2,13 +2,13 @@
 
 ## Project Overview
 
-Portfolio analytics module for interpreting eToro portfolio data and delivering advanced analytics for Pro Investors. The module is served via the AlphaSentra Flask backend under the `/port` endpoint. It fetches live portfolio data from the eToro API, enriches it with market data, computes comprehensive performance and risk metrics, and renders an interactive Plotly HTML report.
+Portfolio analytics module for interpreting eToro portfolio data and delivering advanced analytics for Pro Investors. The module is served via the AlphaSentra Flask backend under the `/etopi` endpoint. It fetches live portfolio data from the eToro API, enriches it with market data, computes comprehensive performance and risk metrics, and renders an interactive Plotly HTML report.
 
 **Input:** eToro API (live portfolio data)
 
 ```mermaid
 graph LR
-    A[eToro API] --> B[Flask /port Endpoint]
+    A[eToro API] --> B[Flask /etopi Endpoint]
     B --> C[PortfolioAnalyzer]
     C --> D[Market Data Provider]
     D --> E[Portfolio Time Series + Returns]
@@ -33,7 +33,7 @@ The module fetches live portfolio data from the eToro API using the configured u
 
 1. Configure your eToro username in the environment or config.
 2. Start the Flask backend: `python app.py` (from the project root).
-3. Navigate to `http://localhost:8888/port`.
+3. Navigate to `http://localhost:8888/etopi`.
 
 ## Project Structure
 

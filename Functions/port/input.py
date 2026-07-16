@@ -55,13 +55,8 @@ def handle_portfolio_input():
         etoro_username = request.form.get("etoro_username", "").strip()
         etoro_cid = request.form.get("etoro_cid", "").strip()
         benchmark_ticker = request.form.get("benchmark_ticker", "").strip()
-    elif request.args.get("etoro_username"):
-        etoro_username = request.args.get("etoro_username", "").strip()
-        etoro_cid = request.args.get("etoro_cid", "").strip()
-        benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
-    if etoro_username:
-        # Define cache_key here so it's available for cache_set on a miss
+    if request.method == "POST" and etoro_username:
         cache_key = (
             etoro_username.strip().lower(),
             (benchmark_ticker or "").strip().upper(),

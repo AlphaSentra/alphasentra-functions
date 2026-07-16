@@ -301,6 +301,7 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             ];
 
             let cancelled = false;
+            let submitted = false;
             let currentStepIndex = -1;
             let timeouts = [];
 
@@ -312,7 +313,7 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             function activateStep(index) {{
                 if (cancelled || index >= steps.length) {{
                     setTimeout(() => {{
-                        if (!cancelled) {{
+                        if (!cancelled && !submitted) {{
                             form.submit();
                         }}
                     }}, 500);
@@ -389,9 +390,11 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                         wrapper.classList.add('hiding-form');
                         list.innerHTML = '';
                         cancelled = false;
+                        submitted = false;
                         clearAllTimeouts();
                         setTimeout(() => activateStep(0), 50);
 
+                        submitted = true;
                         fetch('/port', {{
                             method: 'POST',
                             body: formData
@@ -409,9 +412,11 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                     wrapper.classList.add('hiding-form');
                     list.innerHTML = '';
                     cancelled = false;
+                    submitted = false;
                     clearAllTimeouts();
                     setTimeout(() => activateStep(0), 50);
 
+                    submitted = true;
                     fetch('/port', {{
                         method: 'POST',
                         body: formData

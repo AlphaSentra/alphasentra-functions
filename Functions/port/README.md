@@ -164,10 +164,11 @@ Default portfolio settings are defined centrally in `config.py`:
 | Minimum position size per asset | 0.50% |
 | Long/short optimization | Disabled |
 | Gross exposure limit | 2.0x |
-| Cache TTL (report) | 12 hours |
+| Cache TTL (report) | 20 hours |
 | Cache TTL (price) | 6 hours |
-| Cache TTL (sector/industry) | 12 hours |
+| Cache TTL (sector/industry) | 20 hours |
 | Cache TTL (eToro) | 6 hours |
+| Cache TTL (eToro PI) | 24 hours |
 | Default market data provider | `yfinance` |
 | Default benchmark candidates | `^AXJO`, `^GSPC`, `^STOXX50E`, `^FTSE`, `BTC-USD`, `^990100-USD-STRD` |
 

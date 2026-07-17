@@ -42,9 +42,12 @@ def generate_charts(ts_data, risk_contrib, corr_matrix, benchmark_ticker, annual
     charts["performance_barchart"] = generate_performance_barchart(ts_data, benchmark_ticker, annual_yield, include_yield_toggle=(annual_yield > 0))
 
     # 3. Portfolio Allocation Pie Chart
-    weights = risk_contrib["Weight"]
-    pie = px.pie(values=weights, names=weights.index, height=600, title="Portfolio Allocation by Weight")
-    charts["allocation"] = pie.to_html(full_html=False, include_plotlyjs=False)
+    if not risk_contrib.empty and "Weight" in risk_contrib.columns:
+        weights = risk_contrib["Weight"]
+        pie = px.pie(values=weights, names=weights.index, height=600, title="Portfolio Allocation by Weight")
+        charts["allocation"] = pie.to_html(full_html=False, include_plotlyjs=False)
+    else:
+        charts["allocation"] = "<p class='no-data-message'>No allocation data available.</p>"
 
     # 5. Correlation Heatmap (Full Matrix)
     if not corr_matrix.empty and len(corr_matrix) > 0:
@@ -114,9 +117,12 @@ def generate_charts(ts_data, risk_contrib, corr_matrix, benchmark_ticker, annual
 
     # 6. Risk Contribution Chart
     # The column name from analyzer.py is 'Risk Contribution'
-    fig_risk = px.bar(risk_contrib, x=risk_contrib.index, y="Risk Contribution", title="Risk Contribution by Asset")
-    fig_risk.update_layout(font=dict(color=TEXT_MUTED))
-    charts["risk_contribution"] = fig_risk.to_html(full_html=False, include_plotlyjs=False)
+    if not risk_contrib.empty and "Risk Contribution" in risk_contrib.columns:
+        fig_risk = px.bar(risk_contrib, x=risk_contrib.index, y="Risk Contribution", title="Risk Contribution by Asset")
+        fig_risk.update_layout(font=dict(color=TEXT_MUTED))
+        charts["risk_contribution"] = fig_risk.to_html(full_html=False, include_plotlyjs=False)
+    else:
+        charts["risk_contribution"] = "<p class='no-data-message'>No risk contribution data available.</p>"
 
     # 7. Correlation Tab Charts & Commentary
     charts["correlation_metrics_strip"] = generate_correlation_metrics_strip(ts_data)

@@ -700,7 +700,7 @@ class PortfolioAnalyzer:
         )
         charts.update(base_charts)
 
-        if ENABLED_MODULES.get("breakdown", True):
+        if ENABLED_MODULES.get("breakdown", True) and not self.risk_df.empty:
             # Sector analysis
             logger.info("Analyzing sector and industry weighting...")
             sector_analysis = generate_sector_industry_analysis(self.risk_df, self.sector_industry_df, include_yield=self.include_yield, holdings_df=self.holdings_df)
@@ -738,7 +738,7 @@ class PortfolioAnalyzer:
             charts["monte_carlo"] = generate_monte_carlo_chart(self.mc_simulations)
             charts["monte_carlo_metrics_strip"] = generate_monte_carlo_metrics_strip(self.metrics, self.mc_simulations)
 
-        if ENABLED_MODULES.get("risks", True):
+        if ENABLED_MODULES.get("risks", True) and not self.risk_df.empty:
             # Shock analysis for multiple levels (20%, 30%, 50%)
             logger.info("Generating Shock Curve analysis...")
             asset_returns = self.prices[self._get_active_tickers()].pct_change().dropna()

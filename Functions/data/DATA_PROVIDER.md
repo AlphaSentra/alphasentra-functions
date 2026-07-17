@@ -47,7 +47,7 @@ The `DATA_PROVIDER` constant in `config.py` documents the default but the actual
 `YFinanceProvider` implements both interface methods:
 
 - **`download_price_data`** — Calls `yf.download()` with `auto_adjust=False`. Results are cached via `Functions/port/cache.py` with `_PRICE_TTL` (6 hours). Handles `.ASX` → `.AX` ticker normalization.
-- **`get_sector_industry_data`** — Fetches `yf.Ticker(ticker).info` concurrently with up to 10 workers. Retries failed tickers up to 3 times. Returns an `AssetMetadata` DataFrame cached with `_SECTOR_TTL` (12 hours).
+- **`get_sector_industry_data`** — Fetches `yf.Ticker(ticker).info` concurrently with up to 10 workers. Retries failed tickers up to 3 times. Returns an `AssetMetadata` DataFrame cached with `_SECTOR_TTL` (20 hours).
 
 ## Facade Layer
 

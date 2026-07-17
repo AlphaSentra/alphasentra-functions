@@ -196,6 +196,7 @@ def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain
         "period": period,
         "sort": sort,
         "copiersMin": 10,
+        "weeksSinceRegistrationMin": 52,
     }
     if page_size is not None:
         params["pageSize"] = page_size
@@ -471,14 +472,7 @@ def _fetch_rankings() -> List[Dict[str, Any]]:
     year_map = _build_gain_map(year_data.get("results", []), "gain")
 
     if merged:
-        usernames = [str(item.get("userName", "")) for item in merged if item.get("userName")]
-        with ThreadPoolExecutor(max_workers=8) as executor:
-            future_avatars = {executor.submit(_get_user_avatar, u): u for u in usernames}
-            future_trends = {executor.submit(_get_trend_data, u): u for u in usernames}
-            for future in as_completed(future_avatars):
-                future.result()
-            for future in as_completed(future_trends):
-                future.result()
+        _prefetch_country_data(merged)
 
     return merged, week_map, month_map, year_map
 

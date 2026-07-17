@@ -2,7 +2,7 @@
 Portfolio input handler - form display and request processing.
 """
 
-from flask import request, jsonify # Import jsonify
+from flask import request, jsonify, make_response
 import logging
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _REPORT_TTL
 from Functions.port.form import PORTFOLIO_FORM_HTML
@@ -47,6 +47,19 @@ def get_portfolio_cache_status():
     is_cached = cache_exists(cache_key, _REPORT_TTL, ext=".html")
     return jsonify({"cached": is_cached})
 
+def _get_cookie_policy():
+    origin = request.headers.get('Origin', '')
+    if origin:
+        try:
+            target = request.host_url.rstrip('/')
+            same = origin == target or origin == target.replace('http://', 'https://')
+            if same:
+                return {'samesite': 'Lax', 'secure': False}
+            return {'samesite': 'None', 'secure': True}
+        except Exception:
+            pass
+    return {'samesite': 'Lax', 'secure': False}
+
 def handle_portfolio_input():
     etoro_username = ""
     etoro_cid = ""
@@ -65,10 +78,24 @@ def handle_portfolio_input():
 
         cached_html = _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker)
         if cached_html is not None:
-            return cached_html
-        logger.info("Portfolio cache miss username=%s benchmark=%s", etoro_username, benchmark_ticker)
+            policy = _get_cookie_policy()
+            resp = make_response(cached_html)
+            resp.set_cookie('etoro_authuser', etoro_username, max_age=86400,
+                            httponly=False, samesite=policy['samesite'], secure=policy['secure'], path='/')
+            return resp
+
         from Functions.port.main import generate_portfolio_html
-        html = generate_portfolio_html(etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
+        html = generate_portfolio_html(etoro_username=etoro_username,
+                                       benchmark_ticker=benchmark_ticker,
+                                       etoro_cid=etoro_cid)
         cache_set(cache_key, html, ext=".html")
-        return html
-    return PORTFOLIO_FORM_HTML
+        policy = _get_cookie_policy()
+        resp = make_response(html)
+        resp.set_cookie('etoro_authuser', etoro_username, max_age=86400,
+                        httponly=False, samesite=policy['samesite'], secure=policy['secure'], path='/')
+        return resp
+
+    if request.method == "GET":
+        return PORTFOLIO_FORM_HTML
+
+    return jsonify({'error': 'Unauthorized', 'message': 'Authentication required'}), 403

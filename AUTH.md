@@ -1,4 +1,4 @@
-# Iframe Authentication
+# Authentication
 
 This document describes how the parent app authenticates with the Flask iframe app, and how to implement it.
 
@@ -30,6 +30,23 @@ Browser stores cookie for func.alphasentra.com
 Flask app validates cookie → serves content
 ```
 
+```mermaid
+flowchart TD
+    A[User opens parent app] --> B[Parent app has username]
+    B --> C{POST /auth<br/>etoro_authuser}
+    C -->|Origin allowed| D[Flask validates origin]
+    C -->|Origin blocked| E[403 Unauthorized origin]
+    D -->|Missing username| F[400 Bad Request]
+    D -->|Valid| G[Set etoro_authuser cookie<br/>24h, path=/]
+    G --> H[Browser stores cookie]
+    H --> I[Iframe loads protected route]
+    I --> J{Cookie present?}
+    J -->|Yes| K[Allow request]
+    J -->|No| L[403 response]
+    L --> M[Break out of iframe<br/>Redirect parent to LOGIN_REDIRECT_URL]
+    K --> N[Serve content]
+```
+
 ## Security
 
 - `/auth` accepts requests only from origins matching `PARENT_APP_ALLOWED_ORIGINS` or `*.alphasentra.com`
@@ -58,50 +75,6 @@ LOGIN_REDIRECT_URL = "https://app.alphasentra.com/login"
 To allow additional origins, add them to `PARENT_APP_ALLOWED_ORIGINS`. Any subdomain of `alphasentra.com` is also accepted.
 
 ## Parent App Implementation
-
-### Step 1: Authenticate once
-
-From the parent app, POST `etoro_authuser` to the Flask app's `/auth` endpoint. This should happen once when the user's session is established or when the iframe is about to load.
-
-```javascript
-async function authenticateIframe(username, flaskBaseUrl) {
-  const response = await fetch(`${flaskBaseUrl}/auth`, {
-    method: 'POST',
-    headers: {
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `etoro_authuser=${encodeURIComponent(username)}`,
-    credentials: 'include',
-  });
-
-  if (!response.ok) {
-    throw new Error('Authentication failed');
-  }
-}
-```
-
-### Step 2: Load the iframe
-
-After authentication, load any route in the iframe. The browser sends the `etoro_authuser` cookie automatically.
-
-```javascript
-function loadIframe(flaskBaseUrl, route) {
-  const iframe = document.getElementById('flask-iframe');
-  iframe.src = `${flaskBaseUrl}${route}`;
-}
-```
-
-### Step 3: Complete example
-
-```javascript
-async function openFlaskIframe(username) {
-  const flaskBaseUrl = 'https://func.alphasentra.com';
-  const route = '/etopi';
-
-  await authenticateIframe(username, flaskBaseUrl);
-  loadIframe(flaskBaseUrl, route);
-}
-```
 
 ### React with TypeScript
 
@@ -286,54 +259,6 @@ const FlaskIframeContainer: React.FC<{ username: string }> = ({ username }) => {
 };
 ```
 
-### React example
-
-```jsx
-function FlaskIframe({ username }) {
-  const [ready, setReady] = React.useState(false);
-  const flaskBaseUrl = 'https://func.alphasentra.com';
-  const route = '/etopi';
-
-  React.useEffect(() => {
-    async function auth() {
-      const response = await fetch(`${flaskBaseUrl}/auth`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-        body: `etoro_authuser=${encodeURIComponent(username)}`,
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        setReady(true);
-      }
-    }
-    auth();
-  }, [username, flaskBaseUrl]);
-
-  if (!ready) return <div>Loading...</div>;
-  return (
-    <iframe
-      src={`${flaskBaseUrl}${route}`}
-      style={{ width: '100%', height: '100vh', border: 'none' }}
-    />
-  );
-}
-```
-
-## Credentials Mode
-
-The parent app must use `credentials: 'include'` when POSTing to `/auth` if the parent and iframe are **cross-origin**. For same-origin setups, `same-origin` also works.
-
-```javascript
-// Cross-origin (different domains)
-fetch(`${flaskBaseUrl}/auth`, {
-  method: 'POST',
-  headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
-  body: `etoro_authuser=${encodeURIComponent(username)}`,
-  credentials: 'include', // required for cross-origin cookies
-});
-```
-
 ## Production Requirements
 
 When deploying with HTTPS and cross-origin iframe:
@@ -342,36 +267,6 @@ When deploying with HTTPS and cross-origin iframe:
 2. The Flask app automatically sets `SameSite=None; Secure` on cookies for cross-origin requests
 3. The parent app must POST with `credentials: 'include'`
 4. Add production origins to `PARENT_APP_ALLOWED_ORIGINS` if needed
-
-## Testing
-
-### Local same-origin test
-
-Start the Flask app and open the built-in test page:
-
-```bash
-cd /Users/daivieth/Documents/_G8I/Development/alphasentra-functions
-python app.py
-# Open http://localhost:8888/test_iframe_auth.html
-```
-
-Because the test page is served from the same origin as the Flask app (`localhost:8888`), cookies work without HTTPS.
-
-### Command-line test
-
-```bash
-python test_auth.py SomeEToroUser
-python test_auth.py SomeEToroUser --url http://localhost:8888
-```
-
-### Cross-origin test
-
-For cross-origin iframe testing with cookies, use HTTPS (e.g., ngrok):
-
-```bash
-ngrok http 8888
-# Use the HTTPS URL as the Flask base URL
-```
 
 ## API Reference
 

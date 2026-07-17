@@ -1,12 +1,12 @@
 # Authentication
 
-This document describes how the parent app authenticates with the Flask iframe app, and how to implement it.
+This document describes how the parent app authenticates with the Flask Function app, and how to implement it.
 
 ## Overview
 
-The Flask app is embedded as an iframe inside the parent app (`app.alphasentra.com`). Every route in the Flask app requires authentication. The parent app authenticates once by POSTing the `etoro_authuser` to `/auth`, which sets a 24-hour cookie. Subsequent iframe requests automatically include that cookie.
+The Flask Function app is embedded inside the parent app (`app.alphasentra.com`). Every route in the Flask app requires authentication. The parent app authenticates once by POSTing the `etoro_authuser` to `/auth`, which sets a 24-hour cookie. Subsequent iframe requests automatically include that cookie.
 
-There is no login form inside the iframe. Unauthenticated requests receive `403 Unauthorized`.
+There is no login form in this app. Unauthenticated requests receive `403 Unauthorized`.
 
 ## Architecture
 

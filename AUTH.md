@@ -6,7 +6,7 @@ This document describes how the parent app authenticates with the Flask Function
 
 The Flask Function app is embedded inside the parent app (`app.alphasentra.com`). Every route in the Flask app requires authentication. The parent app authenticates once by POSTing the `etoro_authuser` to `/auth`, which sets a 24-hour cookie. Subsequent iframe requests automatically include that cookie.
 
-There is no login form in this app. Unauthenticated requests receive `403 Unauthorized`.
+There is no login form in this app. Unauthenticated requests receive `403 Unauthorized`, **unless** the requested page is already cached — in that case, the cached content is served directly without requiring the auth cookie.
 
 ## Architecture
 
@@ -15,19 +15,20 @@ Parent app (app.alphasentra.com)
     │
     │ 1. POST /auth with etoro_authuser
     │    Origin: https://app.alphasentra.com
-    │
     ▼
 Flask app (func.alphasentra.com)
     │
     │ 2. Validates origin → sets etoro_authuser cookie (24h)
-    │
     ▼
 Browser stores cookie for func.alphasentra.com
     │
     │ 3. Iframe loads any route → cookie sent automatically
-    │
     ▼
 Flask app validates cookie → serves content
+    │
+    │ 3a. No cookie, but page is cached → serves cached content
+    ▼
+User sees cached page without re-authenticating
 ```
 
 ```mermaid
@@ -42,9 +43,12 @@ flowchart TD
     H --> I[Iframe loads protected route]
     I --> J{Cookie present?}
     J -->|Yes| K[Allow request]
-    J -->|No| L[403 response]
-    L --> M[Break out of iframe<br/>Redirect parent to LOGIN_REDIRECT_URL]
-    K --> N[Serve content]
+    J -->|No| L{Page cached?}
+    L -->|Yes| M[Bypass auth]
+    L -->|No| N[403 response]
+    N --> O[Break out of iframe<br/>Redirect parent to LOGIN_REDIRECT_URL]
+    M --> P[Serve cached content]
+    K --> Q[Serve fresh content]
 ```
 
 ## Security
@@ -313,7 +317,24 @@ GET /etopi
 Cookie: etoro_authuser=SomeEToroUser
 ```
 
-If the cookie is missing or empty:
+**Cache bypass:** If the cookie is missing but the requested page is already cached, the cached content is served without authentication. This applies to:
+
+- **`/etopi` (POST):** Portfolio report is cached by `(etoro_username, benchmark_ticker, etoro_cid)`. If a cached HTML report exists for those values, the response is returned without requiring the auth cookie.
+- **`/port` (GET):** Portfolio Investor Selection page is cached as a single entry. If the cache is warm, the page is served without authentication.
+
+```
+GET /etopi
+(no cookie, but cached report exists)
+→ 200 OK with cached HTML
+```
+
+```
+GET /port
+(no cookie, but cached selection page exists)
+→ 200 OK with cached HTML
+```
+
+If the cookie is missing and no cached version exists:
 
 ```
 HTTP 403
@@ -344,12 +365,19 @@ When loaded inside an iframe, this response breaks out of the iframe and redirec
 - The `etoro_authuser` cookie may have expired (24h TTL)
 - The parent app needs to re-authenticate by POSTing to `/auth` again
 - Check that the cookie is present in DevTools → Application → Cookies → `func.alphasentra.com`
+- If the page is cached, it may still load without the cookie — clear the cache to verify auth behavior
 
 **Iframe shows 403**
 - Verify the parent app successfully POSTed to `/auth` and got `{"ok": true}`
 - Check that the cookie was set (DevTools → Application → Cookies → `func.alphasentra.com`)
 - Ensure the cookie path is `/`
 - For cross-origin iframes, ensure the Flask app uses HTTPS
+- 403 is expected when the cookie is missing AND the page is not cached
+
+**Cached page loads without authentication**
+- This is expected behavior: if a page is already in the file cache, it can be accessed without the `etoro_authuser` cookie
+- Cached pages: `/etopi` portfolio reports (keyed by username + benchmark + CID, TTL 20h), `/port` portfolio selection (TTL 24h)
+- On a cache hit, the response sets a fresh `etoro_authuser` cookie to re-establish the session
 
 **Cookie not stored**
 - Cross-origin cookies require `SameSite=None; Secure` and HTTPS

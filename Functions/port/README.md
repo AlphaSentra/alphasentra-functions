@@ -4,6 +4,8 @@
 
 Portfolio analytics module for interpreting eToro portfolio data and delivering advanced analytics for Pro Investors. The module is served via the AlphaSentra Flask backend under the `/etopi` endpoint. It fetches live portfolio data from the eToro API, enriches it with market data, computes comprehensive performance and risk metrics, and renders an interactive Plotly HTML report.
 
+**Authentication:** The `/etopi` and `/port` endpoints require the `etoro_authuser` cookie. However, if the requested page is already cached, the cached HTML is served without authentication. See [AUTH.md](../AUTH.md) for details.
+
 **Input:** eToro API (live portfolio data)
 
 ```mermaid

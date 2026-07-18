@@ -92,8 +92,8 @@ The app will start on `http://localhost:8888`.
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/` | GET | Function Index — auto-generated list of all registered routes |
-| `/etopi` | GET | Portfolio & Risk Analytics (rendered live) |
-| `/port` | GET | Portfolio Investor Selection — Pro Investor ranking table with country resolution via `countries.dev` API and eToro→ISO mapping from `Functions/etoro/countries.csv` |
+| `/etopi` | GET/POST | Portfolio & Risk Analytics (rendered live). **Auth required**, but cached reports bypass auth (TTL 20h). |
+| `/port` | GET | Portfolio Investor Selection — Pro Investor ranking table with country resolution. **Auth required**, but cached page bypasses auth (TTL 24h). |
 | `/eqs` | GET | Stocks AI Screener (rendered live) |
 | `/wcr` | GET | Forex AI Screener (rendered live) |
 | `/cryp` | GET | Cryptocurrency AI Screener (rendered live) |

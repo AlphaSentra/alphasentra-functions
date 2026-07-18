@@ -3,6 +3,7 @@ from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
+from Functions.port.cache import exists as cache_exists, get as cache_get, _REPORT_TTL, _ETORO_PI_TTL
 
 app = Flask(__name__)
 
@@ -37,6 +38,23 @@ def _require_etoro_auth():
 
     username = request.cookies.get('etoro_authuser', '').strip()
     if not username:
+        if request.path == '/etopi' and request.method == 'POST':
+            etoro_username = request.form.get('etoro_username', '').strip()
+            etoro_cid = request.form.get('etoro_cid', '').strip()
+            benchmark_ticker = request.form.get('benchmark_ticker', '').strip()
+            if etoro_username:
+                cache_key = (
+                    etoro_username.strip().lower(),
+                    (benchmark_ticker or "").strip().upper(),
+                    etoro_cid.strip().lower(),
+                )
+                if cache_exists(cache_key, _REPORT_TTL, ext=".html"):
+                    return
+
+        if request.path == '/port' and request.method == 'GET':
+            if cache_exists(("portfolio_selection",), _ETORO_PI_TTL, ext=".html"):
+                return
+
         return _unauthorized_response()
 
     g.etoro_authuser = username

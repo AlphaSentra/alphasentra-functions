@@ -71,6 +71,8 @@ def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: 
             return None
         item = items[0]
         symbol = item.get("internalSymbolFull") or item.get("internalSymbol") or item.get("symbol")
+        if isinstance(symbol, str) and symbol.endswith(".RTH"):
+            symbol = symbol[:-4]
         name = (
             item.get("internalInstrumentDisplayName")
             or item.get("displayname")
@@ -276,6 +278,9 @@ class ETPublicClient:
                 resolved_symbol = db_symbol_map[symbol_full]
             elif iid in db_symbol_map:
                 resolved_symbol = db_symbol_map[iid]
+
+            if isinstance(resolved_symbol, str) and resolved_symbol.endswith(".RTH"):
+                resolved_symbol = resolved_symbol[:-4]
 
             if resolved_symbol is None:
                 logger.warning(
@@ -522,7 +527,10 @@ class ETPublicClient:
         for iid in instrument_ids:
             iid_str = str(iid)
             if iid_str in cache:
-                result[iid_str] = {k: v for k, v in cache[iid_str].items() if k != "_ts"}
+                entry = {k: v for k, v in cache[iid_str].items() if k != "_ts"}
+                if isinstance(entry.get("symbol"), str) and entry["symbol"].endswith(".RTH"):
+                    entry = {**entry, "symbol": entry["symbol"][:-4]}
+                result[iid_str] = entry
 
         if not remaining:
             return result

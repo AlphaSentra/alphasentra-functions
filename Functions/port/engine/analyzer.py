@@ -115,7 +115,7 @@ class PortfolioAnalyzer:
 
             self.portfolio = pd.DataFrame([
                 {
-                    "ticker": pos.symbol.replace(".ASX", ".AX") if isinstance(pos.symbol, str) and pos.symbol.endswith(".ASX") else pos.symbol,
+                    "ticker": pos.symbol,
                     "instrument_id": pos.instrument_id,
                     "symbol_full": pos.symbol_full,
                     "quantity": pos.weight,
@@ -233,7 +233,7 @@ class PortfolioAnalyzer:
         Returns:
             Final ticker list including benchmarks.
         """
-        tickers = [t.replace(".ASX", ".AX") if isinstance(t, str) and t.endswith(".ASX") else t for t in tickers]
+        tickers = list(tickers)
 
         candidates = list(BENCHMARK_CANDIDATES)
         if candidates:

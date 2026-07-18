@@ -10,7 +10,7 @@ PARENT_APP_ALLOWED_ORIGINS = [
     "http://localhost:8888",
     "http://127.0.0.1:8888",
 ]
-LOGIN_REDIRECT_URL = "https://app.alphasentra.com/login"
+LOGIN_REDIRECT_URL = "https://app.alphasentra.com/auth"
 REPORT_LOGO_SRC = "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850"
 ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 

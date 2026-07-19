@@ -12,6 +12,7 @@ import requests
 from dotenv import load_dotenv
 
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _ETORO_PI_TTL
+from Functions.etoro.auth import get_random_private_key
 
 from Functions.themes import (
     _TEXT_PRIMARY, _TEXT_HEADING, _BRAND_PRIMARY, _HOVER_SURFACE, _BORDER_DEFAULT,
@@ -28,7 +29,6 @@ _ENV_PATH = os.path.join(_BASE_DIR, "..", "..", ".env")
 load_dotenv(dotenv_path=_ENV_PATH, override=False)
 
 _ETORO_API_KEY = os.getenv("ETORO_PUBLIC_KEY", "")
-_ETORO_USER_KEY = os.getenv("ETORO_PRIVATE_KEY", "")
 _RANKINGS_URL = "https://public-api.etoro.com/api/v1/user-info/people/search"
 _USER_INFO_URL = "https://public-api.etoro.com/api/v1/user-info/people"
 _AVATAR_CACHE: Dict[str, Optional[str]] = {}
@@ -69,7 +69,7 @@ def _get_session() -> requests.Session:
         "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
         "Accept": "application/json",
         "x-api-key": _ETORO_API_KEY,
-        "x-user-key": _ETORO_USER_KEY,
+        "x-user-key": get_random_private_key(),
         "x-request-id": str(uuid.uuid4()),
     })
     return session
@@ -115,7 +115,7 @@ def _get_trend_data(username: str) -> List[float]:
         "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
         "Accept": "application/json",
         "x-api-key": _ETORO_API_KEY,
-        "x-user-key": _ETORO_USER_KEY,
+        "x-user-key": get_random_private_key(),
         "x-request-id": str(uuid.uuid4()),
     })
     min_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
@@ -211,7 +211,7 @@ def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain
         return {"results": [], "pagination": {}, "error": str(exc)}
 
     return {
-        "results": data.get("items", []),
+        "results": [item for item in data.get("items", []) if item.get("subType", "").startswith("pi-")],
         "pagination": data.get("pagination", {}),
     }
 
@@ -495,7 +495,7 @@ def search_investors_api(query: str) -> Dict[str, Any]:
         if resp.status_code == 200:
             data = resp.json()
             return {
-                "results": data.get("results", []),
+                "results": [item for item in data.get("results", []) if item.get("subType", "").startswith("pi-")],
             }
     except requests.RequestException:
         pass

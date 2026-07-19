@@ -49,7 +49,9 @@ ENCRYPTION_SECRET=encryption_secret
 
 # eToro API credentials (required for /etopi)
 ETORO_PUBLIC_KEY=public_key
-ETORO_PRIVATE_KEY=private_key
+# ETORO_PRIVATE_KEY can be a single key or a comma-separated list.
+# When multiple keys are provided, one is chosen at random per request.
+ETORO_PRIVATE_KEY=private_key1,private_key2,private_key3
 
 # Optional: Override default market data provider (default: yfinance)
 # MARKET_DATA_PROVIDER=yfinance
@@ -72,7 +74,7 @@ ETORO_PRIVATE_KEY=private_key
 | `GEMINI_PRO_MODEL` | No | Gemini Pro model identifier |
 | `ENCRYPTION_SECRET` | Yes | Secret key used for data encryption |
 | `ETORO_PUBLIC_KEY` | Yes | eToro public API key |
-| `ETORO_PRIVATE_KEY` | Yes | eToro private API key |
+| `ETORO_PRIVATE_KEY` | Yes | eToro private API key. Accepts a single key or a comma-separated list; one key is selected at random per request |
 | `MARKET_DATA_PROVIDER` | No | Market data provider (`yfinance` is default) |
 
 \* Either `MONGODB_SRV` (when `USE_MONGODB_SRV=true`) or `MONGODB_HOST` + `MONGODB_PORT` (when `USE_MONGODB_SRV=false`) is required.

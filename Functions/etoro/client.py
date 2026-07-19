@@ -22,7 +22,7 @@ try:
 except ImportError:
     DatabaseManager = None
 
-from .auth import public_api_session
+from .auth import public_api_session, get_random_private_key
 from .models import (
     EToroAggregatedPosition,
     EToroGainHistory,
@@ -604,15 +604,15 @@ class ETPublicClient:
 
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:
     api_key = os.getenv("ETORO_PUBLIC_KEY")
-    user_key = os.getenv("ETORO_PRIVATE_KEY")
+    user_key = get_random_private_key()
     logger.info(
         "EToro public client init: api_key=%s, user_key=%s",
         "present" if api_key else "missing",
         "present" if user_key else "missing",
     )
-    if not api_key or not user_key:
+    if not api_key:
         raise EToroClientError(
-            "ETORO_PUBLIC_KEY and ETORO_PRIVATE_KEY environment variables are required."
+            "ETORO_PUBLIC_KEY environment variable is required."
         )
     return ETPublicClient(api_key=api_key, user_key=user_key, timeout=timeout)
 

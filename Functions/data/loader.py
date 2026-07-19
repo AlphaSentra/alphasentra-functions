@@ -9,6 +9,7 @@ from typing import Any, Dict, Optional
 import pandas as pd
 
 from Functions.etoro.client import EToroClientError, ETPublicClient
+from Functions.etoro.auth import get_random_private_key
 
 logger = logging.getLogger(__name__)
 def _safe_to_float(value) -> Optional[float]:
@@ -105,7 +106,7 @@ def load_transactions_from_etoro(
     """
     try:
         resolved_api_key = api_key if api_key is not None else os.getenv("ETORO_PUBLIC_KEY", "")
-        resolved_user_key = user_key if user_key is not None else os.getenv("ETORO_PRIVATE_KEY", "")
+        resolved_user_key = user_key if user_key is not None else get_random_private_key()
         resolved_client = client or ETPublicClient(api_key=resolved_api_key, user_key=resolved_user_key)
         resolved_cid = cid or resolved_client.resolve_cid(username)
         history = resolved_client.get_trade_history(username=username, explicit_cid=resolved_cid)

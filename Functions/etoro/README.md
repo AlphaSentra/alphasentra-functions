@@ -31,7 +31,9 @@ Session creation is handled centrally in `Functions/etoro/auth.py:public_api_ses
 
 ```env
 ETORO_PUBLIC_KEY=<public_key>
-ETORO_PRIVATE_KEY=<private_key>
+# Provide a single key or a comma-separated list. When multiple keys are given,
+# one is chosen at random for each request to distribute load.
+ETORO_PRIVATE_KEY=<private_key1>,<private_key2>,<private_key3>
 ```
 
 Client instantiation: `Functions/etoro/client.py:get_public_client_from_env()`

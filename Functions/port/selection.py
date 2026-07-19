@@ -192,28 +192,35 @@ def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float]
 
 
 def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1) -> Dict[str, Any]:
-    session = _get_session()
-    params: Dict[str, Any] = {
-        "period": period,
-        "sort": sort,
-        "copiersMin": 10,
-        "weeksSinceRegistrationMin": 52,
-        "page": page,
-    }
-    if page_size is not None:
-        params["pageSize"] = page_size
+    max_retries = 3
+    for attempt in range(max_retries):
+        session = _get_session()
+        params: Dict[str, Any] = {
+            "period": period,
+            "sort": sort,
+            "copiersMin": 10,
+            "weeksSinceRegistrationMin": 52,
+            "page": page,
+        }
+        if page_size is not None:
+            params["pageSize"] = page_size
 
-    try:
-        resp = session.get(_RANKINGS_URL, params=params, timeout=30)
-        resp.raise_for_status()
-        data = resp.json()
-    except requests.RequestException as exc:
-        return {"results": [], "pagination": {}, "error": str(exc)}
+        try:
+            resp = session.get(_RANKINGS_URL, params=params, timeout=30)
+            resp.raise_for_status()
+            data = resp.json()
+        except requests.RequestException as exc:
+            status = getattr(getattr(exc, 'response', None), 'status_code', None)
+            if status == 401 and attempt < max_retries - 1:
+                continue
+            return {"results": [], "pagination": {}, "error": str(exc)}
 
     return {
-        "results": [item for item in data.get("items", []) if item.get("subType", "").startswith("pi-")],
+        "results": data.get("items", []),
         "pagination": data.get("pagination", {}),
     }
+
+    return {"results": [], "pagination": {}, "error": "Max retries exceeded with invalid API keys"}
 
 
 def _build_gain_map(items: List[Dict[str, Any]], gain_key: str) -> Dict[str, float]:
@@ -448,8 +455,16 @@ def _fetch_rankings() -> List[Dict[str, Any]]:
         year_data = future_year.result()
 
     base_results = base_data.get("results", [])
-    if not base_results and base_data.get("error"):
-        raise RuntimeError(base_data["error"])
+    month_results = month_data.get("results", [])
+    year_results = year_data.get("results", [])
+
+    if not base_results and not month_results and not year_results:
+        base_error = base_data.get("error") or month_data.get("error") or year_data.get("error")
+        if base_error:
+            raise RuntimeError(base_error)
+
+    if not base_results:
+        base_results = month_results or year_results
 
     merged: List[Dict[str, Any]] = []
     seen = set()
@@ -1442,6 +1457,7 @@ def get_portfolio_selection_html() -> str:
                 }}
             }});
 
+            const tableBody = document.getElementById('investor-table-body');
             tableBody.addEventListener('click', function(e) {{
                 const row = e.target.closest('tr');
                 if (!row) return;

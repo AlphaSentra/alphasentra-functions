@@ -63,13 +63,13 @@ def _load_etoro_country_map() -> None:
 _load_etoro_country_map()
 
 
-def _get_session() -> requests.Session:
+def _get_session(user_key: Optional[str] = None) -> requests.Session:
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
         "Accept": "application/json",
         "x-api-key": _ETORO_API_KEY,
-        "x-user-key": get_random_private_key(),
+        "x-user-key": user_key or get_random_private_key(),
         "x-request-id": str(uuid.uuid4()),
     })
     return session
@@ -79,27 +79,42 @@ def _get_trend_session() -> requests.Session:
     return _get_session()
 
 
+def _session_get_with_retry(session_factory, url: str, **kwargs) -> Optional[requests.Response]:
+    max_retries = 3
+    for attempt in range(max_retries):
+        session = session_factory()
+        try:
+            resp = session.get(url, **kwargs)
+            if resp.status_code != 401:
+                return resp
+        except requests.RequestException:
+            if attempt == max_retries - 1:
+                return None
+    return None
+
+
 def _get_user_avatar(username: str) -> Optional[str]:
     if not username:
         return None
     if username in _AVATAR_CACHE:
         return _AVATAR_CACHE[username]
 
-    session = _get_session()
-    try:
-        resp = session.get(_USER_INFO_URL, params={"usernames": username}, timeout=20)
-        if resp.status_code == 200:
-            data = resp.json()
-            users = data.get("users", [])
-            if users:
-                avatars = users[0].get("avatars") or []
-                for av in avatars:
-                    url = av.get("url")
-                    if url:
-                        _AVATAR_CACHE[username] = url
-                        return url
-    except requests.RequestException:
-        pass
+    resp = _session_get_with_retry(
+        _get_session,
+        _USER_INFO_URL,
+        params={"usernames": username},
+        timeout=20,
+    )
+    if resp and resp.status_code == 200:
+        data = resp.json()
+        users = data.get("users", [])
+        if users:
+            avatars = users[0].get("avatars") or []
+            for av in avatars:
+                url = av.get("url")
+                if url:
+                    _AVATAR_CACHE[username] = url
+                    return url
     _AVATAR_CACHE[username] = None
     return None
 
@@ -110,44 +125,34 @@ def _get_trend_data(username: str) -> List[float]:
     if username in _TREND_CACHE:
         return _TREND_CACHE[username]
 
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
-        "Accept": "application/json",
-        "x-api-key": _ETORO_API_KEY,
-        "x-user-key": get_random_private_key(),
-        "x-request-id": str(uuid.uuid4()),
-    })
     min_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     max_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
     url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
-    try:
-        resp = session.get(
-            url,
-            params={"minDate": min_date, "maxDate": max_date, "type": "Daily"},
-            timeout=20,
-        )
-        if resp.status_code == 200:
-            data = resp.json()
-            if not isinstance(data, list):
-                if isinstance(data, dict):
-                    data = data.get("dailyExample", data.get("daily", []))
-                else:
-                    data = []
-            points = []
-            cumulative = 0.0
-            for entry in data:
-                if not isinstance(entry, dict):
-                    continue
-                gain = entry.get("gain")
-                if gain is not None:
-                    cumulative += float(gain)
-                    points.append(cumulative)
-            if points:
-                _TREND_CACHE[username] = points
-                return points
-    except requests.RequestException:
-        pass
+    resp = _session_get_with_retry(
+        _get_session,
+        url,
+        params={"minDate": min_date, "maxDate": max_date, "type": "Daily"},
+        timeout=20,
+    )
+    if resp and resp.status_code == 200:
+        data = resp.json()
+        if not isinstance(data, list):
+            if isinstance(data, dict):
+                data = data.get("dailyExample", data.get("daily", []))
+            else:
+                data = []
+        points = []
+        cumulative = 0.0
+        for entry in data:
+            if not isinstance(entry, dict):
+                continue
+            gain = entry.get("gain")
+            if gain is not None:
+                cumulative += float(gain)
+                points.append(cumulative)
+        if points:
+            _TREND_CACHE[username] = points
+            return points
     _TREND_CACHE[username] = []
     return []
 
@@ -192,9 +197,14 @@ def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float]
 
 
 def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1) -> Dict[str, Any]:
-    max_retries = 3
+    max_retries = 6
+    used_keys = set()
+    last_error = None
     for attempt in range(max_retries):
         session = _get_session()
+        if session.headers.get("x-user-key") in used_keys:
+            continue
+        used_keys.add(session.headers.get("x-user-key", ""))
         params: Dict[str, Any] = {
             "period": period,
             "sort": sort,
@@ -210,17 +220,18 @@ def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
+            last_error = exc
             status = getattr(getattr(exc, 'response', None), 'status_code', None)
             if status == 401 and attempt < max_retries - 1:
                 continue
             return {"results": [], "pagination": {}, "error": str(exc)}
 
-    return {
-        "results": data.get("items", []),
-        "pagination": data.get("pagination", {}),
-    }
+        return {
+            "results": data.get("items", []),
+            "pagination": data.get("pagination", {}),
+        }
 
-    return {"results": [], "pagination": {}, "error": "Max retries exceeded with invalid API keys"}
+    return {"results": [], "pagination": {}, "error": str(last_error) if last_error else "Max retries exceeded with invalid API keys"}
 
 
 def _build_gain_map(items: List[Dict[str, Any]], gain_key: str) -> Dict[str, float]:
@@ -576,40 +587,40 @@ def search_investors_api(query: str) -> Dict[str, Any]:
 
 
 _FALLBACK_INVESTORS = [
-    {"cid": "1", "username": "CompoundValue", "fullName": "Sarah Miller", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "US", "copiers": 32800, "aumValue": 14500000.0, "baseLineCopiers": 31850, "gain": 0.0042},
-    {"cid": "2", "username": "GreenMacro_Vance", "fullName": "Helena Vance", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 24100, "aumValue": 12200000.0, "baseLineCopiers": 22900, "gain": 0.0072},
-    {"cid": "3", "username": "TechBull_Sanchez", "fullName": "Ruben Sanchez", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "ES", "copiers": 18450, "aumValue": 8400000.0, "baseLineCopiers": 16080, "gain": 0.0284},
-    {"cid": "4", "username": "NordicCap_Nielsen", "fullName": "Line Nielsen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DK", "copiers": 14200, "aumValue": 7900000.0, "baseLineCopiers": 13020, "gain": 0.0165},
-    {"cid": "5", "username": "CryptoQuantum", "fullName": "Yuki Sato", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 11350, "aumValue": 4100000.0, "baseLineCopiers": 8820, "gain": -0.0432},
-    {"cid": "6", "username": "ShenzhenVanguard", "fullName": "Lin Wong", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SG", "copiers": 10800, "aumValue": 6700000.0, "baseLineCopiers": 9130, "gain": 0.0342},
-    {"cid": "7", "username": "AlphaDividends", "fullName": "Maximilian Weber", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 9200, "aumValue": 5800000.0, "baseLineCopiers": 8480, "gain": 0.0115},
-    {"cid": "8", "username": "TrendRider_Chloe", "fullName": "Chloe Laurent", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "FR", "copiers": 8700, "aumValue": 6200000.0, "baseLineCopiers": 7820, "gain": 0.0214},
-    {"cid": "9", "username": "QuantumEdge", "fullName": "Marcus Chen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 21500, "aumValue": 9300000.0, "baseLineCopiers": 20150, "gain": 0.0128},
-    {"cid": "10", "username": "NordicGrowth", "fullName": "Sofia Andersson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SE", "copiers": 16800, "aumValue": 7600000.0, "baseLineCopiers": 15360, "gain": 0.0095},
-    {"cid": "11", "username": "QuantumAlpha", "fullName": "James Wilson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "GB", "copiers": 28300, "aumValue": 11800000.0, "baseLineCopiers": 27080, "gain": 0.0115},
-    {"cid": "12", "username": "EmergingMarkets", "fullName": "Aisha Patel", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 12100, "aumValue": 5400000.0, "baseLineCopiers": 11220, "gain": 0.0188},
-    {"cid": "13", "username": "AsiaTech_Kim", "fullName": "David Kim", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "KR", "copiers": 19700, "aumValue": 8900000.0, "baseLineCopiers": 18600, "gain": 0.0205},
-    {"cid": "14", "username": "GreenBond_Emma", "fullName": "Emma Thompson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 14500, "aumValue": 6300000.0, "baseLineCopiers": 13650, "gain": 0.0065},
-    {"cid": "15", "username": "LatamGrowth", "fullName": "Lucas Silva", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "BR", "copiers": 9800, "aumValue": 4700000.0, "baseLineCopiers": 8710, "gain": -0.0125},
-    {"cid": "16", "username": "EuroValue_Nina", "fullName": "Nina Kowalski", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 15600, "aumValue": 7100000.0, "baseLineCopiers": 14780, "gain": 0.0088},
-    {"cid": "17", "username": "DeepSea_Oliver", "fullName": "Oliver Brown", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 22400, "aumValue": 9600000.0, "baseLineCopiers": 20910, "gain": 0.0155},
-    {"cid": "18", "username": "IndiaRising", "fullName": "Priya Sharma", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 8200, "aumValue": 3900000.0, "baseLineCopiers": 7420, "gain": 0.0235},
-    {"cid": "19", "username": "NordicBond_Thomas", "fullName": "Thomas Anderson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "NO", "copiers": 13100, "aumValue": 5800000.0, "baseLineCopiers": 12570, "gain": 0.0055},
-    {"cid": "20", "username": "JapanNext", "fullName": "Yuki Tanaka", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 16900, "aumValue": 6900000.0, "baseLineCopiers": 15540, "gain": -0.0075},
+    {"cid": "1", "username": "CompoundValue", "fullName": "Sarah Miller", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "US", "copiers": 32800, "aumValue": 14500000.0, "baseLineCopiers": 31850, "gain": 0.42},
+    {"cid": "2", "username": "GreenMacro_Vance", "fullName": "Helena Vance", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 24100, "aumValue": 12200000.0, "baseLineCopiers": 22900, "gain": 0.72},
+    {"cid": "3", "username": "TechBull_Sanchez", "fullName": "Ruben Sanchez", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "ES", "copiers": 18450, "aumValue": 8400000.0, "baseLineCopiers": 16080, "gain": 2.84},
+    {"cid": "4", "username": "NordicCap_Nielsen", "fullName": "Line Nielsen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DK", "copiers": 14200, "aumValue": 7900000.0, "baseLineCopiers": 13020, "gain": 1.65},
+    {"cid": "5", "username": "CryptoQuantum", "fullName": "Yuki Sato", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 11350, "aumValue": 4100000.0, "baseLineCopiers": 8820, "gain": -4.32},
+    {"cid": "6", "username": "ShenzhenVanguard", "fullName": "Lin Wong", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SG", "copiers": 10800, "aumValue": 6700000.0, "baseLineCopiers": 9130, "gain": 3.42},
+    {"cid": "7", "username": "AlphaDividends", "fullName": "Maximilian Weber", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 9200, "aumValue": 5800000.0, "baseLineCopiers": 8480, "gain": 1.15},
+    {"cid": "8", "username": "TrendRider_Chloe", "fullName": "Chloe Laurent", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "FR", "copiers": 8700, "aumValue": 6200000.0, "baseLineCopiers": 7820, "gain": 2.14},
+    {"cid": "9", "username": "QuantumEdge", "fullName": "Marcus Chen", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 21500, "aumValue": 9300000.0, "baseLineCopiers": 20150, "gain": 1.28},
+    {"cid": "10", "username": "NordicGrowth", "fullName": "Sofia Andersson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "SE", "copiers": 16800, "aumValue": 7600000.0, "baseLineCopiers": 15360, "gain": 0.95},
+    {"cid": "11", "username": "QuantumAlpha", "fullName": "James Wilson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "GB", "copiers": 28300, "aumValue": 11800000.0, "baseLineCopiers": 27080, "gain": 1.15},
+    {"cid": "12", "username": "EmergingMarkets", "fullName": "Aisha Patel", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 12100, "aumValue": 5400000.0, "baseLineCopiers": 11220, "gain": 1.88},
+    {"cid": "13", "username": "AsiaTech_Kim", "fullName": "David Kim", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "KR", "copiers": 19700, "aumValue": 8900000.0, "baseLineCopiers": 18600, "gain": 2.05},
+    {"cid": "14", "username": "GreenBond_Emma", "fullName": "Emma Thompson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 14500, "aumValue": 6300000.0, "baseLineCopiers": 13650, "gain": 0.65},
+    {"cid": "15", "username": "LatamGrowth", "fullName": "Lucas Silva", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "BR", "copiers": 9800, "aumValue": 4700000.0, "baseLineCopiers": 8710, "gain": -1.25},
+    {"cid": "16", "username": "EuroValue_Nina", "fullName": "Nina Kowalski", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "DE", "copiers": 15600, "aumValue": 7100000.0, "baseLineCopiers": 14780, "gain": 0.88},
+    {"cid": "17", "username": "DeepSea_Oliver", "fullName": "Oliver Brown", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "AU", "copiers": 22400, "aumValue": 9600000.0, "baseLineCopiers": 20910, "gain": 1.55},
+    {"cid": "18", "username": "IndiaRising", "fullName": "Priya Sharma", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "IN", "copiers": 8200, "aumValue": 3900000.0, "baseLineCopiers": 7420, "gain": 2.35},
+    {"cid": "19", "username": "NordicBond_Thomas", "fullName": "Thomas Anderson", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "NO", "copiers": 13100, "aumValue": 5800000.0, "baseLineCopiers": 12570, "gain": 0.55},
+    {"cid": "20", "username": "JapanNext", "fullName": "Yuki Tanaka", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-champion", "country": "JP", "copiers": 16900, "aumValue": 6900000.0, "baseLineCopiers": 15540, "gain": -0.75},
 ]
 
-_WEEK_MAP = {str(item["cid"]): item["gain"] for item in _FALLBACK_INVESTORS}
+_WEEK_MAP = {str(item["cid"]): item["gain"] * 100 for item in _FALLBACK_INVESTORS}
 _MONTH_MAP = {
-    "1": 0.0185, "2": 0.0245, "3": 0.0812, "4": 0.0524, "5": 0.145,
-    "6": 0.0955, "7": 0.041, "8": 0.068, "9": 0.039, "10": 0.042,
-    "11": 0.054, "12": 0.068, "13": 0.062, "14": 0.029, "15": -0.0125,
-    "16": 0.0325, "17": 0.0475, "18": 0.082, "19": 0.021, "20": 0.051,
+    "1": 1.85, "2": 2.45, "3": 8.12, "4": 5.24, "5": 14.5,
+    "6": 9.55, "7": 4.1, "8": 6.8, "9": 3.9, "10": 4.2,
+    "11": 5.4, "12": 6.8, "13": 6.2, "14": 2.9, "15": -1.25,
+    "16": 3.25, "17": 4.75, "18": 8.2, "19": 2.1, "20": 5.1,
 }
 _YEAR_MAP = {
-    "1": 0.142, "2": 0.1685, "3": 0.4265, "4": 0.284, "5": 0.892,
-    "6": 0.328, "7": 0.194, "8": 0.269, "9": 0.185, "10": 0.213,
-    "11": 0.198, "12": 0.241, "13": 0.312, "14": 0.157, "15": 0.453,
-    "16": 0.179, "17": 0.224, "18": 0.385, "19": 0.138, "20": 0.276,
+    "1": 14.2, "2": 16.85, "3": 42.65, "4": 28.4, "5": 89.2,
+    "6": 32.8, "7": 19.4, "8": 26.9, "9": 18.5, "10": 21.3,
+    "11": 19.8, "12": 24.1, "13": 31.2, "14": 15.7, "15": 45.3,
+    "16": 17.9, "17": 22.4, "18": 38.5, "19": 13.8, "20": 27.6,
 }
 
 

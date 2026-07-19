@@ -45,69 +45,37 @@ def fetch_page(params):
     return items, total
 
 
-def collect_all(default_page_size=1000, delay_seconds=0.0):
+def collect_all(default_page_size=1000, delay_seconds=1.0):
     import time
     seen = {}
-    variants = [
-        {'period': 'CurrMonth', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'LastYear', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'LastYear', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '-gain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-gain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '-aumValue', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-aumValue', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '-copiers', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-copiers', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': 'displayName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': 'displayName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': '-gain', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': '-gain', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': '-copiersGain', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': 'userName', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': '-gain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '-weeklyGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-weeklyGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': 'riskScore', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': 'riskScore', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '-riskScore', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '-riskScore', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': 'username', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': 'username', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': 'fullName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': 'fullName', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': '-copiers', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': '-aumValue', 'isPopularInvestor': 'true'},
-        {'period': 'CurrWeek', 'sort': '-weeklyGain', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': '-copiers', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': '-aumValue', 'isPopularInvestor': 'true'},
-        {'period': 'ThreeMonthsAgo', 'sort': '-weeklyGain', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': '-copiers', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': '-aumValue', 'isPopularInvestor': 'true'},
-        {'period': 'OneYearAgo', 'sort': '-weeklyGain', 'isPopularInvestor': 'true'},
-        {'period': 'CurrMonth', 'sort': '', 'isPopularInvestor': 'true'},
-        {'period': 'CurrYear', 'sort': '', 'isPopularInvestor': 'true'},
-    ]
+    periods = ['CurrMonth', 'CurrYear', 'LastYear', 'ThreeMonthsAgo', 'OneYearAgo']
+    sorts = ['-copiersGain', 'userName', '-gain', '-aumValue', '-copiers', 'displayName', '-weeklyGain', 'riskScore', '-riskScore', 'username', 'fullName', '', 'copiersGain', 'gain', 'aumValue', 'copiers']
+    variants = []
+    for period in periods:
+        for sort in sorts:
+            variants.append({'period': period, 'sort': sort, 'isPopularInvestor': 'true'})
     global_total = None
 
     def _fetch(variant, page):
         params = {**variant, 'page': page, 'pageSize': default_page_size}
         max_retries = 3
-        retry_delays = [2, 4, 8]
+        retry_delays = [5, 10, 20]
         for attempt in range(max_retries + 1):
             try:
                 items, total = fetch_page(params)
                 return items, total
             except requests.HTTPError as exc:
                 status = exc.response.status_code if exc.response else None
-                print(f"  _fetch variant={variant.get('period')}/{variant.get('sort')} page={page} attempt={attempt+1} HTTP {status}: {exc}")
-                if status == 404 and attempt < max_retries:
+                resp_body = ''
+                if exc.response is not None:
+                    try:
+                        resp_body = exc.response.text[:200]
+                    except Exception:
+                        pass
+                print(f"  _fetch variant={variant.get('period')}/{variant.get('sort')} page={page} attempt={attempt+1} HTTP {status}: {exc} body={resp_body!r}")
+                if status in (429,) and attempt < max_retries:
+                    time.sleep(retry_delays[attempt])
+                elif status == 404 and attempt < max_retries:
                     time.sleep(retry_delays[attempt])
                 else:
                     return [], status
@@ -139,6 +107,7 @@ def collect_all(default_page_size=1000, delay_seconds=0.0):
             if len(items) < default_page_size:
                 break
             page += 1
+            time.sleep(delay_seconds)
 
     return list(seen.values()), global_total
 

@@ -36,6 +36,7 @@ _TREND_CACHE: Dict[str, List[float]] = {}
 _COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
 _COUNTRIES_API_BASE = "https://countries.dev"
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
+_SEARCH_INDEX_CACHE: Optional[List[Dict[str, Any]]] = None
 
 
 def _load_etoro_country_map() -> None:
@@ -190,13 +191,14 @@ def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float]
     return _trend_svg(positive=latest >= 0)
 
 
-def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20) -> Dict[str, Any]:
+def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1) -> Dict[str, Any]:
     session = _get_session()
     params: Dict[str, Any] = {
         "period": period,
         "sort": sort,
         "copiersMin": 10,
         "weeksSinceRegistrationMin": 52,
+        "page": page,
     }
     if page_size is not None:
         params["pageSize"] = page_size
@@ -477,6 +479,87 @@ def _fetch_rankings() -> List[Dict[str, Any]]:
     return merged, week_map, month_map, year_map
 
 
+def search_investors_api(query: str) -> Dict[str, Any]:
+    if not query or not query.strip():
+        return {"results": []}
+
+    session = _get_session()
+    url = "https://public-api.etoro.com/api/v1/portfolios/search"
+    params = {
+        "type": "trader",
+        "query": query.strip(),
+        "limit": 20,
+    }
+    try:
+        resp = session.get(url, params=params, timeout=15)
+        if resp.status_code == 200:
+            data = resp.json()
+            return {
+                "results": data.get("results", []),
+            }
+    except requests.RequestException:
+        pass
+
+    global _SEARCH_INDEX_CACHE
+    if _SEARCH_INDEX_CACHE is None:
+        _SEARCH_INDEX_CACHE = []
+        seen_usernames = set()
+        try:
+            for page in range(1, 25):
+                page_data = _get_rankings("CurrMonth", "-copiersGain", 100, page)
+                page_results = page_data.get("results", []) if isinstance(page_data, dict) else []
+                if not page_results:
+                    break
+                for item in page_results:
+                    uname = str(item.get("userName") or item.get("username") or "")
+                    if uname and uname not in seen_usernames:
+                        seen_usernames.add(uname)
+                        _SEARCH_INDEX_CACHE.append(item)
+                if len(page_results) < 100:
+                    break
+        except Exception:
+            pass
+
+        for item in _FALLBACK_INVESTORS:
+            uname = str(item.get("userName") or item.get("username") or item.get("cid", ""))
+            if uname and uname not in seen_usernames:
+                seen_usernames.add(uname)
+                _SEARCH_INDEX_CACHE.append(item)
+
+    source = _SEARCH_INDEX_CACHE
+
+    q = query.strip().lower()
+    results = []
+    seen_usernames = set()
+
+    def _add_item(item):
+        username = str(item.get("userName") or item.get("username") or "")
+        full_name = str(item.get("fullName") or item.get("displayName") or "")
+        if not username:
+            return
+        if username.lower() in seen_usernames:
+            return
+        if (q in username.lower()
+                or q in full_name.lower()
+                or q in (full_name or username).lower()):
+            seen_usernames.add(username.lower())
+            avatar_url = item.get("avatarUrl")
+            if not avatar_url:
+                avatar_url = _get_user_avatar(username)
+            results.append({
+                "avatarUrl": avatar_url,
+                "username": username,
+                "fullName": full_name or None,
+            })
+
+    for item in source:
+        _add_item(item)
+        if len(results) >= 20:
+            break
+
+    return {"results": results}
+
+
 _FALLBACK_INVESTORS = [
     {"cid": "1", "username": "CompoundValue", "fullName": "Sarah Miller", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite-pro", "country": "US", "copiers": 32800, "aumValue": 14500000.0, "baseLineCopiers": 31850, "gain": 0.0042},
     {"cid": "2", "username": "GreenMacro_Vance", "fullName": "Helena Vance", "avatarUrl": "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850", "subType": "pi-elite", "country": "GB", "copiers": 24100, "aumValue": 12200000.0, "baseLineCopiers": 22900, "gain": 0.0072},
@@ -587,6 +670,7 @@ def get_portfolio_selection_html() -> str:
         .search-container {{
             font-family: {FONT_FAMILY};
             padding: 20px;
+            position: relative;
         }}
 
         .search-input {{
@@ -611,6 +695,95 @@ def get_portfolio_selection_html() -> str:
 
         .search-input::placeholder {{
             color: {_TEXT_MUTED};
+        }}
+
+        .search-dropdown {{
+            position: absolute;
+            top: 100%;
+            left: 20px;
+            right: 20px;
+            background-color: {_BG_SUBTLE};
+            border: 1px solid {_BORDER_DEFAULT};
+            border-top: none;
+            max-height: 320px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }}
+
+        .search-dropdown.active {{
+            display: block;
+        }}
+
+        .search-dropdown-item {{
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid {BORDER_DIVIDER};
+            transition: background-color 0.15s ease;
+        }}
+
+        .search-dropdown-item:hover {{
+            background-color: {_HOVER_SURFACE};
+        }}
+
+        .search-dropdown-item:last-child {{
+            border-bottom: none;
+        }}
+
+        .search-dropdown-avatar {{
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            background-color: {_SEMANTIC_POSITIVE};
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: {_NEUTRAL_0};
+            font-weight: bold;
+            font-size: 14px;
+        }}
+
+        .search-dropdown-avatar img {{
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }}
+
+        .search-dropdown-details {{
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }}
+
+        .search-dropdown-name {{
+            font-weight: bold;
+            color: {_TEXT_HEADING};
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .search-dropdown-username {{
+            color: {_TEXT_MUTED};
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }}
+
+        .search-dropdown-empty {{
+            padding: 16px;
+            text-align: center;
+            color: {_TEXT_MUTED};
+            font-size: 14px;
         }}
 
         .my-portfolio-container {{
@@ -1055,6 +1228,7 @@ def get_portfolio_selection_html() -> str:
                         autocomplete="off"
                         autofocus
                     >
+                    <div class="search-dropdown" id="investor-search-dropdown"></div>
                 </div>
                 <div class="my-portfolio-container">
                     <table class="investor-table">
@@ -1174,39 +1348,98 @@ def get_portfolio_selection_html() -> str:
     <script>
         (function() {{
             const searchInput = document.getElementById('investor-search');
-            const tableBody = document.getElementById('investor-table-body');
-            const noResults = document.getElementById('no-results');
-            const rows = Array.from(tableBody.querySelectorAll('tr'));
+            const dropdown = document.getElementById('investor-search-dropdown');
+            let debounceTimer = null;
 
-            function filterRows(query) {{
-                const q = query.toLowerCase().trim();
-                let visibleCount = 0;
+            function getInitials(name) {{
+                if (!name) return '?';
+                const parts = name.trim().split(/\s+/);
+                return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+            }}
 
-                rows.forEach(function(row) {{
-                    const searchText = row.getAttribute('data-search') || '';
-                    const cells = row.querySelectorAll('td');
-                    let rowText = searchText;
-                    cells.forEach(function(cell) {{
-                        rowText += ' ' + cell.textContent.toLowerCase();
+            function renderDropdown(results, error) {{
+                dropdown.innerHTML = '';
+                if (error) {{
+                    dropdown.innerHTML = '<div class=\"search-dropdown-empty\">' + error + '</div>';
+                    dropdown.classList.add('active');
+                    return;
+                }}
+                if (!results.length) {{
+                    dropdown.innerHTML = '<div class=\"search-dropdown-empty\">No investors found.</div>';
+                    dropdown.classList.add('active');
+                    return;
+                }}
+
+                results.forEach(function(item) {{
+                    const avatarUrl = item.avatarUrl || '';
+                    const username = item.username || '';
+                    const fullName = item.fullName || '';
+
+                    const row = document.createElement('div');
+                    row.className = 'search-dropdown-item';
+
+                    let avatarHtml;
+                    if (avatarUrl) {{
+                        avatarHtml = '<div class=\"search-dropdown-avatar\"><img src=\"' + avatarUrl + '\" alt=\"avatar\" onerror=\"this.style.display=\\'none\\'\"></div>';
+                    }} else {{
+                        const initials = getInitials(fullName || username);
+                        avatarHtml = '<div class=\"search-dropdown-avatar\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;\">' + initials + '</div>';
+                    }}
+
+                    const nameDisplay = fullName || username;
+                    const nameHtml = '<div class=\"search-dropdown-details\">' +
+                        '<div class=\"search-dropdown-name\">' + nameDisplay + '</div>' +
+                        (fullName ? '<div class=\"search-dropdown-username\">@' + username + '</div>' : '') +
+                        '</div>';
+
+                    row.innerHTML = avatarHtml + nameHtml;
+
+                    row.addEventListener('click', function() {{
+                        if (username) {{
+                            window.location.href = '/etopi?etoro_username=' + encodeURIComponent(username);
+                        }}
+                        dropdown.classList.remove('active');
+                        searchInput.value = fullName || username;
                     }});
 
-                    if (!q || rowText.includes(q)) {{
-                        row.classList.remove('hidden');
-                        visibleCount++;
-                    }} else {{
-                        row.classList.add('hidden');
-                    }}
+                    dropdown.appendChild(row);
                 }});
 
-                if (visibleCount === 0) {{
-                    noResults.classList.remove('hidden');
-                }} else {{
-                    noResults.classList.add('hidden');
-                }}
+                dropdown.classList.add('active');
             }}
 
             searchInput.addEventListener('input', function() {{
-                filterRows(this.value);
+                const query = this.value.trim();
+
+                clearTimeout(debounceTimer);
+                if (!query) {{
+                    dropdown.classList.remove('active');
+                    return;
+                }}
+
+                debounceTimer = setTimeout(function() {{
+                    fetch('/port/search_investors?query=' + encodeURIComponent(query))
+                        .then(function(res) {{ return res.json(); }})
+                        .then(function(data) {{
+                            renderDropdown(data.results || [], data.error);
+                        }})
+                        .catch(function() {{
+                            dropdown.classList.remove('active');
+                        }});
+                }}, 200);
+            }});
+
+            searchInput.addEventListener('focus', function() {{
+                const query = this.value.trim();
+                if (query && dropdown.children.length > 0) {{
+                    dropdown.classList.add('active');
+                }}
+            }});
+
+            document.addEventListener('click', function(e) {{
+                if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {{
+                    dropdown.classList.remove('active');
+                }}
             }});
 
             tableBody.addEventListener('click', function(e) {{

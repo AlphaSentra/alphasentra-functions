@@ -2,6 +2,7 @@ import os
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
+from Functions.port.selection import search_investors_api
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.port.cache import exists as cache_exists, get as cache_get, _REPORT_TTL, _ETORO_PI_TTL
 
@@ -12,6 +13,7 @@ def _apply_cors_and_auth(response):
     public_paths = (
         '/auth',
         '/etopi/check_cache',
+        '/port/search_investors',
     )
     if request.path in public_paths or request.path.startswith('/static'):
         origin = request.headers.get('Origin')
@@ -28,6 +30,7 @@ def _require_etoro_auth():
     public_paths = (
         '/auth',
         '/etopi/check_cache',
+        '/port/search_investors',
         '/test_iframe_auth.html',
     )
     if request.path in public_paths or request.path.startswith('/static'):
@@ -143,6 +146,12 @@ register_route(app, '/port', 'Portfolio Investor Selection', sel)
 register_route(app, '/eqs', 'Stocks AI Screener', eqs)
 register_route(app, '/wcr', 'Forex AI Screener', wcr)
 register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)
+
+@app.route('/port/search_investors', methods=['GET'])
+def port_search_investors():
+    query = request.args.get('query', '').strip()
+    return jsonify(search_investors_api(query))
+
 
 @app.route('/test_iframe_auth.html')
 def test_iframe_auth_page():

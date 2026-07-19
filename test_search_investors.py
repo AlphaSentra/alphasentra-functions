@@ -48,7 +48,7 @@ def fetch_page(params):
 def collect_all(default_page_size=1000, delay_seconds=1.0):
     import time
     seen = {}
-    periods = ['CurrMonth', 'CurrYear', 'LastYear', 'ThreeMonthsAgo', 'OneYearAgo']
+    periods = ['CurrWeek', 'CurrMonth', 'CurrYear', 'ThreeMonthsAgo', 'OneYearAgo', 'LastYear']
     sorts = ['-copiersGain', 'userName', '-gain', '-aumValue', '-copiers', 'displayName', '-weeklyGain', 'riskScore', '-riskScore', 'username', 'fullName', '', 'copiersGain', 'gain', 'aumValue', 'copiers']
     variants = []
     for period in periods:

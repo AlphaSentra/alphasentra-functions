@@ -9,6 +9,7 @@ from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
 
 import requests
+from flask import request
 from dotenv import load_dotenv
 
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _ETORO_PI_TTL
@@ -625,7 +626,15 @@ _YEAR_MAP = {
 
 
 def get_portfolio_selection_html() -> str:
-    cache_key = ("portfolio_selection",)
+    from flask import g
+    username_from_cookie = getattr(g, 'etoro_authuser', 'My Portfolio')
+    username_display = username_from_cookie
+    if username_display == "My Portfolio":
+        username_at_display = "@MyPortfolio"
+    else:
+        username_at_display = f"@{username_from_cookie}"
+
+    cache_key = ("portfolio_selection", username_from_cookie)
     cached_html = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
     if cached_html is not None:
         return cached_html
@@ -645,7 +654,120 @@ def get_portfolio_selection_html() -> str:
     if merged:
         _prefetch_country_data(merged)
 
+    # Default values for "My Portfolio"
+    my_avatar_html = f"<div class=\"my-portfolio-avatar\">&#x1F4B0;</div>"
+    my_country_html_val = f"<span class=\"my-portfolio-country\"><span class=\"my-portfolio-country-flag\">&#x1F1FA&#x1F1F8;</span>US</span>"
+    my_aum_display = "$14.5M"
+    my_copiers_value = "32,800"
+    my_copiers_change_val = "&#x25B2; 3.1% 1M"
+    my_week_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +0.42%</span>"
+    my_month_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +1.85%</span>"
+    my_year_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +14.20%</span>"
+    my_trend_svg_val = f"<svg class=\"my-portfolio-trend\" viewBox=\"0 0 100 28\" preserveAspectRatio=\"none\"><polyline fill=\"none\" stroke=\"{_SEMANTIC_POSITIVE}\" stroke-width=\"1.5\" points=\"0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4\"/></svg>"
+
+    my_portfolio_item: Optional[Dict[str, Any]] = None
+    for item in merged:
+        if str(item.get("userName", item.get("username", ""))).lower() == username_from_cookie.lower():
+            my_portfolio_item = item
+            break
+
+    if my_portfolio_item is None and username_from_cookie != "My Portfolio":
+        try:
+            resp = _session_get_with_retry(
+                _get_session,
+                _USER_INFO_URL,
+                params={"usernames": username_from_cookie},
+                timeout=20,
+            )
+            if resp and resp.status_code == 200:
+                data = resp.json()
+                users = data.get("users", [])
+                if users:
+                    my_portfolio_item = users[0]
+                    _prefetch_country_data([my_portfolio_item])
+        except Exception:
+            pass # Safely fall back to default placeholder values
+    
+    if my_portfolio_item:
+        cid = str(my_portfolio_item.get("userName", my_portfolio_item.get("cid", my_portfolio_item.get("realCID", my_portfolio_item.get("gcid", "")))))
+        
+        my_avatar_url = my_portfolio_item.get("avatarUrl")
+        if not my_avatar_url:
+            my_avatar_url = _get_user_avatar(username_from_cookie)
+        my_avatar_html = _avatar_html(my_avatar_url, username_display)
+
+
+        my_country_val = my_portfolio_item.get("country")
+        if my_country_val is not None:
+            mapped = _ETORO_COUNTRY_MAP.get(str(my_country_val))
+            if mapped:
+                my_country_val = mapped["isoNumeric"]
+            else:
+                my_country_val = str(my_country_val)
+        
+        if my_country_val is not None:
+            my_country_val = str(my_country_val)
+        _prefetch_country_data([{"country": my_country_val}])
+        my_country_html_val = _country_html(my_country_val)
+
+
+        my_aum_value = my_portfolio_item.get("aumValue")
+        my_aum_tier_desc = my_portfolio_item.get("aumTierDesc")
+        my_aum_display = my_aum_tier_desc if my_aum_tier_desc else _safe_aum(my_aum_value)
+
+
+        my_copiers = my_portfolio_item.get("copiers")
+        my_base_line_copiers = my_portfolio_item.get("baseLineCopiers")
+        my_copiers_value = _safe_int(my_copiers)
+        my_copiers_change_val = _copiers_change(my_copiers, my_base_line_copiers)
+
+
+        my_week_gain = week_map.get(cid)
+        my_month_gain = month_map.get(cid)
+        my_year_gain = year_map.get(cid)
+        
+        my_week_gain_html = _safe_gain(my_week_gain)
+        my_month_gain_html = _safe_gain(my_month_gain)
+        my_year_gain_html = _safe_gain(my_year_gain)
+
+        
+        my_trend_points = _get_trend_data(username_from_cookie)
+        if my_trend_points:
+            my_trend_svg_val = _trend_svg_from_points(my_trend_points)
+        else:
+            my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
+
+    my_portfolio_html_row = f"""
+                            <tr class="my-portfolio-row">
+                                <td>
+                                    <div class="my-portfolio-investor">
+                                        {my_avatar_html}
+                                        <div class="my-portfolio-info">
+                                            <div class="my-portfolio-name-row">
+                                                <span class="my-portfolio-name">{username_display}</span>
+                                                <span class="my-portfolio-badge">CURRENT</span>
+                                            </div>
+                                            <span class="my-portfolio-username">{username_at_display}</span>
+                                        </div>
+                                    </div>
+                                </td>
+                                <td>{my_country_html_val}</td>
+                                <td><span class="my-portfolio-aum">{my_aum_display}</span></td>
+                                <td>
+                                    <div>
+                                        <div class="my-portfolio-copiers-value">{my_copiers_value}</div>
+                                        <div class="my-portfolio-copiers-change">{my_copiers_change_val}</div>
+                                    </div>
+                                </td>
+                                <td>{my_week_gain_html}</td>
+                                <td>{my_month_gain_html}</td>
+                                <td>{my_year_gain_html}</td>
+                                <td>{my_trend_svg_val}</td>
+                            </tr>
+    """
+
     rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
+
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -1281,41 +1403,7 @@ def get_portfolio_selection_html() -> str:
                             </tr>
                         </thead>
                         <tbody>
-                            <tr class="my-portfolio-row">
-                                <td>
-                                    <div class="my-portfolio-investor">
-                                        <div class="my-portfolio-avatar">&#x1F4B0;</div>
-                                        <div class="my-portfolio-info">
-                                            <div class="my-portfolio-name-row">
-                                                <span class="my-portfolio-name">My Portfolio</span>
-                                                <span class="my-portfolio-badge">CURRENT</span>
-                                            </div>
-                                            <span class="my-portfolio-username">@MyPortfolio</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>
-                                    <span class="my-portfolio-country">
-                                        <span class="my-portfolio-country-flag">&#x1F1FA&#x1F1F8;</span>
-                                        US
-                                    </span>
-                                </td>
-                                <td><span class="my-portfolio-aum">$14.5M</span></td>
-                                <td>
-                                    <div>
-                                        <div class="my-portfolio-copiers-value">32,800</div>
-                                        <div class="my-portfolio-copiers-change">&#x25B2; 3.1% 1M</div>
-                                    </div>
-                                </td>
-                                <td><span class="perf-pill perf-pill-pos">▲ +0.42%</span></td>
-                                <td><span class="perf-pill perf-pill-pos">▲ +1.85%</span></td>
-                                <td><span class="perf-pill perf-pill-pos">▲ +14.20%</span></td>
-                                <td>
-                                    <svg class="my-portfolio-trend" viewBox="0 0 100 28" preserveAspectRatio="none">
-                                        <polyline fill="none" stroke="{_SEMANTIC_POSITIVE}" stroke-width="1.5" points="0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4"/>
-                                    </svg>
-                                </td>
-                            </tr>
+{my_portfolio_html_row}
                         </tbody>
                     </table>
                 </div>

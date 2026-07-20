@@ -87,7 +87,7 @@ def generate_charts(ts_data, risk_contrib, corr_matrix, benchmark_ticker, annual
         ))
 
         n_tickers = len(corr_clean)
-        fig_height = max(800, 120 + n_tickers * 30)
+        fig_height = min(900, max(800, 120 + n_tickers * 30))
 
         fig_corr_full.update_layout(
             title="Full Portfolio Correlation Matrix",

@@ -37,6 +37,21 @@ from .models import (
 
 _INSTRUMENT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / ".etoro_instrument_cache.json"
 _INSTRUMENT_CACHE_TTL = 24 * 60 * 60
+_ETORO_MAX_RETRIES = 3
+
+
+def _session_get_with_retry(session_factory, url: str, **kwargs) -> Optional[requests.Response]:
+    max_retries = _ETORO_MAX_RETRIES
+    for attempt in range(max_retries):
+        session = session_factory()
+        try:
+            resp = session.get(url, **kwargs)
+            if resp.status_code != 401:
+                return resp
+        except requests.RequestException:
+            if attempt == max_retries - 1:
+                return None
+    return None
 
 
 def _load_instrument_cache() -> Dict[str, Dict[str, str]]:
@@ -141,7 +156,6 @@ class ETPublicClient:
         if granularity not in {"Daily", "Period"}:
             raise ValueError("granularity must be one of: Daily, Period")
 
-        session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
         url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
 
         params: Dict[str, Any] = {"type": granularity}
@@ -151,11 +165,17 @@ class ETPublicClient:
             params["maxDate"] = max_date
 
         req = requests.Request("GET", url, params=params)
-        prepared = session.prepare_request(req)
+        _preview_session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
+        prepared = _preview_session.prepare_request(req)
         logger.info("EToro request URL: %s", prepared.url)
 
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
         try:
-            resp = session.get(url, params=params, timeout=self._timeout)
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            if resp is None:
+                raise EToroClientError("GET gain time-series failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
@@ -201,10 +221,14 @@ class ETPublicClient:
             return cached
         # --- 1. Fetch live portfolio positions ---
         url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/portfolio/live"
-        session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
 
         try:
-            resp = session.get(url, timeout=self._timeout)
+            resp = _session_get_with_retry(_session_factory, url, timeout=self._timeout)
+            if resp is None:
+                raise EToroClientError("GET investor portfolio failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
@@ -446,8 +470,13 @@ class ETPublicClient:
             "itemsPerPage": items_per_page,
         }
     
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
         try:
-            resp = session.get(url, params=params, timeout=self._timeout)
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            if resp is None:
+                raise EToroClientError("GET trade history failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
@@ -467,12 +496,16 @@ class ETPublicClient:
         return result
     
     def _resolve_cid_from_username(self, username: str) -> str:
-        session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
         url = "https://public-api.etoro.com/api/v1/user-info/people"
         params: Dict[str, Any] = {"usernames": username}
 
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
         try:
-            resp = session.get(url, params=params, timeout=self._timeout)
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            if resp is None:
+                raise EToroClientError("GET user by username failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:
@@ -578,8 +611,13 @@ class ETPublicClient:
         url = "https://public-api.etoro.com/api/v1/user-info/people"
         params: Dict[str, Any] = {"cidList": ",".join(str(c) for c in cids)}
     
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+    
         try:
-            resp = session.get(url, params=params, timeout=self._timeout)
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            if resp is None:
+                raise EToroClientError("GET user lookup by CID failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
         except requests.RequestException as exc:

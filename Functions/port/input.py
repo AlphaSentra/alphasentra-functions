@@ -2,6 +2,8 @@
 Portfolio input handler - form display and request processing.
 """
 
+import json
+import time
 from flask import request, jsonify, make_response
 import logging
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _REPORT_TTL
@@ -79,8 +81,9 @@ def handle_portfolio_input():
         cached_html = _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker)
         if cached_html is not None:
             policy = _get_cookie_policy()
+            payload = json.dumps({'u': etoro_username, 'ts': time.time()})
             resp = make_response(cached_html)
-            resp.set_cookie('etoro_authuser', etoro_username, max_age=86400,
+            resp.set_cookie('etoro_authuser', payload, max_age=86400,
                             httponly=False, samesite=policy['samesite'], secure=policy['secure'], path='/')
             return resp
 
@@ -90,8 +93,9 @@ def handle_portfolio_input():
                                        etoro_cid=etoro_cid)
         cache_set(cache_key, html, ext=".html")
         policy = _get_cookie_policy()
+        payload = json.dumps({'u': etoro_username, 'ts': time.time()})
         resp = make_response(html)
-        resp.set_cookie('etoro_authuser', etoro_username, max_age=86400,
+        resp.set_cookie('etoro_authuser', payload, max_age=86400,
                         httponly=False, samesite=policy['samesite'], secure=policy['secure'], path='/')
         return resp
 

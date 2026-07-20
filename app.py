@@ -1,4 +1,6 @@
+import json
 import os
+import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
@@ -7,6 +9,28 @@ from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS,
 from Functions.port.cache import exists as cache_exists, get as cache_get, _REPORT_TTL, _ETORO_PI_TTL
 
 app = Flask(__name__)
+
+_COOKIE_MAX_AGE = 86400
+
+def _parse_auth_cookie(value):
+    if not value:
+        return '', False
+    value = value.strip()
+    if not value:
+        return '', False
+    try:
+        data = json.loads(value)
+    except (json.JSONDecodeError, AttributeError, TypeError):
+        return '', False
+    if not isinstance(data, dict):
+        return '', False
+    username = data.get('u', '').strip()
+    ts = data.get('ts', 0)
+    if not username:
+        return '', False
+    if time.time() - ts > _COOKIE_MAX_AGE:
+        return '', False
+    return username, True
 
 @app.after_request
 def _apply_cors_and_auth(response):
@@ -39,8 +63,9 @@ def _require_etoro_auth():
     if request.method == 'OPTIONS':
         return make_response('', 204)
 
-    username = request.cookies.get('etoro_authuser', '').strip()
-    if not username:
+    raw_cookie = request.cookies.get('etoro_authuser', '')
+    username, cookie_valid = _parse_auth_cookie(raw_cookie)
+    if not cookie_valid or not username:
         if request.path == '/etopi' and request.method == 'POST':
             etoro_username = request.form.get('etoro_username', '').strip()
             etoro_cid = request.form.get('etoro_cid', '').strip()
@@ -126,10 +151,11 @@ def auth():
         return jsonify({'ok': False, 'error': 'etoro_authuser is required'}), 400
 
     policy = _get_cookie_policy()
+    payload = json.dumps({'u': username, 'ts': time.time()})
     resp = jsonify({'ok': True})
     resp.set_cookie(
         'etoro_authuser',
-        username,
+        payload,
         max_age=86400,
         httponly=False,
         samesite=policy['samesite'],

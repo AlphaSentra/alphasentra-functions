@@ -927,18 +927,90 @@ def get_portfolio_selection_html() -> str:
         my_trend_svg_val = _FALLBACK_TREND
 
     if my_portfolio_item:
+        cid = str(my_portfolio_item.get("userName", my_portfolio_item.get("cid", my_portfolio_item.get("realCID", my_portfolio_item.get("gcid", "")))))
+        if my_portfolio_from_rankings and cid:
+            week_map[cid] = my_portfolio_item.get("gain")
+
+        my_avatar_url = my_portfolio_item.get("avatarUrl")
+        if not my_avatar_url:
+            my_avatar_url = _get_user_avatar(username_from_cookie)
+        my_avatar_html = _avatar_html(my_avatar_url, username_display)
+
+        my_country_val = my_portfolio_item.get("country")
+        if my_country_val is not None:
+            mapped = _ETORO_COUNTRY_MAP.get(str(my_country_val))
+            if mapped:
+                my_country_val = mapped["isoCode"]
+            else:
+                my_country_val = str(my_country_val)
+        if my_country_val is not None:
+            my_country_val = str(my_country_val)
+            _prefetch_country_data([{"country": my_country_val}])
+            my_country_html_val = _country_html(my_country_val)
+
+        my_aum_value = my_portfolio_item.get("aumValue")
+        my_aum_tier_desc = my_portfolio_item.get("aumTierDesc")
+        if my_aum_tier_desc is not None or my_aum_value is not None:
+            my_aum_display = my_aum_tier_desc if my_aum_tier_desc else _safe_aum(my_aum_value)
+
+        my_copiers = my_portfolio_item.get("copiers")
+        my_base_line_copiers = my_portfolio_item.get("baseLineCopiers")
+        if my_copiers is not None or my_base_line_copiers is not None:
+            my_copiers_value = _safe_int(my_copiers)
+            my_copiers_change_val = _copiers_change(my_copiers, my_base_line_copiers)
+
+        my_week_gain = week_map.get(cid)
+        my_month_gain = month_map.get(cid)
+        my_year_gain = year_map.get(cid)
+
+        if my_week_gain is None and username_from_cookie != "My Portfolio":
+            my_week_gain = _get_period_gain(username_from_cookie, "1m")
+        if my_month_gain is None and username_from_cookie != "My Portfolio":
+            my_month_gain = _get_period_gain(username_from_cookie, "3m")
+        if my_year_gain is None and username_from_cookie != "My Portfolio":
+            my_year_gain = _get_period_gain(username_from_cookie, "1y")
+
+        if my_week_gain is not None or my_month_gain is not None or my_year_gain is not None:
+            my_week_gain_html = _safe_gain(my_week_gain)
+            my_month_gain_html = _safe_gain(my_month_gain)
+            my_year_gain_html = _safe_gain(my_year_gain)
+
+            my_trend_points = _get_trend_data(username_from_cookie)
+            if my_trend_points:
+                my_trend_svg_val = _trend_svg_from_points(my_trend_points)
+            else:
+                my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
+
+    if not my_portfolio_item or my_portfolio_invalid:
         my_portfolio_html_row = _render_row(
-            my_portfolio_item if my_portfolio_item else {
+            {
                 "userName": username_from_cookie,
                 "fullName": username_display,
                 "avatarUrl": None,
                 "subType": None,
-                "country": None,
-                "copiers": 32800,
-                "aumValue": 14500000.0,
-                "aumTierDesc": None,
-                "baseLineCopiers": 31850,
+                "country": my_portfolio_item.get("country") if my_portfolio_item else None,
+                "copiers": my_portfolio_item.get("copiers") if my_portfolio_item else 32800,
+                "aumValue": my_portfolio_item.get("aumValue") if my_portfolio_item else 14500000.0,
+                "aumTierDesc": my_portfolio_item.get("aumTierDesc") if my_portfolio_item else None,
+                "baseLineCopiers": my_portfolio_item.get("baseLineCopiers") if my_portfolio_item else 31850,
             },
+            week_map,
+            month_map,
+            year_map,
+            classes=_MP_CLASSES,
+            badge_text="CURRENT",
+            country_html_override=my_country_html_val,
+            aum_override=my_aum_display,
+            copiers_value_override=my_copiers_value,
+            copiers_change_override=my_copiers_change_val,
+            week_gain_html_override=my_week_gain_html,
+            month_gain_html_override=my_month_gain_html,
+            year_gain_html_override=my_year_gain_html,
+            error_message=my_portfolio_error if my_portfolio_invalid else None,
+        )
+    else:
+        my_portfolio_html_row = _render_row(
+            my_portfolio_item,
             week_map,
             month_map,
             year_map,

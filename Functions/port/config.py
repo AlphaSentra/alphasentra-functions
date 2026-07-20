@@ -11,7 +11,7 @@ PARENT_APP_ALLOWED_ORIGINS = [
     "http://127.0.0.1:8888",
 ]
 LOGIN_REDIRECT_URL = "https://app.alphasentra.com/auth"
-REPORT_LOGO_SRC = "https://cdn.brandfetch.io/idCL5_YhIb/w/400/h/400/theme/dark/icon.jpeg?c=1bxid64Mup7aczewSAYMX&t=1694087448850"
+REPORT_LOGO_SRC = "https://media.licdn.com/dms/image/v2/D4E0BAQFj-vxTtbFnIg/company-logo_200_200/B4EZ89D__DIwAE-/0/1783435886807/etoro_logo?e=1785974400&v=beta&t=dYQqN0I8QuoBODHrfTDERJW4W1IOZM_HHBPhdp-osRg"
 ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 
 # Optimisation default targets

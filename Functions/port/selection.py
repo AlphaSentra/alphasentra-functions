@@ -35,6 +35,7 @@ _USER_INFO_URL = "https://public-api.etoro.com/api/v1/user-info/people"
 _AVATAR_CACHE: Dict[str, Optional[str]] = {}
 _TREND_CACHE: Dict[str, List[float]] = {}
 _COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
+_PERIOD_GAIN_CACHE: Dict[str, Dict[str, Optional[float]]] = {}
 _COUNTRIES_API_BASE = "https://countries.dev"
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
 _SEARCH_INDEX_CACHE: Optional[List[Dict[str, Any]]] = None
@@ -158,6 +159,64 @@ def _get_trend_data(username: str) -> List[float]:
     return []
 
 
+def _get_period_gain(username: str, period: str) -> Optional[float]:
+    if not username:
+        return None
+    cache_key = f"{username}:{period}"
+    if cache_key in _PERIOD_GAIN_CACHE:
+        return _PERIOD_GAIN_CACHE[cache_key]
+
+    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
+    resp = _session_get_with_retry(
+        _get_session,
+        url,
+        params={"type": "Period", "period": period},
+        timeout=20,
+    )
+    result: Optional[float] = None
+    if resp is not None and resp.status_code == 200:
+        data = resp.json()
+        if isinstance(data, dict):
+            result = data.get("gain") or data.get("gainPercent")
+        elif isinstance(data, list) and data:
+            entry = data[0]
+            result = entry.get("gain") or entry.get("gainPercent")
+    elif resp is not None and resp.status_code == 404:
+        result = _get_period_gain_from_daily(username, period)
+
+    _PERIOD_GAIN_CACHE[cache_key] = result
+    return result
+
+
+def _get_period_gain_from_daily(username: str, period: str) -> Optional[float]:
+    period_days = {"1m": 30, "3m": 90, "1y": 365}
+    days = period_days.get(period, 30)
+    min_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
+    max_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
+    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
+    resp = _session_get_with_retry(
+        _get_session,
+        url,
+        params={"type": "Daily", "minDate": min_date, "maxDate": max_date},
+        timeout=20,
+    )
+    if resp is None or resp.status_code != 200:
+        return None
+
+    data = resp.json()
+    if not isinstance(data, list):
+        return None
+
+    total = 0.0
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        gain = entry.get("gain")
+        if gain is not None:
+            total += float(gain)
+    return total if total != 0 else None
+
+
 def _trend_svg_from_points(points: List[float], width: int = 100, height: int = 28) -> str:
     if not points:
         return _trend_svg(positive=True)
@@ -197,7 +256,7 @@ def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float]
     return _trend_svg(positive=latest >= 0)
 
 
-def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1) -> Dict[str, Any]:
+def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1, search_text: Optional[str] = None) -> Dict[str, Any]:
     max_retries = 6
     used_keys = set()
     last_error = None
@@ -215,6 +274,8 @@ def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain
         }
         if page_size is not None:
             params["pageSize"] = page_size
+        if search_text:
+            params["searchText"] = search_text
 
         try:
             resp = session.get(_RANKINGS_URL, params=params, timeout=30)
@@ -316,19 +377,20 @@ def _trend_svg(positive: bool = True) -> str:
     )
 
 
-def _avatar_html(avatar_url: Optional[str], name: str) -> str:
+def _avatar_html(avatar_url: Optional[str], name: str, avatar_class: str = "investor-avatar") -> str:
     if avatar_url:
         return (
-            f"<img class=\"investor-avatar\" src=\"{avatar_url}\" alt=\"avatar\" "
+            f"<img class=\"{avatar_class}\" src=\"{avatar_url}\" alt=\"avatar\" "
             f"onerror=\"this.style.display='none'\">"
         )
     initials = "".join(part[0] for part in name.split()[:2]).upper()
-    return f"<div class=\"investor-avatar\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex-shrink:0;\">{initials}</div>"
+    return f"<div class=\"{avatar_class}\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex-shrink:0;\">{initials}</div>"
 
 
 def _get_country_info(code: str) -> Optional[Dict[str, str]]:
     if not code:
         return None
+    code = str(code)
     if code in _COUNTRY_INFO_CACHE:
         return _COUNTRY_INFO_CACHE[code]
 
@@ -379,6 +441,11 @@ def _prefetch_country_data(items: List[Dict[str, Any]]) -> None:
 def _country_html(country: Optional[str]) -> str:
     if not country:
         return "<span class=\"country-badge\">N/A</span>"
+    country = str(country)
+
+    mapped = _ETORO_COUNTRY_MAP.get(country)
+    if mapped:
+        country = mapped["isoCode"]
 
     info = _get_country_info(country)
     if info:
@@ -390,10 +457,84 @@ def _country_html(country: Optional[str]) -> str:
     return f"<span class=\"country-badge\">{country.upper()}</span>"
 
 
-def _render_row(item: Dict[str, Any], week_map: Dict[str, float], month_map: Dict[str, float], year_map: Dict[str, float]) -> str:
-    cid = str(item.get("userName", item.get("cid", item.get("realCID", item.get("gcid", "")))))
+_MP_CLASSES = {
+    "tr": "my-portfolio-row",
+    "avatar": "my-portfolio-avatar",
+    "investor": "my-portfolio-investor",
+    "info": "my-portfolio-info",
+    "name_row": "my-portfolio-name-row",
+    "name": "my-portfolio-name",
+    "badge": "my-portfolio-badge",
+    "username": "my-portfolio-username",
+    "country": "my-portfolio-country",
+    "aum": "my-portfolio-aum",
+    "copiers_value": "my-portfolio-copiers-value",
+    "copiers_change": "my-portfolio-copiers-change",
+    "week_perf": "my-portfolio-performance",
+    "month_perf": "my-portfolio-performance",
+    "year_perf": "my-portfolio-performance",
+    "trend": "my-portfolio-trend",
+}
+
+_PI_CLASSES = {
+    "tr": "",
+    "avatar": "investor-avatar",
+    "investor": "investor-info",
+    "info": "investor-details",
+    "name_row": "investor-name-row",
+    "name": "investor-name",
+    "badge": "badge",
+    "username": "investor-username",
+    "country": "country-badge",
+    "aum": "aum-value",
+    "copiers_value": "copiers-value",
+    "copiers_change": "copiers-change",
+    "week_perf": "",
+    "month_perf": "",
+    "year_perf": "",
+    "trend": "trend-chart",
+}
+
+
+def _render_row(
+    item: Dict[str, Any],
+    week_map: Dict[str, float],
+    month_map: Dict[str, float],
+    year_map: Dict[str, float],
+    classes: Optional[Dict[str, str]] = None,
+    badge_text: Optional[str] = None,
+    country_html_override: Optional[str] = None,
+    aum_override: Optional[str] = None,
+    copiers_value_override: Optional[str] = None,
+    copiers_change_override: Optional[str] = None,
+    week_gain_html_override: Optional[str] = None,
+    month_gain_html_override: Optional[str] = None,
+    year_gain_html_override: Optional[str] = None,
+    error_message: Optional[str] = None,
+) -> str:
+    cls = classes if classes else _PI_CLASSES
+    cid = str(item.get("userName", item.get("username", item.get("cid", item.get("realCID", item.get("gcid", ""))))))
     username = item.get("userName", item.get("username", ""))
     full_name = item.get("fullName") or item.get("displayName") or username
+
+    if error_message:
+        display_name = full_name or item.get("userName", username)
+        return (
+            f"<tr class=\"{cls['tr']}\">"
+            f"<td colspan=\"8\">"
+            f"<div class=\"my-portfolio-investor\">"
+            f"{_avatar_html(None, display_name, cls['avatar'])}"
+            f"<div class=\"{cls['info']}\">"
+            f"<div class=\"{cls['name_row']}\">"
+            f"<span class=\"{cls['name']}\">{display_name}</span>"
+            f"<span class=\"my-portfolio-badge\" style=\"color:{_SEMANTIC_NEGATIVE};border-color:rgba(239,68,68,0.3);background-color:rgba(239,68,68,0.15);\">NOT FOUND</span>"
+            f"</div>"
+            f"<span class=\"{cls['username']}\" style=\"color:{_SEMANTIC_NEGATIVE};\">{error_message}</span>"
+            f"</div>"
+            f"</div>"
+            f"</td>"
+            f"</tr>"
+        )
     avatar_url = item.get("avatarUrl")
     if not avatar_url:
         avatar_url = _get_user_avatar(username)
@@ -424,33 +565,46 @@ def _render_row(item: Dict[str, Any], week_map: Dict[str, float], month_map: Dic
     else:
         trend_svg = _trend_svg_for_gains(week_gain, month_gain, year_gain)
 
+    if badge_text:
+        badge_html = f"<span class=\"{cls['badge']}\">{badge_text}</span>"
+    else:
+        badge_html = _badge_for_subtype(subtype)
+
     search_text = (
         f"{full_name} @{username} {country or ''}".lower()
     )
 
+    country_td = country_html_override if country_html_override is not None else _country_html(country)
+    aum_td = aum_override if aum_override is not None else _safe_aum(aum_display)
+    copiers_val_td = copiers_value_override if copiers_value_override is not None else _safe_int(copiers)
+    copiers_chg_td = copiers_change_override if copiers_change_override is not None else _copiers_change(copiers, base_line_copiers)
+    week_td = week_gain_html_override if week_gain_html_override is not None else _safe_gain(week_gain)
+    month_td = month_gain_html_override if month_gain_html_override is not None else _safe_gain(month_gain)
+    year_td = year_gain_html_override if year_gain_html_override is not None else _safe_gain(year_gain)
+
     return (
-        f"<tr data-search=\"{search_text}\">"
+        f"<tr class=\"{cls['tr']}\" data-search=\"{search_text}\">"
         f"<td>"
-        f"<div class=\"investor-info\">"
-        f"{_avatar_html(avatar_url, full_name)}"
-        f"<div class=\"investor-details\">"
-        f"<div class=\"investor-name-row\">"
-        f"<span class=\"investor-name\">{full_name}</span>"
-        f"{_badge_for_subtype(subtype)}"
+        f"<div class=\"{cls['investor']}\">"
+        f"{_avatar_html(avatar_url, full_name, cls['avatar'])}"
+        f"<div class=\"{cls['info']}\">"
+        f"<div class=\"{cls['name_row']}\">"
+        f"<span class=\"{cls['name']}\">{full_name}</span>"
+        f"{badge_html}"
         f"</div>"
-        f"<span class=\"investor-username\">@{username}</span>"
+        f"<span class=\"{cls['username']}\">@{username}</span>"
         f"</div>"
         f"</div>"
         f"</td>"
-        f"<td>{_country_html(country)}</td>"
-        f"<td><span class=\"aum-value\">{_safe_aum(aum_display)}</span></td>"
+        f"<td>{country_td}</td>"
+        f"<td><span class=\"{cls['aum']}\">{aum_td}</span></td>"
         f"<td>"
-        f"<div class=\"copiers-value\">{_safe_int(copiers)}</div>"
-        f"<div class=\"copiers-change\">{_copiers_change(copiers, base_line_copiers)}</div>"
+        f"<div class=\"{cls['copiers_value']}\">{copiers_val_td}</div>"
+        f"<div class=\"{cls['copiers_change']}\">{copiers_chg_td}</div>"
         f"</td>"
-        f"<td>{_safe_gain(week_gain)}</td>"
-        f"<td>{_safe_gain(month_gain)}</td>"
-        f"<td>{_safe_gain(year_gain)}</td>"
+        f"<td class=\"{cls['week_perf']}\">{week_td}</td>"
+        f"<td class=\"{cls['month_perf']}\">{month_td}</td>"
+        f"<td class=\"{cls['year_perf']}\">{year_td}</td>"
         f"<td>{trend_svg}</td>"
         f"</tr>"
     )
@@ -504,6 +658,56 @@ def _fetch_rankings() -> List[Dict[str, Any]]:
         _prefetch_country_data(merged)
 
     return merged, week_map, month_map, year_map
+
+
+def _search_user_full(username: str) -> Optional[Dict[str, Any]]:
+    if not username or username == "My Portfolio":
+        return None
+
+    max_retries = 6
+    used_keys = set()
+    for attempt in range(max_retries):
+        session = _get_session()
+        if session.headers.get("x-user-key") in used_keys:
+            continue
+        used_keys.add(session.headers.get("x-user-key", ""))
+
+        params: Dict[str, Any] = {"period": "CurrMonth"}
+        try:
+            resp = session.get(
+                f"https://public-api.etoro.com/api/v2/portfolios/{username}/rankings",
+                params=params,
+                timeout=30,
+            )
+            if resp.status_code == 200:
+                data = resp.json()
+                item = data.get("data")
+                if item and isinstance(item, dict):
+                    if str(item.get("userName", item.get("username", ""))).lower() == username.lower():
+                        if not item.get("country") and not item.get("countryId"):
+                            try:
+                                info_resp = _session_get_with_retry(
+                                    _get_session,
+                                    _USER_INFO_URL,
+                                    params={"usernames": username},
+                                    timeout=20,
+                                )
+                                if info_resp and info_resp.status_code == 200:
+                                    info_data = info_resp.json()
+                                    users = info_data.get("users", [])
+                                    if users:
+                                        country_val = users[0].get("country")
+                                        if country_val is not None:
+                                            item["country"] = country_val
+                            except Exception:
+                                pass
+                        return item
+                return None
+        except requests.RequestException:
+            if attempt == max_retries - 1:
+                return None
+            continue
+    return None
 
 
 def search_investors_api(query: str) -> Dict[str, Any]:
@@ -654,24 +858,44 @@ def get_portfolio_selection_html() -> str:
     if merged:
         _prefetch_country_data(merged)
 
-    # Default values for "My Portfolio"
+    _FALLBACK_AUM = "$14.5M"
+    _FALLBACK_COPIERS = "32,800"
+    _FALLBACK_COPIERS_CHANGE = "&#x25B2; 3.1% 1M"
+    _FALLBACK_WEEK = "<span class=\"perf-pill perf-pill-pos\">▲ +0.42%</span>"
+    _FALLBACK_MONTH = "<span class=\"perf-pill perf-pill-pos\">▲ +1.85%</span>"
+    _FALLBACK_YEAR = "<span class=\"perf-pill perf-pill-pos\">▲ +14.20%</span>"
+    _FALLBACK_TREND = f"<svg class=\"my-portfolio-trend\" viewBox=\"0 0 100 28\" preserveAspectRatio=\"none\"><polyline fill=\"none\" stroke=\"{_SEMANTIC_POSITIVE}\" stroke-width=\"1.5\" points=\"0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4\"/></svg>"
+
+    # Default values for "My Portfolio" — start as N/A; only replaced by placeholders
+    # if the API call completely fails (network error / non-200 / empty users).
     my_avatar_html = f"<div class=\"my-portfolio-avatar\">&#x1F4B0;</div>"
-    my_country_html_val = f"<span class=\"my-portfolio-country\"><span class=\"my-portfolio-country-flag\">&#x1F1FA&#x1F1F8;</span>US</span>"
-    my_aum_display = "$14.5M"
-    my_copiers_value = "32,800"
-    my_copiers_change_val = "&#x25B2; 3.1% 1M"
-    my_week_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +0.42%</span>"
-    my_month_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +1.85%</span>"
-    my_year_gain_html = "<span class=\"perf-pill perf-pill-pos\">▲ +14.20%</span>"
-    my_trend_svg_val = f"<svg class=\"my-portfolio-trend\" viewBox=\"0 0 100 28\" preserveAspectRatio=\"none\"><polyline fill=\"none\" stroke=\"{_SEMANTIC_POSITIVE}\" stroke-width=\"1.5\" points=\"0,20 12,18 24,19 36,16 48,15 60,14 72,10 84,8 100,4\"/></svg>"
+    my_country_html_val = "<span class=\"my-portfolio-country\">N/A</span>"
+    my_aum_display = "N/A"
+    my_copiers_value = "N/A"
+    my_copiers_change_val = ""
+    my_week_gain_html = ""
+    my_month_gain_html = ""
+    my_year_gain_html = ""
+    my_trend_svg_val = _trend_svg(positive=True)
 
     my_portfolio_item: Optional[Dict[str, Any]] = None
+    my_portfolio_invalid = False
+    my_portfolio_error = ""
+    my_portfolio_api_failed = False
+    my_portfolio_from_rankings = False
+
     for item in merged:
         if str(item.get("userName", item.get("username", ""))).lower() == username_from_cookie.lower():
             my_portfolio_item = item
             break
 
-    if my_portfolio_item is None and username_from_cookie != "My Portfolio":
+    if not my_portfolio_item and username_from_cookie != "My Portfolio":
+        my_portfolio_item = _search_user_full(username_from_cookie)
+        if my_portfolio_item:
+            my_portfolio_from_rankings = True
+            _prefetch_country_data([my_portfolio_item])
+
+    if not my_portfolio_item and username_from_cookie != "My Portfolio":
         try:
             resp = _session_get_with_retry(
                 _get_session,
@@ -685,86 +909,50 @@ def get_portfolio_selection_html() -> str:
                 if users:
                     my_portfolio_item = users[0]
                     _prefetch_country_data([my_portfolio_item])
-        except Exception:
-            pass # Safely fall back to default placeholder values
-    
-    if my_portfolio_item:
-        cid = str(my_portfolio_item.get("userName", my_portfolio_item.get("cid", my_portfolio_item.get("realCID", my_portfolio_item.get("gcid", "")))))
-        
-        my_avatar_url = my_portfolio_item.get("avatarUrl")
-        if not my_avatar_url:
-            my_avatar_url = _get_user_avatar(username_from_cookie)
-        my_avatar_html = _avatar_html(my_avatar_url, username_display)
-
-
-        my_country_val = my_portfolio_item.get("country")
-        if my_country_val is not None:
-            mapped = _ETORO_COUNTRY_MAP.get(str(my_country_val))
-            if mapped:
-                my_country_val = mapped["isoNumeric"]
+                else:
+                    my_portfolio_invalid = True
+                    my_portfolio_error = f"@{username_from_cookie} portfolio does not exist"
             else:
-                my_country_val = str(my_country_val)
-        
-        if my_country_val is not None:
-            my_country_val = str(my_country_val)
-        _prefetch_country_data([{"country": my_country_val}])
-        my_country_html_val = _country_html(my_country_val)
+                my_portfolio_api_failed = True
+        except Exception:
+            my_portfolio_api_failed = True
 
+    if my_portfolio_api_failed and username_from_cookie != "My Portfolio":
+        my_aum_display = _FALLBACK_AUM
+        my_copiers_value = _FALLBACK_COPIERS
+        my_copiers_change_val = _FALLBACK_COPIERS_CHANGE
+        my_week_gain_html = _FALLBACK_WEEK
+        my_month_gain_html = _FALLBACK_MONTH
+        my_year_gain_html = _FALLBACK_YEAR
+        my_trend_svg_val = _FALLBACK_TREND
 
-        my_aum_value = my_portfolio_item.get("aumValue")
-        my_aum_tier_desc = my_portfolio_item.get("aumTierDesc")
-        my_aum_display = my_aum_tier_desc if my_aum_tier_desc else _safe_aum(my_aum_value)
-
-
-        my_copiers = my_portfolio_item.get("copiers")
-        my_base_line_copiers = my_portfolio_item.get("baseLineCopiers")
-        my_copiers_value = _safe_int(my_copiers)
-        my_copiers_change_val = _copiers_change(my_copiers, my_base_line_copiers)
-
-
-        my_week_gain = week_map.get(cid)
-        my_month_gain = month_map.get(cid)
-        my_year_gain = year_map.get(cid)
-        
-        my_week_gain_html = _safe_gain(my_week_gain)
-        my_month_gain_html = _safe_gain(my_month_gain)
-        my_year_gain_html = _safe_gain(my_year_gain)
-
-        
-        my_trend_points = _get_trend_data(username_from_cookie)
-        if my_trend_points:
-            my_trend_svg_val = _trend_svg_from_points(my_trend_points)
-        else:
-            my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
-
-    my_portfolio_html_row = f"""
-                            <tr class="my-portfolio-row">
-                                <td>
-                                    <div class="my-portfolio-investor">
-                                        {my_avatar_html}
-                                        <div class="my-portfolio-info">
-                                            <div class="my-portfolio-name-row">
-                                                <span class="my-portfolio-name">{username_display}</span>
-                                                <span class="my-portfolio-badge">CURRENT</span>
-                                            </div>
-                                            <span class="my-portfolio-username">{username_at_display}</span>
-                                        </div>
-                                    </div>
-                                </td>
-                                <td>{my_country_html_val}</td>
-                                <td><span class="my-portfolio-aum">{my_aum_display}</span></td>
-                                <td>
-                                    <div>
-                                        <div class="my-portfolio-copiers-value">{my_copiers_value}</div>
-                                        <div class="my-portfolio-copiers-change">{my_copiers_change_val}</div>
-                                    </div>
-                                </td>
-                                <td>{my_week_gain_html}</td>
-                                <td>{my_month_gain_html}</td>
-                                <td>{my_year_gain_html}</td>
-                                <td>{my_trend_svg_val}</td>
-                            </tr>
-    """
+    if my_portfolio_item:
+        my_portfolio_html_row = _render_row(
+            my_portfolio_item if my_portfolio_item else {
+                "userName": username_from_cookie,
+                "fullName": username_display,
+                "avatarUrl": None,
+                "subType": None,
+                "country": None,
+                "copiers": 32800,
+                "aumValue": 14500000.0,
+                "aumTierDesc": None,
+                "baseLineCopiers": 31850,
+            },
+            week_map,
+            month_map,
+            year_map,
+            classes=_MP_CLASSES,
+            badge_text="CURRENT",
+            country_html_override=my_country_html_val,
+            aum_override=my_aum_display,
+            copiers_value_override=my_copiers_value,
+            copiers_change_override=my_copiers_change_val,
+            week_gain_html_override=my_week_gain_html,
+            month_gain_html_override=my_month_gain_html,
+            year_gain_html_override=my_year_gain_html,
+            error_message=my_portfolio_error if my_portfolio_invalid else None,
+        )
 
     rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
 

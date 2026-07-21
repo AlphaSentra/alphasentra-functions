@@ -840,16 +840,23 @@ def get_portfolio_selection_html() -> str:
     else:
         username_at_display = f"@{username_from_cookie}"
 
-    cache_key = ("portfolio_selection", username_from_cookie)
-    cached_html = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
-    if cached_html is not None:
-        return cached_html
+    # Try to get cached my_portfolio row for this user
+    my_portfolio_cache_key = ("portfolio_selection_my_portfolio", username_from_cookie)
+    my_portfolio_html_row = cache_get(my_portfolio_cache_key, _ETORO_PI_TTL, ext=".html")
 
-    try:
-        merged, week_map, month_map, year_map = _fetch_rankings()
-    except Exception as exc:
-        print(f"Failed to fetch eToro rankings: {exc}")
-        merged, week_map, month_map, year_map = [], {}, {}, {}
+    # Fetch rankings data (cache the raw result to avoid repeated API calls)
+    rankings_cache_key = ("portfolio_selection_rankings",)
+    cached_rankings = cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl")
+    
+    if cached_rankings is not None:
+        merged, week_map, month_map, year_map = cached_rankings
+    else:
+        try:
+            merged, week_map, month_map, year_map = _fetch_rankings()
+            cache_set(rankings_cache_key, (merged, week_map, month_map, year_map), ext=".pkl")
+        except Exception as exc:
+            print(f"Failed to fetch eToro rankings: {exc}")
+            merged, week_map, month_map, year_map = [], {}, {}, {}
 
     if not merged:
         merged = _FALLBACK_INVESTORS
@@ -859,6 +866,13 @@ def get_portfolio_selection_html() -> str:
 
     if merged:
         _prefetch_country_data(merged)
+
+    # Cache the common rows HTML (shared across all users)
+    common_rows_cache_key = ("portfolio_selection_common_rows",)
+    rows_html = cache_get(common_rows_cache_key, _ETORO_PI_TTL, ext=".html")
+    if rows_html is None:
+        rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
+        cache_set(common_rows_cache_key, rows_html, ext=".html")
 
     _FALLBACK_AUM = "$14.5M"
     _FALLBACK_COPIERS = "32,800"
@@ -1036,8 +1050,7 @@ def get_portfolio_selection_html() -> str:
             include_badge=False,
         )
 
-    rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
-
+    cache_set(my_portfolio_cache_key, my_portfolio_html_row, ext=".html")
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -1867,5 +1880,4 @@ def get_portfolio_selection_html() -> str:
 </html>
 """
 
-    cache_set(cache_key, html, ext=".html")
     return html

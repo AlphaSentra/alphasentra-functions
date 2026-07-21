@@ -943,6 +943,14 @@ def get_portfolio_selection_html() -> str:
                 my_country_val = mapped["isoCode"]
             else:
                 my_country_val = str(my_country_val)
+        else:
+            country_id = my_portfolio_item.get("countryId")
+            if country_id is not None:
+                mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+                if mapped:
+                    my_country_val = mapped["isoCode"]
+                else:
+                    my_country_val = str(country_id)
         if my_country_val is not None:
             my_country_val = str(my_country_val)
             _prefetch_country_data([{"country": my_country_val}])
@@ -1819,11 +1827,11 @@ def get_portfolio_selection_html() -> str:
                 const row = e.target.closest('tr');
                 if (!row) return;
 
-                const nameCell = row.querySelector('.investor-name');
+                const nameCell = row.querySelector('.investor-name, .my-portfolio-name');
                 if (!nameCell) return;
 
                 const investorName = nameCell.textContent.trim();
-                const usernameCell = row.querySelector('.investor-username');
+                const usernameCell = row.querySelector('.investor-username, .my-portfolio-username');
                 const username = usernameCell ? usernameCell.textContent.trim() : '';
 
                 if (investorName) {{

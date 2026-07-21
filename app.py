@@ -55,7 +55,7 @@ def _require_etoro_auth():
         '/auth',
         '/etopi/check_cache',
         '/port/search_investors',
-        '/test_iframe_auth.html',
+        '/auth.htm',
     )
     if request.path in public_paths or request.path.startswith('/static'):
         return
@@ -179,9 +179,9 @@ def port_search_investors():
     return jsonify(search_investors_api(query))
 
 
-@app.route('/test_iframe_auth.html')
+@app.route('/auth.htm')
 def test_iframe_auth_page():
-    with open(os.path.join(os.path.dirname(__file__), 'test_iframe_auth.html'), 'r') as f:
+    with open(os.path.join(os.path.dirname(__file__), 'auth.htm'), 'r') as f:
         return f.read()
 
 if __name__ == '__main__':

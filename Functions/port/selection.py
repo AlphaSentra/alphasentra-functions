@@ -464,7 +464,6 @@ _MP_CLASSES = {
     "info": "my-portfolio-info",
     "name_row": "my-portfolio-name-row",
     "name": "my-portfolio-name",
-    "badge": "my-portfolio-badge",
     "username": "my-portfolio-username",
     "country": "my-portfolio-country",
     "aum": "my-portfolio-aum",
@@ -511,6 +510,7 @@ def _render_row(
     month_gain_html_override: Optional[str] = None,
     year_gain_html_override: Optional[str] = None,
     error_message: Optional[str] = None,
+    include_badge: bool = True,
 ) -> str:
     cls = classes if classes else _PI_CLASSES
     cid = str(item.get("userName", item.get("username", item.get("cid", item.get("realCID", item.get("gcid", ""))))))
@@ -527,7 +527,6 @@ def _render_row(
             f"<div class=\"{cls['info']}\">"
             f"<div class=\"{cls['name_row']}\">"
             f"<span class=\"{cls['name']}\">{display_name}</span>"
-            f"<span class=\"my-portfolio-badge\" style=\"color:{_SEMANTIC_NEGATIVE};border-color:rgba(239,68,68,0.3);background-color:rgba(239,68,68,0.15);\">NOT FOUND</span>"
             f"</div>"
             f"<span class=\"{cls['username']}\" style=\"color:{_SEMANTIC_NEGATIVE};\">{error_message}</span>"
             f"</div>"
@@ -565,10 +564,13 @@ def _render_row(
     else:
         trend_svg = _trend_svg_for_gains(week_gain, month_gain, year_gain)
 
-    if badge_text:
-        badge_html = f"<span class=\"{cls['badge']}\">{badge_text}</span>"
+    if include_badge:
+        if badge_text:
+            badge_html = f"<span class=\"{cls['badge']}\">{badge_text}</span>"
+        else:
+            badge_html = _badge_for_subtype(subtype)
     else:
-        badge_html = _badge_for_subtype(subtype)
+        badge_html = ""
 
     search_text = (
         f"{full_name} @{username} {country or ''}".lower()
@@ -1014,6 +1016,7 @@ def get_portfolio_selection_html() -> str:
             month_gain_html_override=my_month_gain_html,
             year_gain_html_override=my_year_gain_html,
             error_message=my_portfolio_error if my_portfolio_invalid else None,
+            include_badge=False,
         )
     else:
         my_portfolio_html_row = _render_row(
@@ -1030,6 +1033,7 @@ def get_portfolio_selection_html() -> str:
             month_gain_html_override=my_month_gain_html,
             year_gain_html_override=my_year_gain_html,
             error_message=my_portfolio_error if my_portfolio_invalid else None,
+            include_badge=False,
         )
 
     rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
@@ -1259,22 +1263,6 @@ def get_portfolio_selection_html() -> str:
         .my-portfolio-username {{
             color: {_TEXT_MUTED};
             font-size: 12px;
-        }}
-
-        .my-portfolio-badge {{
-            display: inline-flex;
-            align-items: center;
-            padding: 1px 6px;
-            border-radius: 3px;
-            font-size: 10px;
-            font-weight: bold;
-            text-transform: uppercase;
-            letter-spacing: 0.03em;
-            line-height: 1.4;
-            background-color: rgba(64, 224, 208, 0.15);
-            color: {_BRAND_PRIMARY};
-            border: 1px solid rgba(64, 224, 208, 0.3);
-            flex-shrink: 0;
         }}
 
         .my-portfolio-country {{
@@ -1668,7 +1656,7 @@ def get_portfolio_selection_html() -> str:
                                 <th>1M Trend</th>
                             </tr>
                         </thead>
-                        <tbody>
+                        <tbody id="my-portfolio-table-body">
 {my_portfolio_html_row}
                         </tbody>
                     </table>
@@ -1823,7 +1811,9 @@ def get_portfolio_selection_html() -> str:
             }});
 
             const tableBody = document.getElementById('investor-table-body');
-            tableBody.addEventListener('click', function(e) {{
+            const myPortfolioTableBody = document.getElementById('my-portfolio-table-body');
+
+            function handleTableRowClick(e) {{
                 const row = e.target.closest('tr');
                 if (!row) return;
 
@@ -1837,7 +1827,14 @@ def get_portfolio_selection_html() -> str:
                 if (investorName) {{
                     window.location.href = `/etopi?etoro_username=${{encodeURIComponent(username.replace('@', ''))}}`;
                 }}
-            }});
+            }}
+
+            if (tableBody) {{
+                tableBody.addEventListener('click', handleTableRowClick);
+            }}
+            if (myPortfolioTableBody) {{
+                myPortfolioTableBody.addEventListener('click', handleTableRowClick);
+            }}
         }})();
     </script>
 

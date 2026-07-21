@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Iframe Auth Test</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+      margin: 0;
+      padding: 20px;
+      background: #0b0f14;
+      color: #e6edf3;
+    }
+    .card {
+      max-width: 720px;
+      margin: 0 auto 20px;
+      padding: 18px;
+      border: 1px solid #1f2730;
+      border-radius: 8px;
+      background: #11161d;
+    }
+    label {
+      display: block;
+      font-size: 12px;
+      color: #8b98a8;
+      margin-bottom: 6px;
+      text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    input, select {
+      width: 100%;
+      padding: 10px;
+      border-radius: 6px;
+      border: 1px solid #2a323d;
+      background: #0b0f14;
+      color: #e6edf3;
+      font-size: 14px;
+      margin-bottom: 14px;
+      box-sizing: border-box;
+    }
+    button {
+      padding: 10px 14px;
+      border-radius: 6px;
+      border: none;
+      background: #2ec4b6;
+      color: #05201f;
+      font-weight: 600;
+      cursor: pointer;
+    }
+    button.secondary {
+      background: #1f2730;
+      color: #e6edf3;
+    }
+    .row {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 12px;
+    }
+    iframe {
+      width: 100%;
+      height: 90vh;
+      border: 1px solid #1f2730;
+      border-radius: 8px;
+      background: #000;
+    }
+    .status {
+      margin-top: 10px;
+      font-size: 13px;
+      color: #8b98a8;
+      white-space: pre-wrap;
+      word-break: break-word;
+    }
+    .error { color: #ff7b72; }
+    .success { color: #3fb950; }
+    .note {
+      margin-top: 8px;
+      font-size: 12px;
+      color: #8b98a8;
+      font-style: italic;
+    }
+  </style>
+</head>
+<body>
+  <div class="card">
+    <label>Current Cookie Details</label>
+    <div id="cookieDetails" class="status">Loading cookie details...</div>
+  </div>
+
+  <div class="card">
+    <label>Iframe app base URL</label>
+    <input id="baseUrl" value="/" />
+    <label>eToro username</label>
+    <input id="username" placeholder="eToro username" />
+    <div class="row">
+      <div>
+        <label>Iframe route</label>
+        <select id="route">
+          <option value="/">/</option>
+        </select>
+      </div>
+      <div>
+        <label>Credentials mode</label>
+        <input id="credentialsInfo" value="Auto" disabled />
+      </div>
+    </div>
+    <button id="authBtn">Authenticate & Load Iframe</button>
+    <button id="clearBtn" class="secondary">Clear Iframe</button>
+
+    <div class="status" id="status">
+      Idle.
+      <div class="note">Tip: Open this page via http://localhost:8888/test_iframe_auth.html for same-origin testing.</div>
+    </div>
+  </div>
+
+  <iframe id="app" tabindex="0" sandbox="allow-scripts allow-same-origin allow-forms" style="display:none;"></iframe>
+
+  <script>
+    console.log('test_iframe_auth.html script starting');
+    const statusEl = document.getElementById('status');
+    const iframe = document.getElementById('app');
+    const credentialsInfo = document.getElementById('credentialsInfo');
+
+    function getOriginFromUrl(url) {
+      try {
+        return new URL(url, window.location.href).origin;
+      } catch {
+        return '';
+      }
+    }
+
+    function detectCredentialsMode(baseUrl) {
+      const parentOrigin = window.location.origin;
+      const targetOrigin = getOriginFromUrl(baseUrl);
+      if (!targetOrigin) return 'same-origin';
+      return parentOrigin === targetOrigin ? 'same-origin' : 'include';
+    }
+
+    function setStatus(text, type = '') {
+      statusEl.innerHTML = text;
+      statusEl.className = 'status ' + type;
+    }
+
+    async function authenticateAndLoad() {
+      const baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+      const username = document.getElementById('username').value.trim();
+      const route = document.getElementById('route').value;
+      const credentials = detectCredentialsMode(baseUrl);
+      credentialsInfo.value = `Auto: ${credentials}`;
+
+      if (!username) {
+        setStatus('Please enter an eToro username.', 'error');
+        return;
+      }
+
+      const authUrl = `${baseUrl}/auth`;
+      const iframeSrc = `${baseUrl}${route}`;
+
+      setStatus(
+        `POST ${authUrl}\n` +
+        `Detected credentials mode: ${credentials}\n` +
+        `Waiting for response...`
+      );
+
+      try {
+        const response = await fetch(authUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: `etoro_authuser=${encodeURIComponent(username)}`,
+          credentials: credentials,
+        });
+
+        const text = await response.text();
+        let body;
+        try { body = JSON.parse(text); } catch { body = text; }
+
+        const cookieHeader = response.headers.get('set-cookie');
+        const cookieInfo = cookieHeader
+          ? `Set-Cookie present: yes`
+          : 'Set-Cookie visible to JS: no (normal for CORS — browser handles cookies internally)';
+
+        let message =
+          `POST ${authUrl}\n` +
+          `Status: ${response.status} ${response.statusText}\n` +
+          `Body: ${JSON.stringify(body)}\n` +
+          `${cookieInfo}\n` +
+          `\nLoading iframe: ${iframeSrc}\n` +
+          `If iframe shows 403, the cookie was not stored or not sent.\n` +
+          `Common fix: serve this page from the same origin as the Flask app (http://localhost:8888/test_iframe_auth.html).`;
+
+        if (response.ok && body && body.ok) {
+          setStatus(message, 'success');
+          iframe.style.display = 'block';
+          iframe.src = iframeSrc;
+
+          iframe.addEventListener('load', function onLoad() {
+            iframe.removeEventListener('load', onLoad);
+            const statusEl = document.getElementById('status');
+            try {
+              iframe.contentWindow.focus();
+              if (statusEl) {
+                statusEl.innerHTML = statusEl.innerHTML + '\n\nIframe focused. Waiting for form input...';
+              }
+            } catch (e) {
+              console.warn('Could not focus iframe:', e);
+            }
+
+            let attempts = 0;
+            const maxAttempts = 100;
+            const interval = setInterval(() => {
+              attempts++;
+              try {
+                const doc = iframe.contentDocument;
+                if (!doc) throw new Error('No document');
+                const input = doc.getElementById('etoro_username');
+                if (input) {
+                  clearInterval(interval);
+                  input.focus();
+                  input.select();
+                  if (statusEl) {
+                    statusEl.innerHTML = statusEl.innerHTML + '\n\nFocused iframe input.';
+                  }
+                } else if (attempts >= maxAttempts) {
+                  clearInterval(interval);
+                  if (statusEl) {
+                    statusEl.innerHTML = statusEl.innerHTML + '\n\nCould not find #etoro_username in iframe after ' + maxAttempts + ' attempts.';
+                  }
+                }
+              } catch (e) {
+                clearInterval(interval);
+                console.warn('Could not focus iframe input:', e);
+                if (statusEl) {
+                  statusEl.innerHTML = statusEl.innerHTML + '\n\nFocus error: ' + e.message + ' (likely cross-origin restriction)';
+                }
+              }
+            }, 50);
+          });
+        } else {
+          setStatus(message, 'error');
+        }
+      } catch (err) {
+        setStatus(
+          `Request failed: ${err.message}\n\n` +
+          `Common causes:\n` +
+          `- Flask app not running on ${baseUrl}\n` +
+          `- CORS not configured on Flask app\n` +
+          `- Network/firewall blocking the request`,
+          'error'
+        );
+      }
+    }
+
+    document.getElementById('authBtn').addEventListener('click', authenticateAndLoad);
+    document.getElementById('clearBtn').addEventListener('click', () => {
+      iframe.style.display = 'none';
+      iframe.src = 'about:blank';
+      setStatus('Cleared.');
+    });
+
+    function getCookie(name) {
+      const value = `; ${document.cookie}`;
+      const parts = value.split(`; ${name}=`);
+      if (parts.length === 2) return parts.pop().split(';').shift();
+      return null;
+    }
+
+    function formatDate(timestamp) {
+      try {
+        return new Date(timestamp * 1000).toLocaleString();
+      } catch (e) {
+        return 'Invalid date';
+      }
+    }
+
+    function formatDuration(seconds) {
+      const s = Math.max(0, Math.floor(seconds));
+      const h = Math.floor(s / 3600);
+      const m = Math.floor((s % 3600) / 60);
+      const sec = s % 60;
+      const parts = [];
+      if (h > 0) parts.push(`${h}h`);
+      if (m > 0 || h > 0) parts.push(`${m}m`);
+      parts.push(`${sec}s`);
+      return parts.join(' ');
+    }
+
+    function updateCookieDetails() {
+      const cookieEl = document.getElementById('cookieDetails');
+      if (!cookieEl) return;
+      const raw = getCookie('etoro_authuser');
+      if (!raw) {
+        cookieEl.innerHTML = '<span class="error">No etoro_authuser cookie found.</span>';
+        return;
+      }
+
+      let html = '';
+      html += `Raw cookie value:\n${escapeHtml(raw)}\n\n`;
+
+      let data = null;
+      let first = null;
+      try {
+        first = JSON.parse(raw);
+      } catch (e) {
+        console.warn('First JSON parse failed:', e.message);
+      }
+      if (first && typeof first === 'object' && first !== null) {
+        data = first;
+      } else if (first && typeof first === 'string') {
+        let text = first
+          .replace(/^"|"$/g, '')
+          .replace(/\\"/g, '"')
+          .replace(/\\([0-7]{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+        try {
+          const second = JSON.parse(text);
+          if (typeof second === 'object' && second !== null) {
+            data = second;
+          } else if (typeof second === 'string') {
+            data = JSON.parse(second);
+          }
+        } catch (e2) {
+          console.warn('Second JSON parse failed:', e2.message);
+        }
+      }
+
+      if (!data) {
+        const uMatch = raw.match(/\\"u\\"\s*:\s*\\"([^\\"]*)\\"/);
+        const tsMatch = raw.match(/\\"ts\\"\s*:\s*([0-9.]+)/);
+        if (uMatch || tsMatch) {
+          data = { u: uMatch ? uMatch[1] : '', ts: tsMatch ? parseFloat(tsMatch[1]) : 0 };
+        }
+      }
+
+      if (!data) {
+        cookieEl.innerHTML = html + '<span class="error">Could not parse cookie JSON.</span>';
+        return;
+      }
+
+      const username = (data.u || '').trim();
+      const ts = typeof data.ts === 'number' ? data.ts : 0;
+      const now = Date.now() / 1000;
+      const maxAge = 86400;
+      const expiresAt = ts + maxAge;
+      const remaining = expiresAt - now;
+      const valid = username && ts > 0 && remaining > 0;
+
+      html += `Username: ${username || '<span class="error">missing</span>'}\n`;
+      html += `Created: ${ts ? formatDate(ts) : '<span class="error">missing</span>'}\n`;
+      html += `Expires: ${ts ? formatDate(expiresAt) : '<span class="error">missing</span>'}\n`;
+      html += `Valid: ${valid ? '<span class="success">Yes</span>' : '<span class="error">No</span>'}`;
+        if (valid) {
+          html += `\nRemaining: ${formatDuration(remaining)}`;
+        }
+      cookieEl.innerHTML = html;
+    }
+
+    function escapeHtml(value) {
+      return value
+        .replace(/&/g, '&amp;')
+        .replace(/</g, '&lt;')
+        .replace(/>/g, '&gt;');
+    }
+
+    updateCookieDetails();
+    setInterval(updateCookieDetails, 1000);
+  </script>
+</body>
+</html>

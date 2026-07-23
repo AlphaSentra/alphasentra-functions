@@ -21,7 +21,7 @@ if _dotenv_path.exists():
                 _line = _line.strip()
                 if _line and not _line.startswith("#") and "=" in _line:
                     _k, _v = _line.split("=", 1)
-                    os.environ.setdefault(_k.strip(), _v.strip())
+                    os.environ.setdefault(_k.strip(), _v.strip().strip('"').strip("'"))
 
 import numpy as np
 import pandas as pd

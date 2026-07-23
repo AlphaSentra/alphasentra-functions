@@ -37,21 +37,48 @@ from .models import (
 
 _INSTRUMENT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / ".etoro_instrument_cache.json"
 _INSTRUMENT_CACHE_TTL = 24 * 60 * 60
-_ETORO_MAX_RETRIES = 3
+_ETORO_MAX_RETRIES = 5
+_ETORO_STALE_TTL = 24 * 60 * 60
 
 
-def _session_get_with_retry(session_factory, url: str, **kwargs) -> Optional[requests.Response]:
+def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Response:
     max_retries = _ETORO_MAX_RETRIES
+    base_delay = 2.0
+    last_status = None
+    last_body_preview = ""
     for attempt in range(max_retries):
         session = session_factory()
         try:
             resp = session.get(url, **kwargs)
-            if resp.status_code != 401:
+            if resp.status_code == 401:
+                logger.warning("eToro API 401 on attempt %d for %s", attempt + 1, url)
+            elif 200 <= resp.status_code < 300:
                 return resp
-        except requests.RequestException:
+            else:
+                last_status = resp.status_code
+                try:
+                    body = resp.json()
+                    last_body_preview = str(body)[:200]
+                except Exception:
+                    last_body_preview = resp.text[:200]
+                logger.warning(
+                    "eToro API HTTP %d on attempt %d for %s body=%s",
+                    last_status, attempt + 1, url, last_body_preview,
+                )
+        except requests.RequestException as exc:
+            logger.warning("eToro API error on attempt %d for %s: %s", attempt + 1, url, exc)
             if attempt == max_retries - 1:
-                return None
-    return None
+                raise EToroClientError(
+                    f"GET {url} failed after {max_retries} attempts: {exc}"
+                ) from exc
+        if attempt < max_retries - 1:
+            delay = base_delay * (2 ** attempt) + __import__('random').uniform(0, 1.0)
+            logger.info("Retrying %s in %.1fs...", url, delay)
+            time.sleep(delay)
+    raise EToroClientError(
+        f"GET {url} failed after {max_retries} attempts: "
+        f"last_status={last_status}, body={last_body_preview!r}"
+    )
 
 
 def _load_instrument_cache() -> Dict[str, Dict[str, str]]:
@@ -174,10 +201,10 @@ class ETPublicClient:
 
         try:
             resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
-            if resp is None:
-                raise EToroClientError("GET gain time-series failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
+        except EToroClientError:
+            raise
         except requests.RequestException as exc:
             raise EToroClientError(f"GET gain time-series failed: {exc}") from exc
 
@@ -219,7 +246,7 @@ class ETPublicClient:
         cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
         if cached is not None:
             return cached
-        # --- 1. Fetch live portfolio positions ---
+        stale = cache_get(cache_key, _ETORO_STALE_TTL, ext=".pkl")
         url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/portfolio/live"
 
         def _session_factory():
@@ -227,11 +254,17 @@ class ETPublicClient:
 
         try:
             resp = _session_get_with_retry(_session_factory, url, timeout=self._timeout)
-            if resp is None:
-                raise EToroClientError("GET investor portfolio failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
+        except EToroClientError:
+            if stale is not None:
+                logger.warning("Live portfolio API failed for %s; using stale cache", username)
+                return stale
+            raise
         except requests.RequestException as exc:
+            if stale is not None:
+                logger.warning("Live portfolio API error for %s (%s); using stale cache", username, exc)
+                return stale
             raise EToroClientError(f"GET investor portfolio failed: {exc}") from exc
 
         raw_positions = data.get("positions", [])
@@ -475,10 +508,10 @@ class ETPublicClient:
 
         try:
             resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
-            if resp is None:
-                raise EToroClientError("GET trade history failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
+        except EToroClientError:
+            raise
         except requests.RequestException as exc:
             raise EToroClientError(f"GET trade history failed: {exc}") from exc
     
@@ -504,10 +537,10 @@ class ETPublicClient:
 
         try:
             resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
-            if resp is None:
-                raise EToroClientError("GET user by username failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
+        except EToroClientError:
+            raise
         except requests.RequestException as exc:
             raise EToroClientError(f"GET user by username failed: {exc}") from exc
 
@@ -616,10 +649,10 @@ class ETPublicClient:
     
         try:
             resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
-            if resp is None:
-                raise EToroClientError("GET user lookup by CID failed after retries: no response")
             resp.raise_for_status()
             data = resp.json()
+        except EToroClientError:
+            raise
         except requests.RequestException as exc:
             raise EToroClientError(f"GET user lookup by CID failed: {exc}") from exc
     

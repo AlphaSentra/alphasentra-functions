@@ -78,7 +78,6 @@ class YFinanceProvider(MarketDataProvider):
         cached = cache_get(cache_key, _SECTOR_TTL, ext=".pkl")
         if cached is not None:
             return cached
-        print(f"[yinance] requested={list(tickers)} normalized={normalized}")
 
         _MAX_WORKERS = min(10, len(normalized) or 1)
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
@@ -102,7 +101,6 @@ class YFinanceProvider(MarketDataProvider):
                 records.append(AssetMetadata.failed(ticker))
                 continue
             keys_found = [k for k in ['longName','sector','industry','enterpriseToEbitda','returnOnEquity','currentRatio','forwardPE'] if info.get(k) is not None]
-            print(f"[yinance] {ticker}: {len(keys_found)}/7 core keys: {keys_found}")
             meta = AssetMetadata(
                 ticker=ticker,
                 name=info.get("longName") or ticker,

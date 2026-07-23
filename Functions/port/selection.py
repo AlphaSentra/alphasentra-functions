@@ -1207,7 +1207,7 @@ def get_portfolio_selection_html() -> str:
             top: 100%;
             left: 20px;
             right: 20px;
-            background-color: {_BG_SUBTLE};
+            background-color: var(--brand-primary);
             border: 1px solid {_BORDER_DEFAULT};
             border-top: none;
             max-height: 320px;
@@ -1230,8 +1230,8 @@ def get_portfolio_selection_html() -> str:
             transition: background-color 0.15s ease;
         }}
 
-        .search-dropdown-item:hover {{
-            background-color: {_HOVER_SURFACE};
+        .search-dropdown-item:hover, .search-dropdown-item.selected {{
+            background-color: rgba(21, 184, 166);
         }}
 
         .search-dropdown-item:last-child {{
@@ -1269,7 +1269,7 @@ def get_portfolio_selection_html() -> str:
 
         .search-dropdown-name {{
             font-weight: bold;
-            color: {_TEXT_HEADING};
+            color: #1a1a1a;
             font-size: 14px;
             white-space: nowrap;
             overflow: hidden;
@@ -1277,7 +1277,7 @@ def get_portfolio_selection_html() -> str:
         }}
 
         .search-dropdown-username {{
-            color: {_TEXT_MUTED};
+            color: #3a3a3a;
             font-size: 12px;
             white-space: nowrap;
             overflow: hidden;
@@ -1287,7 +1287,7 @@ def get_portfolio_selection_html() -> str:
         .search-dropdown-empty {{
             padding: 16px;
             text-align: center;
-            color: {_TEXT_MUTED};
+            color: #3a3a3a;
             font-size: 14px;
         }}
 
@@ -1805,6 +1805,7 @@ def get_portfolio_selection_html() -> str:
             const searchInput = document.getElementById('investor-search');
             const dropdown = document.getElementById('investor-search-dropdown');
             let debounceTimer = null;
+            let selectedIndex = -1;
 
             function getInitials(name) {{
                 if (!name) return '?';
@@ -1812,8 +1813,39 @@ def get_portfolio_selection_html() -> str:
                 return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
             }}
 
+            function clearSelection() {{
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                items.forEach(function(el) {{ el.classList.remove('selected'); }});
+                selectedIndex = -1;
+            }}
+
+            function setSelectedIndex(index) {{
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                if (!items.length) return;
+                if (index < 0) index = 0;
+                if (index >= items.length) index = items.length - 1;
+                clearSelection();
+                selectedIndex = index;
+                items[selectedIndex].classList.add('selected');
+                items[selectedIndex].scrollIntoView({{ block: 'nearest' }});
+            }}
+
+            function selectCurrent() {{
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                if (selectedIndex < 0 || selectedIndex >= items.length) return;
+                const row = items[selectedIndex];
+                const username = row.getAttribute('data-username') || '';
+                const fullName = row.getAttribute('data-fullname') || '';
+                if (username) {{
+                    window.location.href = '/etopi?etoro_username=' + encodeURIComponent(username);
+                }}
+                dropdown.classList.remove('active');
+                searchInput.value = fullName || username;
+            }}
+
             function renderDropdown(results, error) {{
                 dropdown.innerHTML = '';
+                clearSelection();
                 if (error) {{
                     dropdown.innerHTML = '<div class=\"search-dropdown-empty\">' + error + '</div>';
                     dropdown.classList.add('active');
@@ -1847,7 +1879,16 @@ def get_portfolio_selection_html() -> str:
                         (fullName ? '<div class=\"search-dropdown-username\">@' + username + '</div>' : '') +
                         '</div>';
 
+                    row.setAttribute('data-username', username);
+                    row.setAttribute('data-fullname', fullName);
                     row.innerHTML = avatarHtml + nameHtml;
+
+                    row.addEventListener('mouseenter', function() {{
+                        const items = dropdown.querySelectorAll('.search-dropdown-item');
+                        const arr = Array.prototype.slice.call(items);
+                        const idx = arr.indexOf(row);
+                        if (idx >= 0) setSelectedIndex(idx);
+                    }});
 
                     row.addEventListener('click', function() {{
                         if (username) {{
@@ -1888,6 +1929,36 @@ def get_portfolio_selection_html() -> str:
                 const query = this.value.trim();
                 if (query && dropdown.children.length > 0) {{
                     dropdown.classList.add('active');
+                }}
+            }});
+
+            searchInput.addEventListener('keydown', function(e) {{
+                if (!dropdown.classList.contains('active')) {{
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {{
+                        const query = searchInput.value.trim();
+                        if (query) {{
+                            searchInput.dispatchEvent(new Event('input'));
+                        }}
+                    }}
+                    return;
+                }}
+                if (e.key === 'ArrowDown') {{
+                    e.preventDefault();
+                    const items = dropdown.querySelectorAll('.search-dropdown-item');
+                    if (!items.length) return;
+                    const next = selectedIndex + 1;
+                    setSelectedIndex(next);
+                }} else if (e.key === 'ArrowUp') {{
+                    e.preventDefault();
+                    const items = dropdown.querySelectorAll('.search-dropdown-item');
+                    if (!items.length) return;
+                    const prev = selectedIndex - 1;
+                    setSelectedIndex(prev);
+                }} else if (e.key === 'Enter') {{
+                    e.preventDefault();
+                    selectCurrent();
+                }} else if (e.key === 'Escape') {{
+                    dropdown.classList.remove('active');
                 }}
             }});
 

@@ -7,7 +7,8 @@ import yfinance as yf
 
 from .protocols import MarketDataProvider
 from .models import AssetMetadata
-from Functions.port.cache import get as cache_get, set as cache_set, _PRICE_TTL, _SECTOR_TTL
+from Functions.port.cache import get as cache_get, set as cache_set
+from Functions.port.config import CACHE_TTL_PRICE as _PRICE_TTL, CACHE_TTL_SECTOR as _SECTOR_TTL
 
 
 def _normalize_ticker(ticker: str) -> str:

@@ -10,7 +10,8 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
-from Functions.port.cache import get as cache_get, set as cache_set, _ETORO_TTL
+from Functions.port.cache import get as cache_get, set as cache_set
+from Functions.port.config import CACHE_TTL_ETORO as _ETORO_TTL
 
 _current_dir = Path(__file__).resolve().parent
 _parent_dir = _current_dir.parent

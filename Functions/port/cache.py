@@ -17,14 +17,6 @@ from typing import Any, Optional
 
 import pandas as pd
 
-from config import (
-    CACHE_TTL_REPORT,
-    CACHE_TTL_PRICE,
-    CACHE_TTL_SECTOR,
-    CACHE_TTL_ETORO,
-    CACHE_TTL_ETORO_PI,
-)
-
 _logger = logging.getLogger(__name__)
 
 _CACHE_DIR = Path(__file__).resolve().parent / ".cache"
@@ -39,12 +31,6 @@ except Exception as exc:
         _logger.warning("Fallback portfolio cache dir %s unusable (%s); using system tmp", _CACHE_DIR, exc)
         _CACHE_DIR = Path("/tmp")
 _logger.info("Portfolio cache directory: %s", _CACHE_DIR)
-
-_REPORT_TTL = CACHE_TTL_REPORT
-_PRICE_TTL = CACHE_TTL_PRICE
-_SECTOR_TTL = CACHE_TTL_SECTOR
-_ETORO_TTL = CACHE_TTL_ETORO
-_ETORO_PI_TTL = CACHE_TTL_ETORO_PI
 
 _lock = Lock()
 

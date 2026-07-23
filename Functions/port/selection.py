@@ -13,7 +13,8 @@ import requests
 from flask import request
 from dotenv import load_dotenv
 
-from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _ETORO_PI_TTL
+from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
+from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
 from Functions.etoro.auth import get_random_private_key
 
 try:

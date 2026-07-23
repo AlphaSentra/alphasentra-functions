@@ -8,7 +8,8 @@ sys.path.insert(0, str(_ROOT / "Functions"))
 sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 
 from Functions.logging_utils import log_info
-from Functions.port.cache import set as cache_set, _ETORO_PI_TTL
+from Functions.port.cache import set as cache_set
+from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
 
 USERNAME = "etoroteam"
 

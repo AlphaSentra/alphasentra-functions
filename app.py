@@ -6,7 +6,8 @@ from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
 from Functions.port.selection import search_investors_api
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
-from Functions.port.cache import exists as cache_exists, get as cache_get, _REPORT_TTL, _ETORO_PI_TTL
+from Functions.port.cache import exists as cache_exists, get as cache_get
+from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
 
 app = Flask(__name__)
 
@@ -86,6 +87,11 @@ def _require_etoro_auth():
             if cache_exists(("portfolio_selection_rankings",), _ETORO_PI_TTL, ext=".pkl") or \
                cache_exists(("portfolio_selection_common_rows",), _ETORO_PI_TTL, ext=".html"):
                 return
+
+        if request.path == '/' and request.method == 'GET':
+            cached = cache_get(("index",), _ETORO_PI_TTL, ext=".html")
+            if cached is not None:
+                return cached
 
         return _unauthorized_response()
 

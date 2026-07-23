@@ -5,7 +5,8 @@ Portfolio input handler - form display and request processing.
 import json
 from flask import request, jsonify, make_response
 import logging
-from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _REPORT_TTL
+from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
+from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
 from Functions.port.form import PORTFOLIO_FORM_HTML
 from Functions.port.engine.analyzer import PortfolioFunctionsError
 

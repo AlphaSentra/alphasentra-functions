@@ -80,7 +80,11 @@ def _require_etoro_auth():
                     return
 
         if request.path == '/port' and request.method == 'GET':
-            if cache_exists(("portfolio_selection",), _ETORO_PI_TTL, ext=".html"):
+            cached = cache_get(("portfolio_selection",), _ETORO_PI_TTL, ext=".html")
+            if cached is not None:
+                return cached
+            if cache_exists(("portfolio_selection_rankings",), _ETORO_PI_TTL, ext=".pkl") or \
+               cache_exists(("portfolio_selection_common_rows",), _ETORO_PI_TTL, ext=".html"):
                 return
 
         return _unauthorized_response()

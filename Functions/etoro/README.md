@@ -90,7 +90,7 @@ GET https://public-api.etoro.com/api/v1/user-info/people/search
 
 **Client method:** Not wrapped in `ETPublicClient`; called directly from `selection.py:_get_rankings()`.
 
-**Purpose:** Fetch the Top 20 Pro Investor rankings used by the `/port` selection page.
+**Purpose:** Fetch the Top Pro Investor rankings used by the `/port` selection page.
 
 **Query params:**
 

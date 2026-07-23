@@ -84,7 +84,7 @@ Functions/port/
 - **Modular Tab System:** Self-contained sub-packages for Overview, Correlation, Risks, Monte Carlo, Holdings, History, Breakdown, Efficiency, and Optimisation.
 - **Dynamic Charting:** Interactive Plotly charts with centralized theme colours.
 - **Automated Commentary:** AI-generated insights embedded in each report tab.
-- **Pro Investor Selection (`/port`):** Renders a searchable Top 20 Pro Investor table with flag + ISO alpha-2 country badges. Country data is resolved at runtime using the [countries.dev](https://countries.dev) API, with eToro internal `countryId` values translated to ISO codes via `Functions/etoro/countries.csv`.
+- **Pro Investor Selection (`/port`):** Renders a searchable Top Pro Investor table with flag + ISO alpha-2 country badges. Country data is resolved at runtime using the [countries.dev](https://countries.dev) API, with eToro internal `countryId` values translated to ISO codes via `Functions/etoro/countries.csv`.
 
 ## Pro Investor Selection — Country Resolution
 

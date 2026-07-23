@@ -14,7 +14,7 @@ from flask import request
 from dotenv import load_dotenv
 
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
-from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
+from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
 from Functions.etoro.auth import get_random_private_key
 
 try:
@@ -393,6 +393,38 @@ def _avatar_html(avatar_url: Optional[str], name: str, avatar_class: str = "inve
         )
     initials = "".join(part[0] for part in name.split()[:2]).upper()
     return f"<div class=\"{avatar_class}\" style=\"background-color:{_SEMANTIC_POSITIVE};color:{_NEUTRAL_0};display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:18px;flex-shrink:0;\">{initials}</div>"
+
+
+def _render_login_prompt_row() -> str:
+    login_url = LOGIN_REDIRECT_URL
+    return (
+        f'<tr class="my-portfolio-row my-portfolio-login-prompt">'
+        f'<td colspan="8">'
+        f'<div class="my-portfolio-investor">'
+        f'<div class="my-portfolio-avatar my-portfolio-login-avatar">'
+        f'<svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"'
+        f' stroke-width="2" stroke-linecap="round" stroke-linejoin="round"'
+        f' style="color:{_TEXT_MUTED};flex-shrink:0;">'
+        f'<rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>'
+        f'<path d="M7 11V7a5 5 0 0 1 10 0v4"></path>'
+        f'</svg>'
+        f'</div>'
+        f'<div class="my-portfolio-info my-portfolio-login-info">'
+        f'<div class="my-portfolio-name-row my-portfolio-login-name-row">'
+        f'<span class="my-portfolio-name my-portfolio-login-name">My Portfolio</span>'
+        f'</div>'
+        f'<span class="my-portfolio-username my-portfolio-login-subtitle">'
+        f'Sign in to view and add your portfolio'
+        f'</span>'
+        f'<a href="{login_url}" class="my-portfolio-login-btn"'
+        f' onclick="window.top.location.href=\'{login_url}\'; event.stopPropagation(); event.preventDefault(); return false;">'
+        f'Sign In &rarr;'
+        f'</a>'
+        f'</div>'
+        f'</div>'
+        f'</td>'
+        f'</tr>'
+    )
 
 
 def _get_country_info(code: str) -> Optional[Dict[str, str]]:
@@ -907,12 +939,16 @@ _YEAR_MAP = {
 
 def get_portfolio_selection_html() -> str:
     from flask import g
-    username_from_cookie = getattr(g, 'etoro_authuser', 'My Portfolio')
-    username_display = username_from_cookie
-    if username_display == "My Portfolio":
-        username_at_display = "@MyPortfolio"
+    etoro_authuser = getattr(g, 'etoro_authuser', None)
+    is_authenticated = etoro_authuser is not None
+    if is_authenticated:
+        username_from_cookie = etoro_authuser
+        username_display = etoro_authuser
+        username_at_display = f"@{etoro_authuser}"
     else:
-        username_at_display = f"@{username_from_cookie}"
+        username_from_cookie = 'My Portfolio'
+        username_display = 'My Portfolio'
+        username_at_display = "@MyPortfolio"
 
     # Try to get cached my_portfolio row for this user
     my_portfolio_cache_key = ("portfolio_selection_my_portfolio", username_from_cookie)
@@ -1080,32 +1116,35 @@ def get_portfolio_selection_html() -> str:
                 my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
 
     if not my_portfolio_item or my_portfolio_invalid:
-        my_portfolio_html_row = _render_row(
-            {
-                "userName": username_from_cookie,
-                "fullName": username_display,
-                "avatarUrl": None,
-                "subType": None,
-                "country": my_portfolio_item.get("country") if my_portfolio_item else None,
-                "copiers": my_portfolio_item.get("copiers") if my_portfolio_item else 32800,
-                "aumValue": my_portfolio_item.get("aumValue") if my_portfolio_item else 14500000.0,
-                "aumTierDesc": my_portfolio_item.get("aumTierDesc") if my_portfolio_item else None,
-                "baseLineCopiers": my_portfolio_item.get("baseLineCopiers") if my_portfolio_item else 31850,
-            },
-            week_map,
-            month_map,
-            year_map,
-            classes=_MP_CLASSES,
-            country_html_override=my_country_html_val,
-            aum_override=my_aum_display,
-            copiers_value_override=my_copiers_value,
-            copiers_change_override=my_copiers_change_val,
-            week_gain_html_override=my_week_gain_html,
-            month_gain_html_override=my_month_gain_html,
-            year_gain_html_override=my_year_gain_html,
-            error_message=my_portfolio_error if my_portfolio_invalid else None,
-            include_badge=False,
-        )
+        if not is_authenticated:
+            my_portfolio_html_row = _render_login_prompt_row()
+        else:
+            my_portfolio_html_row = _render_row(
+                {
+                    "userName": username_from_cookie,
+                    "fullName": username_display,
+                    "avatarUrl": None,
+                    "subType": None,
+                    "country": my_portfolio_item.get("country") if my_portfolio_item else None,
+                    "copiers": my_portfolio_item.get("copiers") if my_portfolio_item else 32800,
+                    "aumValue": my_portfolio_item.get("aumValue") if my_portfolio_item else 14500000.0,
+                    "aumTierDesc": my_portfolio_item.get("aumTierDesc") if my_portfolio_item else None,
+                    "baseLineCopiers": my_portfolio_item.get("baseLineCopiers") if my_portfolio_item else 31850,
+                },
+                week_map,
+                month_map,
+                year_map,
+                classes=_MP_CLASSES,
+                country_html_override=my_country_html_val,
+                aum_override=my_aum_display,
+                copiers_value_override=my_copiers_value,
+                copiers_change_override=my_copiers_change_val,
+                week_gain_html_override=my_week_gain_html,
+                month_gain_html_override=my_month_gain_html,
+                year_gain_html_override=my_year_gain_html,
+                error_message=my_portfolio_error if my_portfolio_invalid else None,
+                include_badge=False,
+            )
     else:
         my_portfolio_html_row = _render_row(
             my_portfolio_item,
@@ -1404,6 +1443,48 @@ def get_portfolio_selection_html() -> str:
             width: 100px;
             height: 28px;
             flex-shrink: 0;
+        }}
+
+        .my-portfolio-login-prompt {{
+            cursor: default;
+        }}
+
+        .my-portfolio-login-avatar {{
+            background-color: {_BG_SUBTLE} !important;
+            border: 1.5px dashed {_BORDER_DEFAULT};
+        }}
+
+        .my-portfolio-login-name {{
+            color: {_TEXT_MUTED};
+            font-weight: 600;
+        }}
+
+        .my-portfolio-login-subtitle {{
+            color: {_TEXT_MUTED};
+            font-size: 12px;
+            font-style: italic;
+        }}
+
+        .my-portfolio-login-btn {{
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 7px 16px;
+            border-radius: 6px;
+            background-color: {_BRAND_PRIMARY};
+            color: {_NEUTRAL_0};
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.15s ease;
+            letter-spacing: 0.02em;
+            align-self: flex-start;
+        }}
+
+        .my-portfolio-login-btn:hover {{
+            opacity: 0.88;
+            color: {_NEUTRAL_0};
         }}
 
         .selection-header {{

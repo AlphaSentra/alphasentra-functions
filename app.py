@@ -66,6 +66,9 @@ def _require_etoro_auth():
 
     raw_cookie = request.cookies.get('etoro_authuser', '')
     username, cookie_valid = _parse_auth_cookie(raw_cookie)
+    if cookie_valid and username:
+        g.etoro_authuser = username
+
     if not cookie_valid or not username:
         if request.path == '/etopi':
             etoro_username = ''
@@ -91,12 +94,7 @@ def _require_etoro_auth():
                     return
 
         if request.path == '/port' and request.method == 'GET':
-            cached = cache_get(("portfolio_selection",), _ETORO_PI_TTL, ext=".html")
-            if cached is not None:
-                return cached
-            if cache_exists(("portfolio_selection_rankings",), _ETORO_PI_TTL, ext=".pkl") or \
-               cache_exists(("portfolio_selection_common_rows",), _ETORO_PI_TTL, ext=".html"):
-                return
+            return
 
         if request.path == '/' and request.method == 'GET':
             cached = cache_get(("index",), _ETORO_PI_TTL, ext=".html")

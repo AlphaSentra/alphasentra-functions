@@ -67,10 +67,17 @@ def _require_etoro_auth():
     raw_cookie = request.cookies.get('etoro_authuser', '')
     username, cookie_valid = _parse_auth_cookie(raw_cookie)
     if not cookie_valid or not username:
-        if request.path == '/etopi' and request.method == 'POST':
-            etoro_username = request.form.get('etoro_username', '').strip()
-            etoro_cid = request.form.get('etoro_cid', '').strip()
-            benchmark_ticker = request.form.get('benchmark_ticker', '').strip()
+        if request.path == '/etopi':
+            etoro_username = ''
+            etoro_cid = ''
+            benchmark_ticker = ''
+            if request.method == 'POST':
+                etoro_username = request.form.get('etoro_username', '').strip()
+                etoro_cid = request.form.get('etoro_cid', '').strip()
+                benchmark_ticker = request.form.get('benchmark_ticker', '').strip()
+            elif request.method == 'GET':
+                etoro_username = request.args.get('etoro_username', '').strip()
+
             if etoro_username:
                 cache_key = (
                     etoro_username.strip().lower(),
@@ -78,6 +85,9 @@ def _require_etoro_auth():
                     etoro_cid.strip().lower(),
                 )
                 if cache_exists(cache_key, _REPORT_TTL, ext=".html"):
+                    cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
+                    if cached_html is not None:
+                        return make_response(cached_html)
                     return
 
         if request.path == '/port' and request.method == 'GET':

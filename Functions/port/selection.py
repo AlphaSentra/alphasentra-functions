@@ -91,7 +91,7 @@ def _get_trend_session() -> requests.Session:
 
 
 def _session_get_with_retry(session_factory, url: str, **kwargs) -> Optional[requests.Response]:
-    max_retries = 3
+    max_retries = 6
     for attempt in range(max_retries):
         session = session_factory()
         try:
@@ -292,8 +292,7 @@ def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain
             data = resp.json()
         except requests.RequestException as exc:
             last_error = exc
-            status = getattr(getattr(exc, 'response', None), 'status_code', None)
-            if status == 401 and attempt < max_retries - 1:
+            if attempt < max_retries - 1:
                 continue
             return {"results": [], "pagination": {}, "error": str(exc)}
 
@@ -1752,7 +1751,7 @@ def get_portfolio_selection_html() -> str:
                 <div class=\"selection-container\">
                     <div class=\"selection-header\">
                         <h2 class=\"selection-title\">
-                            Top 20 Pro Investors Trending This Week
+                            Top Pro Investors Trending This Week
                         </h2>
                     </div>
                     <table class=\"investor-table\">

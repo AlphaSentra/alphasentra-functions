@@ -43,9 +43,20 @@ def _path(key_str: str, ext: str = ".pkl") -> Path:
     return _CACHE_DIR / f"{key_str}{ext}"
 
 
-def get(key: tuple, ttl: int, ext: str = ".pkl") -> Optional[Any]:
+def _resolve_path(key: tuple, ext: str = ".pkl", filename: Optional[str] = None) -> tuple[Path, Optional[str]]:
+    stored_filename = None
+    if filename:
+        p = _CACHE_DIR / filename
+        stored_filename = filename
+    else:
+        key_str = _key_str(key)
+        p = _path(key_str, ext)
+    return p, stored_filename
+
+
+def get(key: tuple, ttl: int, ext: str = ".pkl", filename: Optional[str] = None) -> Optional[Any]:
+    p, _ = _resolve_path(key, ext, filename)
     key_str = _key_str(key)
-    p = _path(key_str, ext)
     if not p.exists():
         _logger.debug("Cache miss key=%s path=%s", key_str, p)
         return None
@@ -72,9 +83,9 @@ def get(key: tuple, ttl: int, ext: str = ".pkl") -> Optional[Any]:
         return None
 
 
-def exists(key: tuple, ttl: int, ext: str = ".pkl") -> bool:
+def exists(key: tuple, ttl: int, ext: str = ".pkl", filename: Optional[str] = None) -> bool:
+    p, _ = _resolve_path(key, ext, filename)
     key_str = _key_str(key)
-    p = _path(key_str, ext)
     if not p.exists():
         _logger.debug("Cache exists miss key=%s path=%s", key_str, p)
         return False
@@ -94,9 +105,9 @@ def exists(key: tuple, ttl: int, ext: str = ".pkl") -> bool:
         return False
 
 
-def set(key: tuple, value: Any, ext: str = ".pkl") -> None:
+def set(key: tuple, value: Any, ext: str = ".pkl", filename: Optional[str] = None) -> None:
+    p, _ = _resolve_path(key, ext, filename)
     key_str = _key_str(key)
-    p = _path(key_str, ext)
     with _lock:
         try:
             if ext == ".pkl":
@@ -105,6 +116,10 @@ def set(key: tuple, value: Any, ext: str = ".pkl") -> None:
             elif ext == ".html":
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(value)
+            elif ext == ".json":
+                import json
+                with open(p, "w", encoding="utf-8") as f:
+                    json.dump(value, f)
             else:
                 with open(p, "w", encoding="utf-8") as f:
                     f.write(str(value))
@@ -113,12 +128,16 @@ def set(key: tuple, value: Any, ext: str = ".pkl") -> None:
             _logger.warning("Cache write error key=%s path=%s error=%s", key_str, p, exc)
 
 
-def invalidate(key: tuple) -> None:
+def invalidate(key: tuple, filename: Optional[str] = None) -> None:
     key_str = _key_str(key)
     with _lock:
-        for ext in [".pkl", ".html", ".json"]:
-            p = _path(key_str, ext)
+        if filename:
+            p = _CACHE_DIR / filename
             p.unlink(missing_ok=True)
+        else:
+            for ext in [".pkl", ".html", ".json"]:
+                p = _path(key_str, ext)
+                p.unlink(missing_ok=True)
         _logger.debug("Cache invalidated key=%s", key_str)
 
 

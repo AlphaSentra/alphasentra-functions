@@ -1,0 +1,4 @@
+2026-07-23 13:46:24,308 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-23 13:53:31,752 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-23 13:54:33,359 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-23 14:02:01,651 - ERROR - [ERR-0001] - [f8fb2883] Failed to create MongoDB client | Exception: ImportError: pymongo not available | From: helpers.py:get_client()

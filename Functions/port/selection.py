@@ -15,6 +15,11 @@ from dotenv import load_dotenv
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists, _ETORO_PI_TTL
 from Functions.etoro.auth import get_random_private_key
 
+try:
+    from Functions.helpers import DatabaseManager
+except ImportError:
+    DatabaseManager = None
+
 from Functions.themes import (
     _TEXT_PRIMARY, _TEXT_HEADING, _BRAND_PRIMARY, _HOVER_SURFACE, _BORDER_DEFAULT,
     _BG_SUBTLE, _NEUTRAL_0, _BG_DEFAULT, _TEXT_MUTED, _GRID_LINE, BORDER_DIVIDER,
@@ -712,85 +717,90 @@ def _search_user_full(username: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _search_etoro_pi_db(query: str, limit: int = 20) -> Dict[str, Any]:
+    if DatabaseManager is None:
+        return {"results": [], "error": "MongoDB client not available"}
+
+    q = query.strip().lower()
+    if not q:
+        return {"results": []}
+
+    try:
+        db = DatabaseManager().get_client()
+        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+        coll = db[db_name]["etoro_pi"]
+
+        regex = {"$regex": q, "$options": "i"}
+        cursor = coll.find(
+            {
+                "$or": [
+                    {"userName": regex},
+                    {"fullName": regex},
+                    {"username": regex},
+                ]
+            },
+            {
+                "userName": 1,
+                "fullName": 1,
+                "username": 1,
+                "country": 1,
+                "gain": 1,
+                "copiers": 1,
+                "baseLineCopiers": 1,
+                "aumTierDesc": 1,
+                "avatars": 1,
+                "countryId": 1,
+                "subType": 1,
+            },
+        ).limit(limit)
+
+        results = []
+        seen = set()
+        for doc in cursor:
+            username = str(doc.get("userName") or doc.get("username") or "").strip()
+            if not username or username.lower() in seen:
+                continue
+            seen.add(username.lower())
+
+            full_name = str(doc.get("fullName") or "").strip() or None
+            avatar_url = None
+            avatars = doc.get("avatars") or []
+            if isinstance(avatars, list) and avatars:
+                avatar_url = avatars[0].get("url") if isinstance(avatars[0], dict) else None
+
+            results.append(
+                {
+                    "userName": username,
+                    "username": username,
+                    "fullName": full_name,
+                    "displayName": full_name,
+                    "avatarUrl": avatar_url,
+                    "country": doc.get("country"),
+                    "countryId": doc.get("countryId"),
+                    "copiers": doc.get("copiers"),
+                    "baseLineCopiers": doc.get("baseLineCopiers"),
+                    "gain": doc.get("gain"),
+                    "aumTierDesc": doc.get("aumTierDesc"),
+                    "aumValue": None,
+                    "subType": doc.get("subType") or "",
+                    "isPi": doc.get("isPi", True),
+                }
+            )
+
+        return {"results": results}
+    except Exception as exc:
+        return {"results": [], "error": str(exc)}
+
+
 def search_investors_api(query: str) -> Dict[str, Any]:
     if not query or not query.strip():
         return {"results": []}
 
-    session = _get_session()
-    url = "https://public-api.etoro.com/api/v1/portfolios/search"
-    params = {
-        "type": "trader",
-        "query": query.strip(),
-        "limit": 20,
-    }
-    try:
-        resp = session.get(url, params=params, timeout=15)
-        if resp.status_code == 200:
-            data = resp.json()
-            return {
-                "results": [item for item in data.get("results", []) if item.get("subType", "").startswith("pi-")],
-            }
-    except requests.RequestException:
-        pass
+    db_result = _search_etoro_pi_db(query, limit=20)
+    if db_result.get("results"):
+        return db_result
 
-    global _SEARCH_INDEX_CACHE
-    if _SEARCH_INDEX_CACHE is None:
-        _SEARCH_INDEX_CACHE = []
-        seen_usernames = set()
-        try:
-            for page in range(1, 25):
-                page_data = _get_rankings("CurrMonth", "-copiersGain", 100, page)
-                page_results = page_data.get("results", []) if isinstance(page_data, dict) else []
-                if not page_results:
-                    break
-                for item in page_results:
-                    uname = str(item.get("userName") or item.get("username") or "")
-                    if uname and uname not in seen_usernames:
-                        seen_usernames.add(uname)
-                        _SEARCH_INDEX_CACHE.append(item)
-                if len(page_results) < 100:
-                    break
-        except Exception:
-            pass
-
-        for item in _FALLBACK_INVESTORS:
-            uname = str(item.get("userName") or item.get("username") or item.get("cid", ""))
-            if uname and uname not in seen_usernames:
-                seen_usernames.add(uname)
-                _SEARCH_INDEX_CACHE.append(item)
-
-    source = _SEARCH_INDEX_CACHE
-
-    q = query.strip().lower()
-    results = []
-    seen_usernames = set()
-
-    def _add_item(item):
-        username = str(item.get("userName") or item.get("username") or "")
-        full_name = str(item.get("fullName") or item.get("displayName") or "")
-        if not username:
-            return
-        if username.lower() in seen_usernames:
-            return
-        if (q in username.lower()
-                or q in full_name.lower()
-                or q in (full_name or username).lower()):
-            seen_usernames.add(username.lower())
-            avatar_url = item.get("avatarUrl")
-            if not avatar_url:
-                avatar_url = _get_user_avatar(username)
-            results.append({
-                "avatarUrl": avatar_url,
-                "username": username,
-                "fullName": full_name or None,
-            })
-
-    for item in source:
-        _add_item(item)
-        if len(results) >= 20:
-            break
-
-    return {"results": results}
+    return {"results": []}
 
 
 _FALLBACK_INVESTORS = [

@@ -4,6 +4,7 @@ Portfolio Pro Investor selection interface HTML template.
 
 import os
 import uuid
+import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
 from typing import Any, Dict, List, Optional
@@ -44,6 +45,8 @@ _PERIOD_GAIN_CACHE: Dict[str, Dict[str, Optional[float]]] = {}
 _COUNTRIES_API_BASE = "https://countries.dev"
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
 _SEARCH_INDEX_CACHE: Optional[List[Dict[str, Any]]] = None
+_SEARCH_QUERY_CACHE: Dict[str, tuple] = {}
+_SEARCH_CACHE_TTL = 30
 
 
 def _load_etoro_country_map() -> None:
@@ -717,6 +720,24 @@ def _search_user_full(username: str) -> Optional[Dict[str, Any]]:
     return None
 
 
+def _ensure_etoro_pi_indexes(db_name: str, coll) -> None:
+    try:
+        existing = set(idx["key"] for idx in coll.list_indexes())
+        target = {("userName", 1), ("fullName", 1), ("username", 1), ("isPi", 1)}
+        if not target.issubset(existing):
+            for field in ("userName", "fullName", "username"):
+                try:
+                    coll.create_index([(field, 1)], background=True)
+                except Exception:
+                    pass
+            try:
+                coll.create_index([("userName", 1), ("fullName", 1), ("username", 1)], background=True)
+            except Exception:
+                pass
+    except Exception:
+        pass
+
+
 def _search_etoro_pi_db(query: str, limit: int = 20) -> Dict[str, Any]:
     if DatabaseManager is None:
         return {"results": [], "error": "MongoDB client not available"}
@@ -729,14 +750,15 @@ def _search_etoro_pi_db(query: str, limit: int = 20) -> Dict[str, Any]:
         db = DatabaseManager().get_client()
         db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
         coll = db[db_name]["etoro_pi"]
+        _ensure_etoro_pi_indexes(db_name, coll)
 
-        regex = {"$regex": q, "$options": "i"}
+        prefix = {"$regex": f"^{q}", "$options": "i"}
         cursor = coll.find(
             {
                 "$or": [
-                    {"userName": regex},
-                    {"fullName": regex},
-                    {"username": regex},
+                    {"userName": prefix},
+                    {"fullName": prefix},
+                    {"username": prefix},
                 ]
             },
             {
@@ -796,11 +818,53 @@ def search_investors_api(query: str) -> Dict[str, Any]:
     if not query or not query.strip():
         return {"results": []}
 
-    db_result = _search_etoro_pi_db(query, limit=20)
-    if db_result.get("results"):
-        return db_result
+    q = query.strip().lower()
+    now = time.time()
 
-    return {"results": []}
+    for prefix_len in range(len(q), 0, -1):
+        prefix = q[:prefix_len]
+        entry = _SEARCH_QUERY_CACHE.get(prefix)
+        if entry is None:
+            continue
+        ts, cached_results = entry
+        if now - ts > _SEARCH_CACHE_TTL:
+            del _SEARCH_QUERY_CACHE[prefix]
+            continue
+        if cached_results.get("results") and prefix == q:
+            _SEARCH_QUERY_CACHE[q] = (now, cached_results)
+            return cached_results
+        if cached_results.get("results"):
+            filtered = _filter_results_by_suffix(cached_results["results"], q[prefix_len:])
+            result = {"results": filtered}
+            _SEARCH_QUERY_CACHE[q] = (now, result)
+            return result
+
+    db_result = _search_etoro_pi_db(query, limit=20)
+    _cleanup_expired_cache_entries(now)
+    _SEARCH_QUERY_CACHE[q] = (now, db_result)
+    return db_result
+
+
+def _filter_results_by_suffix(results: List[Dict[str, Any]], suffix: str) -> List[Dict[str, Any]]:
+    if not suffix:
+        return results
+    suffix_lower = suffix.lower()
+    filtered = []
+    for item in results:
+        searchable = " ".join([
+            str(item.get("userName", "")),
+            str(item.get("fullName", "")),
+            str(item.get("username", "")),
+        ]).lower()
+        if suffix_lower in searchable:
+            filtered.append(item)
+    return filtered[:20]
+
+
+def _cleanup_expired_cache_entries(now: float) -> None:
+    expired = [k for k, (ts, _) in _SEARCH_QUERY_CACHE.items() if now - ts > _SEARCH_CACHE_TTL]
+    for k in expired:
+        del _SEARCH_QUERY_CACHE[k]
 
 
 _FALLBACK_INVESTORS = [
@@ -1817,7 +1881,7 @@ def get_portfolio_selection_html() -> str:
                         .catch(function() {{
                             dropdown.classList.remove('active');
                         }});
-                }}, 200);
+                }}, 120);
             }});
 
             searchInput.addEventListener('focus', function() {{

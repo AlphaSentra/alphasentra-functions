@@ -16,7 +16,7 @@ def clear_cache() -> None:
     Logs the outcome so that Render cron runs and local batch jobs can
     distinguish success from silent failure.
     """
-    cache_dir = _HERE.parent.parent / "port" / ".cache"
+    cache_dir = _HERE.parent.parent.parent / ".cache"
     try:
         if cache_dir.is_dir():
             shutil.rmtree(cache_dir)

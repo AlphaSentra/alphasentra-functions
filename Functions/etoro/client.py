@@ -109,7 +109,7 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
                     f"GET {url} failed after {max_retries} attempts: {exc}"
                 ) from exc
         if attempt < max_retries - 1:
-            delay = base_delay * (2 ** attempt) + __import__('random').uniform(0, 1.0)
+            delay = base_delay * (1.1 ** attempt) + __import__('random').uniform(0, 1.0)
             logger.info("Retrying %s in %.1fs...", url, delay)
             time.sleep(delay)
     raise EToroClientError(

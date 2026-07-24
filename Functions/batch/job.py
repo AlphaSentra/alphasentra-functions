@@ -58,8 +58,6 @@ def run_script(script_path: Path) -> dict:
             [sys.executable, str(script_path)],
             check=True,
             timeout=SCRIPT_TIMEOUT_SECONDS,
-            capture_output=True,
-            text=True,
         )
         duration = time.perf_counter() - start
         return {
@@ -70,6 +68,7 @@ def run_script(script_path: Path) -> dict:
         }
     except subprocess.CalledProcessError as exc:
         duration = time.perf_counter() - start
+        print(f"\n[ERROR] {script_name} exited with code {exc.returncode}")
         return {
             "name": script_name,
             "status": "failed",
@@ -78,6 +77,7 @@ def run_script(script_path: Path) -> dict:
         }
     except subprocess.TimeoutExpired:
         duration = time.perf_counter() - start
+        print(f"\n[TIMEOUT] {script_name} exceeded {SCRIPT_TIMEOUT_SECONDS}s limit")
         return {
             "name": script_name,
             "status": "timeout",

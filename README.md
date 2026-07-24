@@ -216,7 +216,26 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
     healthCheckPath: /
+
+  - type: cron
+    name: ago-batch-cache
+    env: python
+    plan: starter
+    schedule: "0 0 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python Functions/batch/job.py
+    autoDeploy: true
 ```
+
+#### Environment Variables
+
+Set all required environment variables in the Render dashboard. To share variables between the `web` and `cron` services, use **Render Environment Groups**:
+
+1. In the Render dashboard, go to **Environment** → **Environment Groups**.
+2. Create an environment group and add all shared variables (MongoDB, eToro, etc.).
+3. Attach the environment group to both the `ago-functions` web service and the `ago-batch-cache` cron service.
+
+This avoids duplicating secrets and keeps them in sync across services.
 
 Key production dependencies:
 - `gunicorn` — WSGI HTTP server

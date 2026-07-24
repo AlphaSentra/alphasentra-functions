@@ -6,3 +6,12 @@ services:
     buildCommand: pip install -r requirements.txt
     startCommand: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
     healthCheckPath: /
+
+  - type: cron
+    name: ago-batch-cache
+    env: python
+    plan: starter
+    schedule: "0 0 * * *"
+    buildCommand: pip install -r requirements.txt
+    startCommand: python Functions/batch/job.py
+    autoDeploy: true

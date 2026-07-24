@@ -19,7 +19,7 @@ import pandas as pd
 
 _logger = logging.getLogger(__name__)
 
-_CACHE_DIR = Path(__file__).resolve().parent / ".cache"
+_CACHE_DIR = Path(__file__).resolve().parent.parent.parent / ".cache"
 try:
     _CACHE_DIR.mkdir(parents=True, exist_ok=True)
 except Exception as exc:

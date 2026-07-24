@@ -11,15 +11,6 @@ from Functions.port.cache import get as cache_get, set as cache_set
 from Functions.port.config import CACHE_TTL_PRICE as _PRICE_TTL, CACHE_TTL_SECTOR as _SECTOR_TTL
 
 
-def _normalize_ticker(ticker: str) -> str:
-    ticker = ticker.replace(".ASX", ".AX") if isinstance(ticker, str) and ticker.endswith(".ASX") else ticker
-    return ticker
-
-
-def _normalize_tickers(tickers):
-    return [_normalize_ticker(t) for t in tickers]
-
-
 def _normalize_dividend_yield(div_yield) -> float:
     if div_yield is None:
         return 0.0
@@ -56,13 +47,12 @@ def _to_camel_case(meta: AssetMetadata) -> dict:
 
 class YFinanceProvider(MarketDataProvider):
     def download_price_data(self, tickers, start_date, end_date) -> pd.DataFrame:
-        normalized = _normalize_tickers(tickers)
-        cache_key = (tuple(sorted(normalized)), str(start_date))
+        cache_key = (tuple(sorted(tickers)), str(start_date))
         cached = cache_get(cache_key, _PRICE_TTL, ext=".pkl")
         if cached is not None:
             return cached
         data = yf.download(
-            normalized,
+            tickers,
             start=start_date,
             end=end_date,
             auto_adjust=False,
@@ -74,17 +64,16 @@ class YFinanceProvider(MarketDataProvider):
         return data
 
     def get_sector_industry_data(self, tickers) -> pd.DataFrame:
-        normalized = _normalize_tickers(tickers)
-        cache_key = ("sector", tuple(sorted(normalized)))
+        cache_key = ("sector", tuple(sorted(tickers)))
         cached = cache_get(cache_key, _SECTOR_TTL, ext=".pkl")
         if cached is not None:
             return cached
 
-        _MAX_WORKERS = min(10, len(normalized) or 1)
+        _MAX_WORKERS = min(10, len(tickers) or 1)
         with ThreadPoolExecutor(max_workers=_MAX_WORKERS) as executor:
             future_map = {
                 executor.submit(self._fetch_info_with_retries, ticker): ticker
-                for ticker in normalized
+                for ticker in tickers
             }
             results = {}
             for future in as_completed(future_map):
@@ -96,7 +85,7 @@ class YFinanceProvider(MarketDataProvider):
                     results[ticker] = None
 
         records = []
-        for ticker in normalized:
+        for ticker in tickers:
             info = results.get(ticker)
             if info is None:
                 records.append(AssetMetadata.failed(ticker))

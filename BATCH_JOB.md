@@ -10,7 +10,7 @@ The runner executes three scripts in order. Each script depends on the state lef
 
 | Order | Script | Purpose |
 |-------|--------|---------|
-| 1 | `port_clear_cache.py` | Deletes the `Functions/port/.cache/` directory to ensure a clean state before warming. |
+| 1 | `port_clear_cache.py` | Deletes the `/.cache/` directory to ensure a clean state before warming. |
 | 2 | `index_function_cache.py` | Generates the landing-page index HTML and stores it in cache. |
 | 3 | `port_selection_cache.py` | Generates portfolio selection HTML, caches the top-investor usernames list, and pre-generates per-investor portfolio reports. |
 
@@ -83,19 +83,23 @@ services:
     autoDeploy: true
 ```
 
-### 2. Configure Environment Variables in Render
+### 2. Share Environment Variables with Environment Groups (Recommended)
 
-In the Render dashboard, open the **ago-batch-cache** service and add the following under **Environment**:
+To avoid duplicating environment variables across the `web` and `cron` services, use **Render Environment Groups**:
 
-- `USE_MONGODB_SRV`
-- `MONGODB_SRV` (if `USE_MONGODB_SRV=true`)
-- `MONGODB_DATABASE`
-- `MONGODB_USERNAME`
-- `MONGODB_PASSWORD`
-- `MONGODB_AUTH_SOURCE`
-- `ETORO_PRIVATE_KEY`
+1. In the Render dashboard, go to **Environment** → **Environment Groups**.
+2. Create a new group (e.g., `ago-functions-env`) and add all shared variables there:
+   - `USE_MONGODB_SRV`
+   - `MONGODB_SRV` (if applicable)
+   - `MONGODB_DATABASE`
+   - `MONGODB_USERNAME`
+   - `MONGODB_PASSWORD`
+   - `MONGODB_AUTH_SOURCE`
+   - `ETORO_PRIVATE_KEY`
+   - Any other shared secrets
+3. Attach the environment group to **both** the `ago-functions` web service and the `ago-batch-cache` cron service.
 
-> **Security note:** Do not commit secrets to the repository. Render injects these at runtime.
+This ensures both services always use the same values, and you only need to update them in one place.
 
 ### 3. Verify Working Directory
 

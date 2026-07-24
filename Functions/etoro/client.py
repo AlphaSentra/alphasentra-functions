@@ -41,6 +41,17 @@ _INSTRUMENT_CACHE_TTL = 24 * 60 * 60
 _ETORO_MAX_RETRIES = 5
 _ETORO_STALE_TTL = 24 * 60 * 60
 
+_ETORO_PUBLIC_API_BASE = "https://public-api.etoro.com"
+_ETORO_SAPI_BASE = "https://www.etoro.com/sapi"
+
+_ETORO_ENDPOINT_USER_INFO = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people"
+_ETORO_ENDPOINT_DAILY_GAIN = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/daily-gain"
+_ETORO_ENDPOINT_PORTFOLIO_LIVE = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/portfolio/live"
+_ETORO_ENDPOINT_PEOPLE_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/search"
+_ETORO_ENDPOINT_MARKET_DATA_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/market-data/search"
+_ETORO_ENDPOINT_PORTFOLIO_RANKINGS = f"{_ETORO_PUBLIC_API_BASE}/api/v2/portfolios/{{username}}/rankings"
+_ETORO_ENDPOINT_TRADE_HISTORY = f"{_ETORO_SAPI_BASE}/trade-data-real/history/public/credit/flat"
+
 
 def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Response:
     max_retries = _ETORO_MAX_RETRIES
@@ -78,7 +89,8 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
             time.sleep(delay)
     raise EToroClientError(
         f"GET {url} failed after {max_retries} attempts: "
-        f"last_status={last_status}, body={last_body_preview!r}"
+        f"last_status={last_status}, body={last_body_preview!r}",
+        status_code=last_status,
     )
 
 
@@ -137,7 +149,9 @@ logger = logging.getLogger(__name__)
 
 
 class EToroClientError(Exception):
-    pass
+    def __init__(self, message, status_code=None):
+        super().__init__(message)
+        self.status_code = status_code
 
 
 class ETPublicClient:
@@ -184,7 +198,7 @@ class ETPublicClient:
         if granularity not in {"Daily", "Period"}:
             raise ValueError("granularity must be one of: Daily, Period")
 
-        url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
+        url = _ETORO_ENDPOINT_DAILY_GAIN.format(username=username)
 
         params: Dict[str, Any] = {"type": granularity}
         if min_date:
@@ -248,7 +262,7 @@ class ETPublicClient:
         if cached is not None:
             return cached
         stale = cache_get(cache_key, _ETORO_STALE_TTL, ext=".pkl")
-        url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/portfolio/live"
+        url = _ETORO_ENDPOINT_PORTFOLIO_LIVE.format(username=username)
 
         def _session_factory():
             return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
@@ -495,7 +509,7 @@ class ETPublicClient:
             return cached
     
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        url = "https://www.etoro.com/sapi/trade-data-real/history/public/credit/flat"
+        url = _ETORO_ENDPOINT_TRADE_HISTORY
     
         params: Dict[str, Any] = {
             "cid": resolved_cid,
@@ -530,7 +544,7 @@ class ETPublicClient:
         return result
     
     def _resolve_cid_from_username(self, username: str) -> str:
-        url = "https://public-api.etoro.com/api/v1/user-info/people"
+        url = _ETORO_ENDPOINT_USER_INFO
         params: Dict[str, Any] = {"usernames": username}
 
         def _session_factory():
@@ -603,7 +617,7 @@ class ETPublicClient:
             return result
 
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        search_url = "https://public-api.etoro.com/api/v1/market-data/search"
+        search_url = _ETORO_ENDPOINT_MARKET_DATA_SEARCH
 
         with ThreadPoolExecutor(max_workers=min(10, len(remaining) or 1)) as executor:
             futures = {executor.submit(_fetch_instrument_metadata, session, search_url, iid): iid for iid in remaining}
@@ -642,7 +656,7 @@ class ETPublicClient:
             return EToroUserLookupResult(by_cid={}, requested=cids)
     
         session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
-        url = "https://public-api.etoro.com/api/v1/user-info/people"
+        url = _ETORO_ENDPOINT_USER_INFO
         params: Dict[str, Any] = {"cidList": ",".join(str(c) for c in cids)}
     
         def _session_factory():
@@ -672,6 +686,67 @@ class ETPublicClient:
                     by_cid[str(val)] = etoro_user
     
         return EToroUserLookupResult(by_cid=by_cid, requested=[str(c) for c in cids])
+
+    def get_user_info(self, usernames: str) -> Dict[str, Any]:
+        url = _ETORO_ENDPOINT_USER_INFO
+        params: Dict[str, Any] = {"usernames": usernames}
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET user info failed: {exc}") from exc
+
+    def get_daily_gain(self, username: str, params: Dict[str, Any]) -> Any:
+        url = _ETORO_ENDPOINT_DAILY_GAIN.format(username=username)
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET daily gain failed: {exc}") from exc
+
+    def search_people(self, params: Dict[str, Any]) -> Dict[str, Any]:
+        url = _ETORO_ENDPOINT_PEOPLE_SEARCH
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET search people failed: {exc}") from exc
+
+    def get_portfolio_rankings(self, username: str, params: Dict[str, Any]) -> Dict[str, Any]:
+        url = _ETORO_ENDPOINT_PORTFOLIO_RANKINGS.format(username=username)
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, params=params, timeout=self._timeout)
+            resp.raise_for_status()
+            return resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET portfolio rankings failed: {exc}") from exc
 
 
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:

@@ -3,7 +3,6 @@ Portfolio Pro Investor selection interface HTML template.
 """
 
 import os
-import uuid
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
@@ -15,7 +14,7 @@ from dotenv import load_dotenv
 
 from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
-from Functions.etoro.auth import get_random_private_key
+from Functions.etoro.client import EToroClientError, get_public_client_from_env
 
 try:
     from Functions.helpers import DatabaseManager
@@ -36,9 +35,6 @@ _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ENV_PATH = os.path.join(_BASE_DIR, "..", "..", ".env")
 load_dotenv(dotenv_path=_ENV_PATH, override=False)
 
-_ETORO_API_KEY = os.getenv("ETORO_PUBLIC_KEY", "")
-_RANKINGS_URL = "https://public-api.etoro.com/api/v1/user-info/people/search"
-_USER_INFO_URL = "https://public-api.etoro.com/api/v1/user-info/people"
 _AVATAR_CACHE: Dict[str, Optional[str]] = {}
 _TREND_CACHE: Dict[str, List[float]] = {}
 _COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
@@ -74,34 +70,11 @@ def _load_etoro_country_map() -> None:
 _load_etoro_country_map()
 
 
-def _get_session(user_key: Optional[str] = None) -> requests.Session:
-    session = requests.Session()
-    session.headers.update({
-        "User-Agent": "Mozilla/5.0 (compatible; alphasentra-etoro-client)",
-        "Accept": "application/json",
-        "x-api-key": _ETORO_API_KEY,
-        "x-user-key": user_key or get_random_private_key(),
-        "x-request-id": str(uuid.uuid4()),
-    })
-    return session
-
-
-def _get_trend_session() -> requests.Session:
-    return _get_session()
-
-
-def _session_get_with_retry(session_factory, url: str, **kwargs) -> Optional[requests.Response]:
-    max_retries = 6
-    for attempt in range(max_retries):
-        session = session_factory()
-        try:
-            resp = session.get(url, **kwargs)
-            if resp.status_code != 401:
-                return resp
-        except requests.RequestException:
-            if attempt == max_retries - 1:
-                return None
-    return None
+def _get_etoro_client():
+    try:
+        return get_public_client_from_env()
+    except Exception:
+        return None
 
 
 def _get_user_avatar(username: str) -> Optional[str]:
@@ -110,14 +83,17 @@ def _get_user_avatar(username: str) -> Optional[str]:
     if username in _AVATAR_CACHE:
         return _AVATAR_CACHE[username]
 
-    resp = _session_get_with_retry(
-        _get_session,
-        _USER_INFO_URL,
-        params={"usernames": username},
-        timeout=20,
-    )
-    if resp and resp.status_code == 200:
-        data = resp.json()
+    client = _get_etoro_client()
+    if client is None:
+        _AVATAR_CACHE[username] = None
+        return None
+
+    try:
+        data = client.get_user_info(username)
+    except EToroClientError:
+        _AVATAR_CACHE[username] = None
+        return None
+    if isinstance(data, dict):
         users = data.get("users", [])
         if users:
             avatars = users[0].get("avatars") or []
@@ -138,32 +114,33 @@ def _get_trend_data(username: str) -> List[float]:
 
     min_date = (datetime.now(timezone.utc) - timedelta(days=30)).strftime("%Y-%m-%d")
     max_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
-    resp = _session_get_with_retry(
-        _get_session,
-        url,
-        params={"minDate": min_date, "maxDate": max_date, "type": "Daily"},
-        timeout=20,
-    )
-    if resp and resp.status_code == 200:
-        data = resp.json()
-        if not isinstance(data, list):
-            if isinstance(data, dict):
-                data = data.get("dailyExample", data.get("daily", []))
-            else:
-                data = []
-        points = []
-        cumulative = 0.0
-        for entry in data:
-            if not isinstance(entry, dict):
-                continue
-            gain = entry.get("gain")
-            if gain is not None:
-                cumulative += float(gain)
-                points.append(cumulative)
-        if points:
-            _TREND_CACHE[username] = points
-            return points
+    client = _get_etoro_client()
+    if client is None:
+        _TREND_CACHE[username] = []
+        return []
+
+    try:
+        data = client.get_daily_gain(username, {"minDate": min_date, "maxDate": max_date, "type": "Daily"})
+    except EToroClientError:
+        _TREND_CACHE[username] = []
+        return []
+    if not isinstance(data, list):
+        if isinstance(data, dict):
+            data = data.get("dailyExample", data.get("daily", []))
+        else:
+            data = []
+    points = []
+    cumulative = 0.0
+    for entry in data:
+        if not isinstance(entry, dict):
+            continue
+        gain = entry.get("gain")
+        if gain is not None:
+            cumulative += float(gain)
+            points.append(cumulative)
+    if points:
+        _TREND_CACHE[username] = points
+        return points
     _TREND_CACHE[username] = []
     return []
 
@@ -175,24 +152,26 @@ def _get_period_gain(username: str, period: str) -> Optional[float]:
     if cache_key in _PERIOD_GAIN_CACHE:
         return _PERIOD_GAIN_CACHE[cache_key]
 
-    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
-    resp = _session_get_with_retry(
-        _get_session,
-        url,
-        params={"type": "Period", "period": period},
-        timeout=20,
-    )
-    result: Optional[float] = None
-    if resp is not None and resp.status_code == 200:
-        data = resp.json()
-        if isinstance(data, dict):
-            result = data.get("gain") or data.get("gainPercent")
-        elif isinstance(data, list) and data:
-            entry = data[0]
-            result = entry.get("gain") or entry.get("gainPercent")
-    elif resp is not None and resp.status_code == 404:
-        result = _get_period_gain_from_daily(username, period)
+    client = _get_etoro_client()
+    if client is None:
+        _PERIOD_GAIN_CACHE[cache_key] = None
+        return None
 
+    try:
+        data = client.get_daily_gain(username, {"type": "Period", "period": period})
+    except EToroClientError as exc:
+        if exc.status_code == 404:
+            result = _get_period_gain_from_daily(username, period)
+            _PERIOD_GAIN_CACHE[cache_key] = result
+            return result
+        _PERIOD_GAIN_CACHE[cache_key] = None
+        return None
+    result: Optional[float] = None
+    if isinstance(data, dict):
+        result = data.get("gain") or data.get("gainPercent")
+    elif isinstance(data, list) and data:
+        entry = data[0]
+        result = entry.get("gain") or entry.get("gainPercent")
     _PERIOD_GAIN_CACHE[cache_key] = result
     return result
 
@@ -202,20 +181,16 @@ def _get_period_gain_from_daily(username: str, period: str) -> Optional[float]:
     days = period_days.get(period, 30)
     min_date = (datetime.now(timezone.utc) - timedelta(days=days)).strftime("%Y-%m-%d")
     max_date = datetime.now(timezone.utc).strftime("%Y-%m-%d")
-    url = f"https://public-api.etoro.com/api/v1/user-info/people/{username}/daily-gain"
-    resp = _session_get_with_retry(
-        _get_session,
-        url,
-        params={"type": "Daily", "minDate": min_date, "maxDate": max_date},
-        timeout=20,
-    )
-    if resp is None or resp.status_code != 200:
+    client = _get_etoro_client()
+    if client is None:
         return None
 
-    data = resp.json()
+    try:
+        data = client.get_daily_gain(username, {"type": "Daily", "minDate": min_date, "maxDate": max_date})
+    except EToroClientError:
+        return None
     if not isinstance(data, list):
         return None
-
     total = 0.0
     for entry in data:
         if not isinstance(entry, dict):
@@ -266,42 +241,30 @@ def _trend_svg_for_gains(week_gain: Optional[float], month_gain: Optional[float]
 
 
 def _get_rankings(period: str = "CurrMonth", sort: Optional[str] = "-copiersGain", page_size: int = 20, page: int = 1, search_text: Optional[str] = None) -> Dict[str, Any]:
-    max_retries = 6
-    used_keys = set()
-    last_error = None
-    for attempt in range(max_retries):
-        session = _get_session()
-        if session.headers.get("x-user-key") in used_keys:
-            continue
-        used_keys.add(session.headers.get("x-user-key", ""))
-        params: Dict[str, Any] = {
-            "period": period,
-            "sort": sort,
-            "copiersMin": 10,
-            "weeksSinceRegistrationMin": 52,
-            "page": page,
-        }
-        if page_size is not None:
-            params["pageSize"] = page_size
-        if search_text:
-            params["searchText"] = search_text
+    params: Dict[str, Any] = {
+        "period": period,
+        "sort": sort,
+        "copiersMin": 10,
+        "weeksSinceRegistrationMin": 52,
+        "page": page,
+    }
+    if page_size is not None:
+        params["pageSize"] = page_size
+    if search_text:
+        params["searchText"] = search_text
 
-        try:
-            resp = session.get(_RANKINGS_URL, params=params, timeout=30)
-            resp.raise_for_status()
-            data = resp.json()
-        except requests.RequestException as exc:
-            last_error = exc
-            if attempt < max_retries - 1:
-                continue
-            return {"results": [], "pagination": {}, "error": str(exc)}
+    client = _get_etoro_client()
+    if client is None:
+        return {"results": [], "pagination": {}, "error": "eToro client not initialized"}
 
+    try:
+        data = client.search_people(params)
         return {
             "results": data.get("items", []),
             "pagination": data.get("pagination", {}),
         }
-
-    return {"results": [], "pagination": {}, "error": str(last_error) if last_error else "Max retries exceeded with invalid API keys"}
+    except EToroClientError as exc:
+        return {"results": [], "pagination": {}, "error": str(exc)}
 
 
 def _build_gain_map(items: List[Dict[str, Any]], gain_key: str) -> Dict[str, float]:
@@ -706,50 +669,29 @@ def _search_user_full(username: str) -> Optional[Dict[str, Any]]:
     if not username or username == "My Portfolio":
         return None
 
-    max_retries = 6
-    used_keys = set()
-    for attempt in range(max_retries):
-        session = _get_session()
-        if session.headers.get("x-user-key") in used_keys:
-            continue
-        used_keys.add(session.headers.get("x-user-key", ""))
+    client = _get_etoro_client()
+    if client is None:
+        return None
 
-        params: Dict[str, Any] = {"period": "CurrMonth"}
-        try:
-            resp = session.get(
-                f"https://public-api.etoro.com/api/v2/portfolios/{username}/rankings",
-                params=params,
-                timeout=30,
-            )
-            if resp.status_code == 200:
-                data = resp.json()
-                item = data.get("data")
-                if item and isinstance(item, dict):
-                    if str(item.get("userName", item.get("username", ""))).lower() == username.lower():
-                        if not item.get("country") and not item.get("countryId"):
-                            try:
-                                info_resp = _session_get_with_retry(
-                                    _get_session,
-                                    _USER_INFO_URL,
-                                    params={"usernames": username},
-                                    timeout=20,
-                                )
-                                if info_resp and info_resp.status_code == 200:
-                                    info_data = info_resp.json()
-                                    users = info_data.get("users", [])
-                                    if users:
-                                        country_val = users[0].get("country")
-                                        if country_val is not None:
-                                            item["country"] = country_val
-                            except Exception:
-                                pass
-                        return item
-                return None
-        except requests.RequestException:
-            if attempt == max_retries - 1:
-                return None
-            continue
-    return None
+    try:
+        data = client.get_portfolio_rankings(username, {"period": "CurrMonth"})
+        item = data.get("data")
+        if item and isinstance(item, dict):
+            if str(item.get("userName", item.get("username", ""))).lower() == username.lower():
+                if not item.get("country") and not item.get("countryId"):
+                    try:
+                        user_data = client.get_user_info(username)
+                        users = user_data.get("users", [])
+                        if users:
+                            country_val = users[0].get("country")
+                            if country_val is not None:
+                                item["country"] = country_val
+                    except EToroClientError:
+                        pass
+                return item
+        return None
+    except EToroClientError:
+        return None
 
 
 def _ensure_etoro_pi_indexes(db_name: str, coll) -> None:
@@ -1022,15 +964,10 @@ def get_portfolio_selection_html() -> str:
             _prefetch_country_data([my_portfolio_item])
 
     if not my_portfolio_item and username_from_cookie != "My Portfolio":
-        try:
-            resp = _session_get_with_retry(
-                _get_session,
-                _USER_INFO_URL,
-                params={"usernames": username_from_cookie},
-                timeout=20,
-            )
-            if resp and resp.status_code == 200:
-                data = resp.json()
+        client = _get_etoro_client()
+        if client is not None:
+            try:
+                data = client.get_user_info(username_from_cookie)
                 users = data.get("users", [])
                 if users:
                     my_portfolio_item = users[0]
@@ -1038,9 +975,9 @@ def get_portfolio_selection_html() -> str:
                 else:
                     my_portfolio_invalid = True
                     my_portfolio_error = f"@{username_from_cookie} portfolio does not exist"
-            else:
+            except EToroClientError:
                 my_portfolio_api_failed = True
-        except Exception:
+        else:
             my_portfolio_api_failed = True
 
     if my_portfolio_api_failed and username_from_cookie != "My Portfolio":

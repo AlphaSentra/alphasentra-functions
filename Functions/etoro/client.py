@@ -38,7 +38,7 @@ from .models import (
 
 _INSTRUMENT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / ".etoro_instrument_cache.json"
 _INSTRUMENT_CACHE_TTL = 24 * 60 * 60
-_ETORO_MAX_RETRIES = 5
+_ETORO_MAX_RETRIES = 10
 _ETORO_STALE_TTL = 24 * 60 * 60
 
 _ETORO_PUBLIC_API_BASE = "https://public-api.etoro.com"

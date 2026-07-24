@@ -44,3 +44,7 @@
 2026-07-24 09:27:37,424 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
 2026-07-24 09:27:47,396 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
 2026-07-24 09:27:51,181 - INFO - [INFO] - Portfolio report caching complete: 16 generated, 0 skipped, 0 errors.
+2026-07-24 09:55:48,083 - INFO - [INFO] - Cleared cache directory: /Users/daivieth/Documents/_G8I/Development/alphasentra-functions/Functions/port/.cache
+2026-07-24 09:55:50,156 - INFO - [INFO] - Cached index HTML (4559 chars).
+2026-07-24 09:57:43,393 - INFO - [INFO] - Cleared cache directory: /Users/daivieth/Documents/_G8I/Development/alphasentra-functions/Functions/port/.cache
+2026-07-24 09:57:46,821 - INFO - [INFO] - Cached index HTML (4559 chars).

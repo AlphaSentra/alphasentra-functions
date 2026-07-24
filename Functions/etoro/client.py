@@ -3,6 +3,7 @@ import os
 import sys
 import time
 import logging
+import threading
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -40,6 +41,11 @@ _INSTRUMENT_CACHE_PATH = Path(__file__).resolve().parent.parent / "data" / ".eto
 _INSTRUMENT_CACHE_TTL = 24 * 60 * 60
 _ETORO_MAX_RETRIES = 10
 _ETORO_STALE_TTL = 24 * 60 * 60
+_ETORO_PAUSE_AFTER_API_CALLS = 250
+_ETORO_PAUSE_DURATION_SECONDS = 60
+
+_etoro_api_call_count = 0
+_etoro_api_lock = threading.Lock()
 
 _ETORO_PUBLIC_API_BASE = "https://public-api.etoro.com"
 _ETORO_SAPI_BASE = "https://www.etoro.com/sapi"
@@ -53,6 +59,20 @@ _ETORO_ENDPOINT_PORTFOLIO_RANKINGS = f"{_ETORO_PUBLIC_API_BASE}/api/v2/portfolio
 _ETORO_ENDPOINT_TRADE_HISTORY = f"{_ETORO_SAPI_BASE}/trade-data-real/history/public/credit/flat"
 
 
+def _maybe_pause_after_api_call() -> None:
+    global _etoro_api_call_count
+    with _etoro_api_lock:
+        _etoro_api_call_count += 1
+        if _etoro_api_call_count >= _ETORO_PAUSE_AFTER_API_CALLS:
+            _etoro_api_call_count = 0
+            logger.info(
+                "Pausing eToro API calls for %ds after %d requests...",
+                _ETORO_PAUSE_DURATION_SECONDS,
+                _ETORO_PAUSE_AFTER_API_CALLS,
+            )
+            time.sleep(_ETORO_PAUSE_DURATION_SECONDS)
+
+
 def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Response:
     max_retries = _ETORO_MAX_RETRIES
     base_delay = 2.0
@@ -62,6 +82,11 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
         session = session_factory()
         try:
             resp = session.get(url, **kwargs)
+        except requests.RequestException:
+            _maybe_pause_after_api_call()
+            raise
+        _maybe_pause_after_api_call()
+        try:
             if resp.status_code == 401:
                 logger.warning("eToro API 401 on attempt %d for %s", attempt + 1, url)
             elif 200 <= resp.status_code < 300:

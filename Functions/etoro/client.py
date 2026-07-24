@@ -89,9 +89,14 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
         try:
             if resp.status_code == 401:
                 logger.warning("eToro API 401 on attempt %d for %s", attempt + 1, url)
+            elif resp.status_code == 404:
+                raise EToroClientError(
+                    f"GET {url} failed: not found (404)",
+                    status_code=404,
+                )
             elif 200 <= resp.status_code < 300:
                 return resp
-            else:
+            elif resp.status_code == 429 or resp.status_code >= 500:
                 last_status = resp.status_code
                 try:
                     body = resp.json()
@@ -101,6 +106,11 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
                 logger.warning(
                     "eToro API HTTP %d on attempt %d for %s body=%s",
                     last_status, attempt + 1, url, last_body_preview,
+                )
+            else:
+                raise EToroClientError(
+                    f"GET {url} failed with HTTP {resp.status_code}",
+                    status_code=resp.status_code,
                 )
         except requests.RequestException as exc:
             logger.warning("eToro API error on attempt %d for %s: %s", attempt + 1, url, exc)

@@ -381,7 +381,7 @@ def _render_login_prompt_row() -> str:
         f'</span>'
         f'<a href="{login_url}" class="my-portfolio-login-btn"'
         f' onclick="window.top.location.href=\'{login_url}\'; event.stopPropagation(); event.preventDefault(); return false;">'
-        f'Sign In &rarr;'
+        f'Login &rarr;'
         f'</a>'
         f'</div>'
         f'</div>'

@@ -9,7 +9,7 @@ PARENT_APP_ALLOWED_ORIGINS = [
     "https://app.alphasentra.com",
     "http://localhost:8888",
     "http://127.0.0.1:8888",
-    "https://ago-functions.onrender.com/",
+    "https://ago-functions.onrender.com",
 ]
 LOGIN_REDIRECT_URL = "https://app.alphasentra.com/auth"
 REPORT_LOGO_SRC = "https://media.licdn.com/dms/image/v2/D4E0BAQFj-vxTtbFnIg/company-logo_200_200/B4EZ89D__DIwAE-/0/1783435886807/etoro_logo?e=1785974400&v=beta&t=dYQqN0I8QuoBODHrfTDERJW4W1IOZM_HHBPhdp-osRg"

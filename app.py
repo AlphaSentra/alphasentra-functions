@@ -162,7 +162,10 @@ def auth():
         return make_response('', 204)
 
     if not _is_allowed_origin():
-        return jsonify({'ok': False, 'error': 'Unauthorized origin'}), 403
+        return jsonify({
+            'ok': False,
+            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/port/config.py"
+        }), 403
 
     username = request.form.get('etoro_authuser', '').strip()
     if not username:

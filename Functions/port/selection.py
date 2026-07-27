@@ -911,8 +911,11 @@ def get_portfolio_selection_html() -> str:
     rankings_cache_key = ("portfolio_selection_rankings",)
     cached_rankings = cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl")
     
+    _using_fallback_rankings = False
     if cached_rankings is not None:
         merged, week_map, month_map, year_map = cached_rankings
+        if merged and len(merged) == len(_FALLBACK_INVESTORS) and merged[0].get("cid") == _FALLBACK_INVESTORS[0].get("cid"):
+            _using_fallback_rankings = True
     else:
         try:
             merged, week_map, month_map, year_map = _fetch_rankings()
@@ -968,13 +971,13 @@ def get_portfolio_selection_html() -> str:
             my_portfolio_item = item
             break
 
-    if not my_portfolio_item and username_from_cookie != "My Portfolio":
+    if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
         my_portfolio_item = _search_user_full(username_from_cookie)
         if my_portfolio_item:
             my_portfolio_from_rankings = True
             _prefetch_country_data([my_portfolio_item])
 
-    if not my_portfolio_item and username_from_cookie != "My Portfolio":
+    if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
         client = _get_etoro_client()
         if client is not None:
             try:
@@ -1045,11 +1048,11 @@ def get_portfolio_selection_html() -> str:
         my_month_gain = month_map.get(cid)
         my_year_gain = year_map.get(cid)
 
-        if my_week_gain is None and username_from_cookie != "My Portfolio":
+        if my_week_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
             my_week_gain = _get_period_gain(username_from_cookie, "1m")
-        if my_month_gain is None and username_from_cookie != "My Portfolio":
+        if my_month_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
             my_month_gain = _get_period_gain(username_from_cookie, "3m")
-        if my_year_gain is None and username_from_cookie != "My Portfolio":
+        if my_year_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
             my_year_gain = _get_period_gain(username_from_cookie, "1y")
 
         if my_week_gain is not None or my_month_gain is not None or my_year_gain is not None:
@@ -1057,11 +1060,12 @@ def get_portfolio_selection_html() -> str:
             my_month_gain_html = _safe_gain(my_month_gain)
             my_year_gain_html = _safe_gain(my_year_gain)
 
-            my_trend_points = _get_trend_data(username_from_cookie)
-            if my_trend_points:
-                my_trend_svg_val = _trend_svg_from_points(my_trend_points)
-            else:
-                my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
+            if not _using_fallback_rankings:
+                my_trend_points = _get_trend_data(username_from_cookie)
+                if my_trend_points:
+                    my_trend_svg_val = _trend_svg_from_points(my_trend_points)
+                else:
+                    my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
 
     if not my_portfolio_item or my_portfolio_invalid:
         if not is_authenticated:
@@ -2076,6 +2080,23 @@ def cached_portfolio_selection_html() -> str:
     cached = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
     if cached is not None:
         return cached
+
+    rankings_cache_key = ("portfolio_selection_rankings",)
+    if cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl") is None:
+        cache_set(rankings_cache_key, (_FALLBACK_INVESTORS, _WEEK_MAP, _MONTH_MAP, _YEAR_MAP), ext=".pkl")
+
+    for item in _FALLBACK_INVESTORS:
+        username = str(item.get("userName", item.get("username", item.get("cid", ""))))
+        if username:
+            _AVATAR_CACHE[username] = item.get("avatarUrl")
+            _TREND_CACHE[username] = []
+        country = item.get("country")
+        country_id = item.get("countryId")
+        if country:
+            _COUNTRY_INFO_CACHE[str(country)] = None
+        if country_id is not None:
+            _COUNTRY_INFO_CACHE[str(country_id)] = None
+
     html = get_portfolio_selection_html()
     cache_set(cache_key, html, ext=".html")
     return html

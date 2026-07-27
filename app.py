@@ -1,17 +1,30 @@
 import json
 import os
+import threading
 import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
-from Functions.port.selection import search_investors_api
+from Functions.port.selection import search_investors_api, get_portfolio_selection_html
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
-from Functions.port.cache import exists as cache_exists, get as cache_get
+from Functions.port.cache import exists as cache_exists, get as cache_get, invalidate as cache_invalidate, set as cache_set
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
 
 app = Flask(__name__)
 
 _COOKIE_MAX_AGE = 86400
+
+
+def _warm_portfolio_cache():
+    try:
+        cache_invalidate(("portfolio_selection_rankings",))
+        html = get_portfolio_selection_html()
+        cache_set(("portfolio_selection",), html, ext=".html")
+    except Exception:
+        pass
+
+
+threading.Thread(target=_warm_portfolio_cache, daemon=True).start()
 
 def _parse_auth_cookie(value):
     if not value:

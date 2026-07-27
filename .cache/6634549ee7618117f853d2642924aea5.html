@@ -1,0 +1,953 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Function - Select Investor</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        :root {
+            --brand-primary: #40e0d0;
+            --neutral-0: #000000;
+            --text-primary: #e5e7eb;
+            --semantic-positive: #34d399;
+            --semantic-warning: #fbbf24;
+            --text-muted: #94a3b8;
+            --border-default: #334155;
+            --bg-subtle: #111827;
+            --text-heading: #f8fafc;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+
+        body {
+            font-family: monospace;
+            background: var(--neutral-0);
+            color: var(--text-primary);
+            min-height: 100vh;
+            margin: 20px auto;
+            padding: 0;
+            max-width: 1380px;
+        }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+        ::-webkit-scrollbar-thumb { background: var(--border-default); }
+
+        .selection-background-wrapper {
+          position: relative;
+          background-color: #000000;
+        }
+
+        .selection-foreground {
+          position: relative;
+          z-index: 1;
+        }
+
+        .search-container {
+            font-family: monospace;
+            padding: 20px;
+            position: relative;
+        }
+
+        .search-input {
+            width: 100%;
+            padding: 8px;
+            box-sizing: border-box;
+            background-color: #111827;
+            border: 1px solid #334155;
+            color: #40e0d0;
+            font-family: monospace;
+            font-size: 16px;
+            line-height: 24px;
+            outline: none;
+            caret-color: #40e0d0;
+            caret-shape: block;
+            text-transform: uppercase;
+        }
+
+        .search-input:focus {
+            border-color: #40e0d0;
+        }
+
+        .search-input::placeholder {
+            color: #94a3b8;
+        }
+
+        .search-dropdown {
+            position: absolute;
+            top: 100%;
+            left: 20px;
+            right: 20px;
+            background-color: var(--brand-primary);
+            border: 1px solid #334155;
+            border-top: none;
+            max-height: 320px;
+            overflow-y: auto;
+            z-index: 1000;
+            display: none;
+        }
+
+        .search-dropdown.active {
+            display: block;
+        }
+
+        .search-dropdown-item {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 10px 12px;
+            cursor: pointer;
+            border-bottom: 1px solid #233046;
+            transition: background-color 0.15s ease;
+        }
+
+        .search-dropdown-item:hover, .search-dropdown-item.selected {
+            background-color: rgba(21, 184, 166);
+        }
+
+        .search-dropdown-item:last-child {
+            border-bottom: none;
+        }
+
+        .search-dropdown-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            background-color: #34d399;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000000;
+            font-weight: bold;
+            font-size: 14px;
+        }
+
+        .search-dropdown-avatar img {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            object-fit: cover;
+        }
+
+        .search-dropdown-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 0;
+        }
+
+        .search-dropdown-name {
+            font-weight: bold;
+            color: #1a1a1a;
+            font-size: 14px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-dropdown-username {
+            color: #3a3a3a;
+            font-size: 12px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .search-dropdown-empty {
+            padding: 16px;
+            text-align: center;
+            color: #3a3a3a;
+            font-size: 14px;
+        }
+
+        .my-portfolio-container {
+            padding: 20px;
+        }
+
+        .selection-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .my-portfolio-row {
+            cursor: pointer;
+            text-decoration: none;
+            color: inherit;
+        }
+
+        .my-portfolio-investor {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .my-portfolio-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background-color: #34d399;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: #000000;
+            font-weight: bold;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .my-portfolio-info {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+            min-width: 160px;
+        }
+
+        .my-portfolio-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .my-portfolio-name {
+            font-weight: bold;
+            color: #f8fafc;
+            font-size: 14px;
+        }
+
+        .my-portfolio-username {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .my-portfolio-country {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            font-size: 12px;
+            color: #e5e7eb;
+            flex-shrink: 0;
+        }
+
+        .my-portfolio-country-flag {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .my-portfolio-aum {
+            font-weight: bold;
+            color: #e5e7eb;
+            font-size: 14px;
+            min-width: 60px;
+        }
+
+        .my-portfolio-copiers-value {
+            color: #e5e7eb;
+            font-size: 13px;
+        }
+
+        .my-portfolio-copiers-change {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        .my-portfolio-performance {
+            font-size: 13px;
+            min-width: 50px;
+        }
+
+        .my-portfolio-performance-positive {
+            color: #34d399;
+        }
+
+        .my-portfolio-performance-negative {
+            color: #f87171;
+        }
+
+        .my-portfolio-trend {
+            width: 100px;
+            height: 28px;
+            flex-shrink: 0;
+        }
+
+        .my-portfolio-login-prompt {
+            cursor: default;
+        }
+
+        .my-portfolio-login-avatar {
+            background-color: #111827 !important;
+            border: 1.5px dashed #334155;
+        }
+
+        .my-portfolio-login-name {
+            color: #94a3b8;
+            font-weight: 600;
+        }
+
+        .my-portfolio-login-subtitle {
+            color: #94a3b8;
+            font-size: 12px;
+            font-style: italic;
+        }
+
+        .my-portfolio-login-btn {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            margin-top: 10px;
+            padding: 7px 16px;
+            border-radius: 6px;
+            background-color: #40e0d0;
+            color: #000000;
+            font-size: 13px;
+            font-weight: 600;
+            text-decoration: none;
+            transition: opacity 0.15s ease;
+            letter-spacing: 0.02em;
+            align-self: flex-start;
+        }
+
+        .my-portfolio-login-btn:hover {
+            opacity: 0.88;
+            color: #000000;
+        }
+
+        .selection-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 16px;
+        }
+
+        .selection-title {
+            font-size: 20px;
+            font-weight: bold;
+            color: #f8fafc;
+            margin: 0;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+
+        .investor-table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+            table-layout: fixed;
+        }
+
+        .investor-table col:nth-child(1) {
+            width: 35%;
+        }
+
+        .investor-table col:nth-child(2) {
+            width: 10%;
+        }
+
+        .investor-table col:nth-child(3) {
+            width: 10%;
+        }
+
+        .investor-table col:nth-child(4) {
+            width: 13%;
+        }
+
+        .investor-table col:nth-child(5) {
+            width: 7%;
+        }
+
+        .investor-table col:nth-child(6) {
+            width: 7%;
+        }
+
+        .investor-table col:nth-child(7) {
+            width: 8%;
+        }
+
+        .investor-table col:nth-child(8) {
+            width: 10%;
+        }
+
+        .selection-container {
+            font-family: monospace;
+            padding: 20px;
+            color: #e5e7eb;
+        }
+
+        .investor-table thead th {
+            text-align: left;
+            padding: 10px 12px;
+            color: #94a3b8;
+            font-weight: normal;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            border-bottom: 1px solid #233046;
+            white-space: nowrap;
+        }
+
+        .investor-table tbody tr {
+            border-bottom: 1px solid #233046;
+            transition: background-color 0.15s ease;
+            cursor: pointer;
+        }
+
+        .investor-table tbody tr:hover {
+            background-color: #243247;
+        }
+
+        .investor-table tbody td {
+            padding: 14px 12px;
+            vertical-align: middle;
+            white-space: nowrap;
+        }
+
+        .investor-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .investor-avatar {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            object-fit: cover;
+            flex-shrink: 0;
+            background-color: #111827;
+        }
+
+        .investor-details {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .investor-name-row {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .investor-name {
+            font-weight: bold;
+            color: #f8fafc;
+            font-size: 14px;
+        }
+
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 6px;
+            border-radius: 3px;
+            font-size: 10px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 0.03em;
+            line-height: 1.4;
+        }
+
+        .badge-elite-pro {
+            background-color: rgba(64, 224, 208, 0.15);
+            color: #40e0d0;
+            border: 1px solid rgba(64, 224, 208, 0.3);
+        }
+
+        .badge-elite {
+            background-color: rgba(64, 224, 208, 0.1);
+            color: #40e0d0;
+            border: 1px solid rgba(64, 224, 208, 0.25);
+        }
+
+        .badge-champion {
+            background-color: rgba(251, 191, 36, 0.15);
+            color: #fbbf24;
+            border: 1px solid rgba(251, 191, 36, 0.3);
+        }
+
+        .investor-username {
+            color: #94a3b8;
+            font-size: 12px;
+        }
+
+        .country-badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            padding: 3px 8px;
+            border-radius: 4px;
+            background-color: #1e293b;
+            border: 1px solid #334155;
+            font-size: 12px;
+            color: #e5e7eb;
+        }
+
+        .country-flag {
+            font-size: 14px;
+            line-height: 1;
+        }
+
+        .aum-value {
+            font-weight: bold;
+            color: #e5e7eb;
+            font-size: 14px;
+        }
+
+        .copiers-value {
+            color: #e5e7eb;
+            font-size: 13px;
+        }
+
+        .copiers-change {
+            font-size: 11px;
+            color: #94a3b8;
+        }
+
+        .perf-pill {
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+            font-size: 13px;
+            display: inline-block;
+            color: #000000;
+        }
+
+        .perf-pill-pos {
+            background-color: #34d399;
+        }
+
+        .perf-pill-neg {
+            background-color: #f87171;
+        }
+
+        .perf-pill-na {
+            background-color: #94a3b8;
+        }
+
+        .my-portfolio-performance {
+            font-size: 13px;
+            min-width: 50px;
+        }
+
+        .my-portfolio-performance-positive {
+            background-color: #34d399;
+            color: #000000;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .my-portfolio-performance-negative {
+            background-color: #f87171;
+            color: #000000;
+            padding: 4px 8px;
+            border-radius: 4px;
+            font-weight: bold;
+        }
+
+        .trend-chart {
+            width: 100px;
+            height: 28px;
+        }
+
+        .no-results {
+            text-align: center;
+            padding: 48px 16px;
+            color: #94a3b8;
+            font-size: 14px;
+        }
+
+        .hidden {
+            display: none !important;
+        }
+
+        .frozen-top {
+            position: sticky;
+            top: 0;
+            z-index: 10;
+            background: var(--neutral-0);
+        }
+
+        .loading-overlay {
+            position: fixed;
+            inset: 0;
+            background: #000000;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.2s ease;
+        }
+
+        .loading-overlay.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
+        .loading-spinner {
+            width: 40px;
+            height: 40px;
+            border: 3px solid #334155;
+            border-top-color: #40e0d0;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .loading-text {
+            margin-top: 12px;
+            font-size: 14px;
+            color: #94a3b8;
+            letter-spacing: 0.05em;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="loading-overlay" id="loading-overlay">
+        <div class="loading-spinner"></div>
+        <div class="loading-text">Loading...</div>
+    </div>
+    <div class="selection-background-wrapper">
+        <div class="selection-foreground">
+            <div class="frozen-top">
+                <div class="search-container">
+                    <input
+                        type="text"
+                        class="search-input"
+                        id="investor-search"
+                        placeholder="Search Pro Investors..."
+                        autocomplete="off"
+                        autofocus
+                    >
+                    <div class="search-dropdown" id="investor-search-dropdown"></div>
+                </div>
+                <div class="my-portfolio-container">
+                    <table class="investor-table">
+                        <colgroup>
+                            <col style="width: 35%">
+                            <col style="width: 10%">
+                            <col style="width: 10%">
+                            <col style="width: 13%">
+                            <col style="width: 7%">
+                            <col style="width: 7%">
+                            <col style="width: 8%">
+                            <col style="width: 10%">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>My Portfolio</th>
+                                <th>Country</th>
+                                <th>AUM</th>
+                                <th>Copiers</th>
+                                <th>1M</th>
+                                <th>3M</th>
+                                <th>1Y</th>
+                                <th>1M Trend</th>
+                            </tr>
+                        </thead>
+                        <tbody id="my-portfolio-table-body">
+<tr class="my-portfolio-row" data-search="etoro team @etoroteam 250"><td><div class="my-portfolio-investor"><img class="my-portfolio-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/918269/11.jpg" alt="avatar" onerror="this.style.display='none'"><div class="my-portfolio-info"><div class="my-portfolio-name-row"><span class="my-portfolio-name">eToro Team</span></div><span class="my-portfolio-username">@eToroTeam</span></div></div></td><td><span class="country-badge">ZZ</span></td><td><span class="my-portfolio-aum">$0</span></td><td><div class="my-portfolio-copiers-value">0</div><div class="my-portfolio-copiers-change"></div></td><td class="my-portfolio-performance"><span class="perf-pill perf-pill-neg">▼ -0.01%</span></td><td class="my-portfolio-performance"><span class="perf-pill perf-pill-neg">▼ -9.95%</span></td><td class="my-portfolio-performance"><span class="perf-pill perf-pill-neg">▼ -59.74%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,8.43 3.45,8.43 6.90,4.89 10.34,9.24 13.79,0.00 17.24,4.30 20.69,4.30 24.14,4.30 27.59,4.30 31.03,3.43 34.48,9.95 37.93,4.68 41.38,3.37 44.83,14.24 48.28,14.24 51.72,14.24 55.17,18.70 58.62,16.91 62.07,16.04 65.52,27.18 68.97,20.82 72.41,20.82 75.86,20.82 79.31,28.00 82.76,23.00 86.21,23.00 89.66,19.41 93.10,15.82 96.55,15.82 100.00,15.82"/></svg></td></tr>
+                        </tbody>
+                    </table>
+                </div>
+                <div class="selection-container">
+                    <div class="selection-header">
+                        <h2 class="selection-title">
+                            Top Pro Investors Trending This Week
+                        </h2>
+                    </div>
+                    <table class="investor-table">
+                        <colgroup>
+                            <col style="width: 35%">
+                            <col style="width: 10%">
+                            <col style="width: 10%">
+                            <col style="width: 13%">
+                            <col style="width: 7%">
+                            <col style="width: 7%">
+                            <col style="width: 8%">
+                            <col style="width: 10%">
+                        </colgroup>
+                        <thead>
+                            <tr>
+                                <th>Pro Investor</th>
+                                <th>Country</th>
+                                <th>AUM</th>
+                                <th>Copiers</th>
+                                <th>1M</th>
+                                <th>3M</th>
+                                <th>1Y</th>
+                                <th>1M Trend</th>
+                            </tr>
+                        </thead>
+                    </table>
+                </div>
+            </div>
+            <div class="selection-container">
+                <table class="investor-table">
+                    <colgroup>
+                        <col style="width: 35%">
+                        <col style="width: 10%">
+                        <col style="width: 10%">
+                        <col style="width: 13%">
+                        <col style="width: 7%">
+                        <col style="width: 7%">
+                        <col style="width: 8%">
+                        <col style="width: 10%">
+                    </colgroup>
+                    <tbody id="investor-table-body">
+                        <tr class="" data-search="jana popa @janka2805 gb"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/18576705/1.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Jana Popa</span></div><span class="investor-username">@Janka2805</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇬🇧</span>GB</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">49</div><div class="copiers-change">&#x25B2; +512.5% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -4.44%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +10.09%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +23.08%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,28.00 3.45,28.00 6.90,22.22 10.34,18.08 13.79,18.70 17.24,16.66 20.69,15.47 24.14,15.47 27.59,15.47 31.03,10.26 34.48,13.83 37.93,15.98 41.38,12.36 44.83,7.48 48.28,7.48 51.72,7.54 55.17,11.11 58.62,6.06 62.07,0.00 65.52,2.32 68.97,8.22 72.41,8.22 75.86,8.22 79.31,8.28 82.76,4.87 86.21,6.52 89.66,17.40 93.10,17.29 96.55,17.29 100.00,17.23"/></svg></td></tr>
+<tr class="" data-search="william nguyen @positive_vector au"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/20206025/17.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">William Nguyen</span></div><span class="investor-username">@Positive_Vector</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇦🇺</span>AU</span></td><td><span class="aum-value">$50K-$100K</span></td><td><div class="copiers-value">132</div><div class="copiers-change">&#x25B2; +59.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -4.18%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +28.25%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +47.00%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,6.29 3.45,6.29 6.90,0.00 10.34,0.13 13.79,8.13 17.24,16.45 20.69,16.45 24.14,16.45 27.59,16.45 31.03,10.27 34.48,17.44 37.93,16.27 41.38,10.59 44.83,9.76 48.28,9.76 51.72,9.76 55.17,16.24 58.62,12.56 62.07,17.87 65.52,28.00 68.97,27.89 72.41,27.89 75.86,27.89 79.31,26.35 82.76,13.97 86.21,12.88 89.66,13.39 93.10,20.21 96.55,20.21 100.00,20.21"/></svg></td></tr>
+<tr class="" data-search="ming jung ho @choose3395 tw"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/13121897/14.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Ming Jung Ho</span></div><span class="investor-username">@choose3395</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇹🇼</span>TW</span></td><td><span class="aum-value">$300K-$1M</span></td><td><div class="copiers-value">570</div><div class="copiers-change">&#x25B2; +40.7% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -0.70%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +2.53%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +26.06%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,27.94 3.45,28.00 6.90,25.22 10.34,26.60 13.79,22.70 17.24,18.87 20.69,16.74 24.14,16.74 27.59,16.82 31.03,14.22 34.48,13.84 37.93,15.51 41.38,15.59 44.83,15.21 48.28,15.21 51.72,15.39 55.17,13.05 58.62,11.15 62.07,5.65 65.52,9.63 68.97,13.08 72.41,13.08 75.86,13.17 79.31,12.58 82.76,1.26 86.21,0.00 89.66,0.85 93.10,3.25 96.55,3.25 100.00,3.01"/></svg></td></tr>
+<tr class="" data-search="joan figueroa espaillat @joanfigueroa47 do"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/17409164/2.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Joan Figueroa Espaillat</span></div><span class="investor-username">@joanfigueroa47</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇩🇴</span>DO</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +37.5% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -5.42%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +65.06%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +160.70%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,13.30 3.45,13.30 6.90,5.34 10.34,0.00 13.79,8.28 17.24,11.35 20.69,11.19 24.14,11.19 27.59,11.19 31.03,8.24 34.48,15.49 37.93,15.25 41.38,10.28 44.83,11.39 48.28,11.39 51.72,11.39 55.17,16.25 58.62,12.35 62.07,12.43 65.52,20.11 68.97,26.17 72.41,26.17 75.86,26.17 79.31,21.91 82.76,15.73 86.21,16.53 89.66,21.43 93.10,28.00 96.55,28.00 100.00,28.00"/></svg></td></tr>
+<tr class="" data-search="trevina benyamin @trevinayoussef ae"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/15229029/5.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Trevina Benyamin</span></div><span class="investor-username">@TrevinaYoussef</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇦🇪</span>AE</span></td><td><span class="aum-value">$300K-$1M</span></td><td><div class="copiers-value">534</div><div class="copiers-change">&#x25B2; +27.1% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -3.70%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +23.06%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +52.44%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,20.25 3.45,20.25 6.90,10.76 10.34,3.81 13.79,11.29 17.24,17.24 20.69,17.17 24.14,17.17 27.59,17.17 31.03,11.89 34.48,15.57 37.93,14.10 41.38,3.01 44.83,0.00 48.28,0.00 51.72,0.00 55.17,14.17 58.62,5.35 62.07,7.15 65.52,23.52 68.97,26.40 72.41,26.40 75.86,26.40 79.31,23.12 82.76,2.34 86.21,4.48 89.66,12.90 93.10,28.00 96.55,28.00 100.00,27.93"/></svg></td></tr>
+<tr class="" data-search="eduardo palacios aliaga @palinved es"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/28732101/1.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Eduardo Palacios aliaga</span></div><span class="investor-username">@Palinved</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇪🇸</span>ES</span></td><td><span class="aum-value">$50K-$100K</span></td><td><div class="copiers-value">60</div><div class="copiers-change">&#x25B2; +25.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -6.62%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +15.97%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +36.47%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,8.31 3.45,8.31 6.90,4.75 10.34,0.00 13.79,7.78 17.24,17.65 20.69,17.65 24.14,17.65 27.59,17.65 31.03,14.95 34.48,19.98 37.93,20.64 41.38,11.91 44.83,12.15 48.28,12.15 51.72,12.15 55.17,18.94 58.62,12.34 62.07,13.62 65.52,24.49 68.97,28.00 72.41,28.00 75.86,28.00 79.31,24.39 82.76,10.87 86.21,12.15 89.66,16.61 93.10,26.67 96.55,26.67 100.00,26.67"/></svg></td></tr>
+<tr class="" data-search="luis flores @josu24 es"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/19583334/4.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Luis Flores</span></div><span class="investor-username">@josu24</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇪🇸</span>ES</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">17</div><div class="copiers-change">&#x25B2; +13.3% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -2.84%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +14.79%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +187.84%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,28.00 3.45,28.00 6.90,23.63 10.34,25.88 13.79,6.04 17.24,6.61 20.69,6.61 24.14,6.42 27.59,6.42 31.03,0.00 34.48,3.79 37.93,7.45 41.38,3.02 44.83,2.31 48.28,2.31 51.72,2.31 55.17,9.57 58.62,8.35 62.07,5.01 65.52,10.40 68.97,19.91 72.41,19.91 75.86,19.84 79.31,16.06 82.76,13.55 86.21,15.54 89.66,23.12 93.10,23.50 96.55,23.50 100.00,23.50"/></svg></td></tr>
+<tr class="" data-search="hrishikesh rahalkar @hrishikeshr1 au"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/5820211/3.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Hrishikesh Rahalkar</span></div><span class="investor-username">@hrishikeshr1</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇦🇺</span>AU</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">18</div><div class="copiers-change">&#x25B2; +12.5% 1M</div></td><td class=""><span class="perf-pill perf-pill-pos">▲ +4.35%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +26.25%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +74.95%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,26.38 3.45,26.38 6.90,28.00 10.34,27.59 13.79,25.59 17.24,25.69 20.69,25.69 24.14,25.69 27.59,25.69 31.03,14.63 34.48,8.22 37.93,10.98 41.38,9.23 44.83,11.95 48.28,11.95 51.72,11.95 55.17,6.21 58.62,0.00 62.07,5.28 65.52,4.62 68.97,9.03 72.41,9.03 75.86,9.03 79.31,11.46 82.76,14.84 86.21,21.08 89.66,27.04 93.10,26.91 96.55,26.91 100.00,26.91"/></svg></td></tr>
+<tr class="" data-search="pawel cylkowski @globalalphas pl"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/15454006/3.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Pawel Cylkowski</span></div><span class="investor-username">@GlobalAlphaS</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇵🇱</span>PL</span></td><td><span class="aum-value">$300K-$1M</span></td><td><div class="copiers-value">427</div><div class="copiers-change">&#x25B2; +12.4% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -3.54%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +23.11%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +45.33%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,24.29 3.45,24.29 6.90,16.08 10.34,1.46 13.79,14.39 17.24,14.06 20.69,11.92 24.14,11.81 27.59,11.81 31.03,3.04 34.48,17.99 37.93,20.69 41.38,2.59 44.83,0.00 48.28,0.00 51.72,0.00 55.17,19.34 58.62,2.47 62.07,1.69 65.52,21.37 68.97,28.00 72.41,27.89 75.86,27.89 79.31,26.43 82.76,4.05 86.21,4.39 89.66,19.90 93.10,26.76 96.55,26.76 100.00,26.31"/></svg></td></tr>
+<tr class="" data-search="tobias engstroem carlsen @epicquality se"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/33794252/7.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Tobias Engstroem Carlsen</span></div><span class="investor-username">@EpicQuality</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇸🇪</span>SE</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -4.91%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +8.41%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +2.59%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,27.96 3.45,28.00 6.90,22.03 10.34,18.11 13.79,11.36 17.24,10.32 20.69,7.72 24.14,7.72 27.59,7.72 31.03,6.83 34.48,9.04 37.93,13.96 41.38,7.99 44.83,5.39 48.28,5.39 51.72,5.43 55.17,5.89 58.62,4.30 62.07,0.00 65.52,1.16 68.97,7.60 72.41,7.60 75.86,7.64 79.31,6.55 82.76,9.23 86.21,15.16 89.66,21.99 93.10,21.21 96.55,21.21 100.00,21.06"/></svg></td></tr>
+<tr class="" data-search="leo ory @leoory30 fr"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/24009616/5.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Leo Ory</span></div><span class="investor-username">@LeoOry30</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇫🇷</span>FR</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-pos">▲ +0.09%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +6.47%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +9.09%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,26.91 3.45,28.00 6.90,23.08 10.34,25.40 13.79,21.31 17.24,14.89 20.69,11.20 24.14,9.83 27.59,8.60 31.03,6.15 34.48,9.42 37.93,16.25 41.38,10.24 44.83,6.15 48.28,6.97 51.72,7.24 55.17,11.75 58.62,4.37 62.07,3.82 65.52,4.10 68.97,8.74 72.41,6.56 75.86,6.97 79.31,6.01 82.76,0.00 86.21,0.00 89.66,8.33 93.10,6.69 96.55,6.15 100.00,3.14"/></svg></td></tr>
+<tr class="" data-search="cristian adam @prester_john ro"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/28794242/2.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Cristian Adam</span></div><span class="investor-username">@Prester_John</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇷🇴</span>RO</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-pos">▲ +13.46%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +19.52%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +15.19%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,14.97 3.45,14.97 6.90,16.15 10.34,23.08 13.79,28.00 17.24,22.71 20.69,22.71 24.14,22.71 27.59,22.71 31.03,21.19 34.48,14.79 37.93,16.92 41.38,16.34 44.83,14.70 48.28,14.70 51.72,14.70 55.17,14.76 58.62,15.69 62.07,12.87 65.52,5.66 68.97,9.59 72.41,9.59 75.86,9.59 79.31,8.11 82.76,7.52 86.21,5.91 89.66,7.49 93.10,0.00 96.55,0.00 100.00,0.00"/></svg></td></tr>
+<tr class="" data-search="petter skaar @petterskaar no"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/8012985/26.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">petter skaar</span></div><span class="investor-username">@petterskaar</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇳🇴</span>NO</span></td><td><span class="aum-value"><$50K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -2.32%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +7.05%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +70.27%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#34d399" stroke-width="1.5" points="0.00,23.60 3.45,23.60 6.90,18.37 10.34,13.09 13.79,5.47 17.24,21.02 20.69,21.02 24.14,21.02 27.59,21.02 31.03,16.99 34.48,9.75 37.93,9.19 41.38,0.00 44.83,13.47 48.28,13.47 51.72,13.47 55.17,13.34 58.62,7.17 62.07,20.76 65.52,14.28 68.97,16.93 72.41,16.93 75.86,16.93 79.31,23.60 82.76,14.41 86.21,18.44 89.66,28.00 93.10,23.34 96.55,23.34 100.00,23.34"/></svg></td></tr>
+<tr class="" data-search="andré mendes @andrecmendes pt"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/39862254/3.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">André Mendes</span></div><span class="investor-username">@AndreCMendes</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇵🇹</span>PT</span></td><td><span class="aum-value">$100K-$300K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -3.58%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +5.25%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +5.27%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,9.84 3.45,9.84 6.90,6.39 10.34,0.00 13.79,8.01 17.24,12.06 20.69,11.10 24.14,11.10 27.59,11.10 31.03,8.65 34.48,15.86 37.93,15.47 41.38,8.92 44.83,13.64 48.28,13.64 51.72,13.68 55.17,22.17 58.62,16.18 62.07,19.75 65.52,27.92 68.97,26.65 72.41,26.65 75.86,26.69 79.31,28.00 82.76,16.54 86.21,16.26 89.66,16.58 93.10,21.58 96.55,21.58 100.00,21.50"/></svg></td></tr>
+<tr class="" data-search="ettore de lellis @ettoredelellis de"><td><div class="investor-info"><img class="investor-avatar" src="https://etoro-cdn.etorostatic.com/avatars/original/8105123/1.jpg" alt="avatar" onerror="this.style.display='none'"><div class="investor-details"><div class="investor-name-row"><span class="investor-name">Ettore De Lellis</span></div><span class="investor-username">@ettoredelellis</span></div></div></td><td><span class="country-badge"><span class="country-flag">🇩🇪</span>DE</span></td><td><span class="aum-value">$50K-$100K</span></td><td><div class="copiers-value">11</div><div class="copiers-change">&#x25B2; +10.0% 1M</div></td><td class=""><span class="perf-pill perf-pill-neg">▼ -9.78%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +9.82%</span></td><td class=""><span class="perf-pill perf-pill-pos">▲ +2.90%</span></td><td><svg class="trend-chart" viewBox="0 0 100 28" preserveAspectRatio="none"><polyline fill="none" stroke="#f87171" stroke-width="1.5" points="0.00,12.57 3.45,12.70 6.90,4.49 10.34,0.00 13.79,4.62 17.24,7.78 20.69,6.88 24.14,6.71 27.59,6.54 31.03,4.32 34.48,13.81 37.93,13.76 41.38,9.15 44.83,10.69 48.28,10.86 51.72,11.03 55.17,19.79 58.62,12.70 62.07,15.52 65.52,26.08 68.97,27.74 72.41,27.49 75.86,27.57 79.31,26.46 82.76,15.22 86.21,17.40 89.66,20.73 93.10,28.00 96.55,27.91 100.00,27.10"/></svg></td></tr>
+                    </tbody>
+                </table>
+                <div class="no-results hidden" id="no-results">No investors match your search.</div>
+            </div>
+        </div>
+    </div>
+    <script>
+        (function() {
+            const searchInput = document.getElementById('investor-search');
+            const dropdown = document.getElementById('investor-search-dropdown');
+            let debounceTimer = null;
+            let selectedIndex = -1;
+
+            function getInitials(name) {
+                if (!name) return '?';
+                const parts = name.trim().split(/\s+/);
+                return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
+            }
+
+            function clearSelection() {
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                items.forEach(function(el) { el.classList.remove('selected'); });
+                selectedIndex = -1;
+            }
+
+            function setSelectedIndex(index) {
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                if (!items.length) return;
+                if (index < 0) index = 0;
+                if (index >= items.length) index = items.length - 1;
+                clearSelection();
+                selectedIndex = index;
+                items[selectedIndex].classList.add('selected');
+                items[selectedIndex].scrollIntoView({ block: 'nearest' });
+            }
+
+            function selectCurrent() {
+                const items = dropdown.querySelectorAll('.search-dropdown-item');
+                if (selectedIndex < 0 || selectedIndex >= items.length) return;
+                const row = items[selectedIndex];
+                const username = row.getAttribute('data-username') || '';
+                const fullName = row.getAttribute('data-fullname') || '';
+                if (username) {
+                    window.location.href = '/etopi?etoro_username=' + encodeURIComponent(username);
+                }
+                dropdown.classList.remove('active');
+                searchInput.value = fullName || username;
+            }
+
+            function renderDropdown(results, error) {
+                dropdown.innerHTML = '';
+                clearSelection();
+                if (error) {
+                    dropdown.innerHTML = '<div class="search-dropdown-empty">' + error + '</div>';
+                    dropdown.classList.add('active');
+                    return;
+                }
+                if (!results.length) {
+                    dropdown.innerHTML = '<div class="search-dropdown-empty">No investors found.</div>';
+                    dropdown.classList.add('active');
+                    return;
+                }
+
+                results.forEach(function(item) {
+                    const avatarUrl = item.avatarUrl || '';
+                    const username = item.username || '';
+                    const fullName = item.fullName || '';
+
+                    const row = document.createElement('div');
+                    row.className = 'search-dropdown-item';
+
+                    let avatarHtml;
+                    if (avatarUrl) {
+                        avatarHtml = '<div class="search-dropdown-avatar"><img src="' + avatarUrl + '" alt="avatar" onerror="this.style.display=\'none\'"></div>';
+                    } else {
+                        const initials = getInitials(fullName || username);
+                        avatarHtml = '<div class="search-dropdown-avatar" style="background-color:#34d399;color:#000000;display:flex;align-items:center;justify-content:center;font-weight:bold;font-size:14px;">' + initials + '</div>';
+                    }
+
+                    const nameDisplay = fullName || username;
+                    const nameHtml = '<div class="search-dropdown-details">' +
+                        '<div class="search-dropdown-name">' + nameDisplay + '</div>' +
+                        (fullName ? '<div class="search-dropdown-username">@' + username + '</div>' : '') +
+                        '</div>';
+
+                    row.setAttribute('data-username', username);
+                    row.setAttribute('data-fullname', fullName);
+                    row.innerHTML = avatarHtml + nameHtml;
+
+                    row.addEventListener('mouseenter', function() {
+                        const items = dropdown.querySelectorAll('.search-dropdown-item');
+                        const arr = Array.prototype.slice.call(items);
+                        const idx = arr.indexOf(row);
+                        if (idx >= 0) setSelectedIndex(idx);
+                    });
+
+                    row.addEventListener('click', function() {
+                        if (username) {
+                            window.location.href = '/etopi?etoro_username=' + encodeURIComponent(username);
+                        }
+                        dropdown.classList.remove('active');
+                        searchInput.value = fullName || username;
+                    });
+
+                    dropdown.appendChild(row);
+                });
+
+                dropdown.classList.add('active');
+            }
+
+            searchInput.addEventListener('input', function() {
+                const query = this.value.trim();
+
+                clearTimeout(debounceTimer);
+                if (!query) {
+                    dropdown.classList.remove('active');
+                    return;
+                }
+
+                debounceTimer = setTimeout(function() {
+                    fetch('/port/search_investors?query=' + encodeURIComponent(query))
+                        .then(function(res) { return res.json(); })
+                        .then(function(data) {
+                            renderDropdown(data.results || [], data.error);
+                        })
+                        .catch(function() {
+                            dropdown.classList.remove('active');
+                        });
+                }, 120);
+            });
+
+            searchInput.addEventListener('focus', function() {
+                const query = this.value.trim();
+                if (query && dropdown.children.length > 0) {
+                    dropdown.classList.add('active');
+                }
+            });
+
+            searchInput.addEventListener('keydown', function(e) {
+                if (!dropdown.classList.contains('active')) {
+                    if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
+                        const query = searchInput.value.trim();
+                        if (query) {
+                            searchInput.dispatchEvent(new Event('input'));
+                        }
+                    }
+                    return;
+                }
+                if (e.key === 'ArrowDown') {
+                    e.preventDefault();
+                    const items = dropdown.querySelectorAll('.search-dropdown-item');
+                    if (!items.length) return;
+                    const next = selectedIndex + 1;
+                    setSelectedIndex(next);
+                } else if (e.key === 'ArrowUp') {
+                    e.preventDefault();
+                    const items = dropdown.querySelectorAll('.search-dropdown-item');
+                    if (!items.length) return;
+                    const prev = selectedIndex - 1;
+                    setSelectedIndex(prev);
+                } else if (e.key === 'Enter') {
+                    e.preventDefault();
+                    selectCurrent();
+                } else if (e.key === 'Escape') {
+                    dropdown.classList.remove('active');
+                }
+            });
+
+            document.addEventListener('click', function(e) {
+                if (!searchInput.contains(e.target) && !dropdown.contains(e.target)) {
+                    dropdown.classList.remove('active');
+                }
+            });
+
+            const tableBody = document.getElementById('investor-table-body');
+            const myPortfolioTableBody = document.getElementById('my-portfolio-table-body');
+
+            function handleTableRowClick(e) {
+                const row = e.target.closest('tr');
+                if (!row) return;
+
+                const nameCell = row.querySelector('.investor-name, .my-portfolio-name');
+                if (!nameCell) return;
+
+                const investorName = nameCell.textContent.trim();
+                const usernameCell = row.querySelector('.investor-username, .my-portfolio-username');
+                const username = usernameCell ? usernameCell.textContent.trim() : '';
+
+                if (investorName) {
+                    window.location.href = `/etopi?etoro_username=${encodeURIComponent(username.replace('@', ''))}`;
+                }
+            }
+
+            if (tableBody) {
+                tableBody.addEventListener('click', handleTableRowClick);
+            }
+            if (myPortfolioTableBody) {
+                myPortfolioTableBody.addEventListener('click', handleTableRowClick);
+            }
+        })();
+    </script>
+
+    <script>
+        (function() {
+            const overlay = document.getElementById('loading-overlay');
+            if (!overlay) return;
+
+            let submitted = false;
+
+            function hideOverlay() {
+                if (submitted) return;
+                overlay.classList.add('hidden');
+            }
+
+            if (document.readyState === 'complete') {
+                setTimeout(hideOverlay, 400);
+            } else {
+                window.addEventListener('load', function() {
+                    setTimeout(hideOverlay, 400);
+                });
+            }
+
+            window.addEventListener('beforeunload', function() {
+                submitted = true;
+            });
+        })();
+    </script>
+</body>
+</html>

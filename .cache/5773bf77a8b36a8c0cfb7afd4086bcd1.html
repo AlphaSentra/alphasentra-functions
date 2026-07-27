@@ -1,0 +1,95 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>AlphaSentra Functions</title>
+    <style>
+        :root {
+            --brand-primary: #40e0d0;
+            --neutral-0: #000000;
+            --text-primary: #e5e7eb;
+            --semantic-positive: #34d399;
+            --semantic-warning: #fbbf24;
+            --text-muted: #94a3b8;
+            --border-default: #334155;
+            --bg-subtle: #111827;
+            --text-heading: #f8fafc;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body { font-family: monospace; background: var(--neutral-0); color: var(--text-primary); min-height: 100vh; margin: 20px auto; padding: 0; max-width: 1380px; }
+
+        .main-menu { padding: 20px; }
+        .wide-caret { caret-color: cyan; caret-shape: block; }
+        .search-box { width: 100%; padding: 8px; margin-bottom: 16px; background: var(--bg-subtle); border: 1px solid var(--border-default); color: var(--brand-primary); font-family: monospace; font-size: 16px; line-height: 24px; outline: none; }
+        .search-box:focus { border-color: var(--brand-primary); }
+        .search-box { text-transform: uppercase; }
+        .panel-title { color: var(--text-heading); font-size: 20px; font-weight: bold; margin-bottom: 16px; border-bottom: 1px solid var(--border-default); padding-bottom: 6px; }
+        .menu-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(280px, 1fr)); gap: 4px; }
+        .menu-item { display: flex; justify-content: space-between; padding: 6px 10px; cursor: pointer; border: 1px solid transparent; }
+        .menu-item:hover { background: var(--bg-subtle); border-color: var(--border-default); }
+        .menu-item .fn { color: var(--semantic-warning); font-weight: bold; min-width: 70px; }
+        .menu-item .desc { color: var(--text-muted); flex: 1; }
+
+        ::-webkit-scrollbar { width: 8px; }
+        ::-webkit-scrollbar-track { background: var(--bg-subtle); }
+        ::-webkit-scrollbar-thumb { background: var(--border-default); }
+    </style>
+</head>
+<body>
+    <div class="main-menu">
+        <input type="text" class="search-box wide-caret" id="searchBox" placeholder="TYPE A FUNCTION..." autocomplete="off" autofocus>
+        <div class="menu-grid" id="menuGrid">
+            
+            <div class="menu-item" onclick="window.location.href='/'">
+                <span class="fn">&lt;INDEX&gt;</span>
+                <span class="desc">Function Index</span>
+            </div>
+            
+            <div class="menu-item" onclick="window.location.href='/ana'">
+                <span class="fn">&lt;ANA&gt;</span>
+                <span class="desc">Analyse</span>
+            </div>
+            
+            <div class="menu-item" onclick="window.location.href='/port'">
+                <span class="fn">&lt;PORT&gt;</span>
+                <span class="desc">Portfolio Investor Selection</span>
+            </div>
+            
+            <div class="menu-item" onclick="window.location.href='/eqs'">
+                <span class="fn">&lt;EQS&gt;</span>
+                <span class="desc">Stocks AI Screener</span>
+            </div>
+            
+            <div class="menu-item" onclick="window.location.href='/wcr'">
+                <span class="fn">&lt;WCR&gt;</span>
+                <span class="desc">Forex AI Screener</span>
+            </div>
+            
+            <div class="menu-item" onclick="window.location.href='/cryp'">
+                <span class="fn">&lt;CRYP&gt;</span>
+                <span class="desc">Cryptocurrency AI Screener</span>
+            </div>
+            
+        </div>
+    </div>
+    <script>
+        const searchBox = document.getElementById('searchBox');
+        const menuGrid = document.getElementById('menuGrid');
+        searchBox.addEventListener('input', function() {
+            this.value = this.value.toUpperCase();
+            const q = this.value.toLowerCase();
+            Array.from(menuGrid.children).forEach(item => {
+                const desc = item.querySelector('.desc').textContent.toLowerCase();
+                const fn = item.querySelector('.fn').textContent.toLowerCase();
+                item.style.display = desc.includes(q) || fn.includes(q) ? '' : 'none';
+            });
+        });
+        searchBox.addEventListener('keydown', function(e) {
+            if (e.key === 'Enter') {
+                const visible = Array.from(menuGrid.children).filter(item => item.style.display !== 'none');
+                if (visible.length > 0) visible[0].click();
+            }
+        });
+
+    </script>
+</body>
+</html>

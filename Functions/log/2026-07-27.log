@@ -1,0 +1,21 @@
+2026-07-27 17:05:56,518 - INFO - [INFO] - Cleared cache directory: /Users/daivieth/Documents/_G8I/Development/alphasentra-functions/.cache
+2026-07-27 17:06:01,401 - INFO - [INFO] - Cached index HTML (4559 chars).
+2026-07-27 17:07:24,855 - INFO - [INFO] - Cached portfolio selection HTML for user etoroteam (50777 chars).
+2026-07-27 17:07:24,856 - INFO - [INFO] - Cached 15 top investor usernames to port_top_investors_username.json.
+2026-07-27 17:07:26,917 - INFO - [INFO] - Caching portfolio reports for 15 investors...
+2026-07-27 17:07:52,027 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:08:16,018 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:08:41,869 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:09:06,203 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:09:24,205 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:09:46,035 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:10:01,871 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:10:15,112 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:10:34,671 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:10:53,219 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:11:10,920 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:11:24,845 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:11:39,255 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:12:03,053 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:12:33,270 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 17:12:43,425 - INFO - [INFO] - Portfolio report caching complete: 15 generated, 0 skipped, 0 errors.

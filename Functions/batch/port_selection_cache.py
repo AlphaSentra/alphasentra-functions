@@ -68,7 +68,7 @@ with app.app_context():
     if usernames:
         log_info(f"Caching portfolio reports for {len(usernames)} investors...")
         ok = skip = err = 0
-        with ThreadPoolExecutor(max_workers=2) as executor:
+        with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {executor.submit(_cache_report, u): u for u in usernames}
             for future in as_completed(futures):
                 res = future.result()

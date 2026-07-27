@@ -3,6 +3,8 @@ Portfolio Pro Investor selection interface HTML template.
 """
 
 import os
+import resource
+import sys
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from datetime import datetime, timedelta, timezone
@@ -881,6 +883,15 @@ _YEAR_MAP = {
 
 def get_portfolio_selection_html() -> str:
     from flask import g
+    try:
+        start_usage = resource.getrusage(resource.RUSAGE_SELF)
+        start_rss = start_usage.ru_maxrss
+        if sys.platform.startswith("linux"):
+            start_mem_mb = start_rss / 1024
+        else:
+            start_mem_mb = start_rss / (1024 * 1024)
+    except Exception:
+        start_mem_mb = None
     etoro_authuser = getattr(g, 'etoro_authuser', None)
     is_authenticated = etoro_authuser is not None
     if is_authenticated:
@@ -2043,4 +2054,28 @@ def get_portfolio_selection_html() -> str:
 </html>
 """
 
+    try:
+        usage = resource.getrusage(resource.RUSAGE_SELF)
+        rss = usage.ru_maxrss
+        if sys.platform.startswith("linux"):
+            end_mem_mb = rss / 1024
+        else:
+            end_mem_mb = rss / (1024 * 1024)
+        if start_mem_mb is not None:
+            delta_mb = end_mem_mb - start_mem_mb
+            print(f"[selection.py] start_mem={start_mem_mb:.2f} MB, peak_mem={end_mem_mb:.2f} MB, delta={delta_mb:+.2f} MB")
+        else:
+            print(f"[selection.py] peak_mem={end_mem_mb:.2f} MB")
+    except Exception:
+        pass
+    return html
+
+
+def cached_portfolio_selection_html() -> str:
+    cache_key = ("portfolio_selection",)
+    cached = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
+    if cached is not None:
+        return cached
+    html = get_portfolio_selection_html()
+    cache_set(cache_key, html, ext=".html")
     return html

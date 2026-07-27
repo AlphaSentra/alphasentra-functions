@@ -4,5 +4,5 @@ services:
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 1 --max-requests 500 --timeout 120 -b 0.0.0.0:$PORT app:app
+    startCommand: gunicorn -w 1 --timeout 3600 -b 0.0.0.0:$PORT app:app
     healthCheckPath: /

@@ -51,6 +51,8 @@ _COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
 _PERIOD_GAIN_CACHE: Dict[str, Dict[str, Optional[float]]] = {}
 _COUNTRIES_API_BASE = "https://countries.dev"
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
+_REGIONAL_INDICATOR_BASE = 0x1F1E6
+
 _SEARCH_INDEX_CACHE: Optional[List[Dict[str, Any]]] = None
 _SEARCH_QUERY_CACHE: Dict[str, tuple] = {}
 _SEARCH_CACHE_TTL = 30
@@ -78,6 +80,16 @@ def _load_etoro_country_map() -> None:
 
 
 _load_etoro_country_map()
+
+
+def _flag_emoji_from_alpha2(code: str) -> str:
+    alpha2 = str(code).upper()
+    if len(alpha2) != 2 or not alpha2.isalpha():
+        return ""
+    try:
+        return "".join(chr(_REGIONAL_INDICATOR_BASE + ord(ch) - ord("A")) for ch in alpha2)
+    except Exception:
+        return ""
 
 
 def _get_etoro_client():
@@ -417,7 +429,10 @@ def _get_country_info(code: str) -> Optional[Dict[str, str]]:
         return None
     code = str(code)
     if code in _COUNTRY_INFO_CACHE:
-        return _COUNTRY_INFO_CACHE[code]
+        cached = _COUNTRY_INFO_CACHE[code]
+        if cached is not None:
+            return cached
+        return None
 
     is_numeric = code.isdigit()
     endpoint = "numericcode" if is_numeric else "alpha"
@@ -427,16 +442,19 @@ def _get_country_info(code: str) -> Optional[Dict[str, str]]:
         resp = requests.get(url, params={"fields": "name,alpha2Code,flag"}, timeout=10)
         if resp.status_code == 200:
             data = resp.json()
+            alpha2 = data.get("alpha2Code", "")
+            flag = data.get("flag", "")
+            if not flag and len(alpha2) == 2:
+                flag = _flag_emoji_from_alpha2(alpha2)
             result = {
-                "flag": data.get("flag", ""),
-                "alpha2": data.get("alpha2Code", ""),
+                "flag": flag,
+                "alpha2": alpha2,
             }
             _COUNTRY_INFO_CACHE[code] = result
             return result
     except requests.RequestException:
         pass
 
-    _COUNTRY_INFO_CACHE[code] = None
     return None
 
 
@@ -473,13 +491,17 @@ def _country_html(country: Optional[str]) -> str:
         country = mapped["isoCode"]
 
     info = _get_country_info(country)
+    alpha2 = country.upper() if not country.isdigit() else ""
+    flag = ""
     if info:
         flag = info.get("flag", "")
-        alpha2 = info.get("alpha2", country.upper() if not country.isdigit() else "")
-        display = alpha2 or country.upper()
-        return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{display}</span>"
+        alpha2 = info.get("alpha2", alpha2) or alpha2
 
-    return f"<span class=\"country-badge\">{country.upper()}</span>"
+    if not flag and len(alpha2) == 2:
+        flag = _flag_emoji_from_alpha2(alpha2)
+
+    display = alpha2 or country.upper()
+    return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{display}</span>"
 
 
 _MP_CLASSES = {

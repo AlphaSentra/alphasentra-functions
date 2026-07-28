@@ -618,5 +618,46 @@ class TestMyPortfolioRowFromUsername:
         assert my_username in captured_my_portfolio_row
 
 
+class TestCountryFlagFallback:
+    """Country flags should render even when the countries.dev API fails."""
+
+    def test_fallback_flag_when_countries_api_returns_none(self):
+        """_country_html should derive a flag emoji from alpha2 when the API yields nothing."""
+        from Functions.port.selection import _country_html
+
+        html = _country_html("US")
+        assert "🇺🇸" in html
+        assert "US" in html
+
+    def test_fallback_flag_when_countries_api_returns_empty_flag(self):
+        """Even if the API returns a result with an empty flag, the emoji should still appear."""
+        fake_mongo: dict = {}
+
+        def mock_get(collection, doc_id, ttl_seconds=86400, ext=".html"):
+            if doc_id in fake_mongo:
+                return fake_mongo[doc_id]["value"]
+            return None
+
+        def mock_set(collection, doc_id, value, ext=".html", ttl_seconds=86400):
+            fake_mongo[doc_id] = {
+                "_id": doc_id,
+                "value": value,
+                "ext": ext,
+                "created_at": MagicMock(),
+                "expires_at": MagicMock(),
+            }
+
+        with patch("Functions.port.selection.get_portfolio_cache_from_mongo", side_effect=mock_get), \
+             patch("Functions.port.selection.set_portfolio_cache_to_mongo", side_effect=mock_set), \
+             patch("Functions.port.selection._get_etoro_client", return_value=None), \
+             patch("Functions.port.selection._get_country_info", return_value={"flag": "", "alpha2": "DE"}) as mock_info, \
+             patch("flask.g", _make_auth_user("testuser")):
+            html = get_portfolio_selection_html()
+
+        assert "🇩🇪" in html
+        assert "DE" in html
+        mock_info.assert_called()
+
+
 if __name__ == "__main__":
     pytest.main([__file__, "-v"])

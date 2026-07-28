@@ -19,11 +19,7 @@ from flask import Flask, g
 app = Flask(__name__)
 
 with app.app_context():
-    g.etoro_authuser = USERNAME
-    from Functions.port.selection import get_portfolio_selection_html, _fetch_rankings
-    html = get_portfolio_selection_html()
-    set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection", html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
-    set_portfolio_cache_to_mongo("portfolio_selection_cache", f"portfolio_selection_my_portfolio_{USERNAME}", html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
+    from Functions.port.selection import _fetch_rankings
 
     rankings_cache_key = "portfolio_selection_rankings"
     cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
@@ -49,7 +45,6 @@ with app.app_context():
             usernames.append(username)
 
     set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
-    log_info(f"Cached portfolio selection HTML for user {USERNAME} ({len(html)} chars).")
     log_info(f"Cached {len(usernames)} top investor usernames to MongoDB.")
 
     from Functions.port.main import generate_portfolio_html

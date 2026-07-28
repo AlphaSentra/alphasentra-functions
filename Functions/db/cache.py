@@ -16,6 +16,7 @@ from Functions.logging_utils import log_info, log_error
 load_dotenv()
 
 _DEFAULT_CACHE_CLIENT_TIMEOUT_MS = 15000
+_MAX_BSON_DOCUMENT_SIZE = 14 * 1024 * 1024  # 14MB stays safely under MongoDB 16MB limit
 
 
 def get_index_cache_from_mongo() -> Optional[str]:

@@ -817,11 +817,14 @@ def get_portfolio_selection_html() -> str:
         username_display = 'My Portfolio'
         username_at_display = "@MyPortfolio"
 
-    # Try to get cached my_portfolio row for this user
+    _MY_PORTFOLIO_ROW_TTL = 30 * 60
+
+    # Try to get cached my_portfolio row for the authenticated user
     my_portfolio_cache_key = f"portfolio_selection_my_portfolio_{username_from_cookie}"
-    my_portfolio_html_row = get_portfolio_cache_from_mongo("portfolio_selection_cache", my_portfolio_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
-    if my_portfolio_html_row is None:
-        _port_debug("MongoDB cache unavailable for my_portfolio row; will regenerate.")
+    my_portfolio_html_row = get_portfolio_cache_from_mongo("portfolio_selection_cache", my_portfolio_cache_key, ttl_seconds=_MY_PORTFOLIO_ROW_TTL, ext=".html")
+    _my_portfolio_cache_hit = my_portfolio_html_row is not None
+    if _my_portfolio_cache_hit:
+        _port_debug(f"MongoDB my_portfolio cache HIT for {username_from_cookie}.")
 
     # Fetch rankings data (cache the raw result to avoid repeated API calls)
     rankings_cache_key = "portfolio_selection_rankings"
@@ -891,118 +894,144 @@ def get_portfolio_selection_html() -> str:
             my_portfolio_item = item
             break
 
-    if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
-        my_portfolio_item = _search_user_full(username_from_cookie)
-        if my_portfolio_item:
-            my_portfolio_from_rankings = True
-            _prefetch_country_data([my_portfolio_item])
+    if not _my_portfolio_cache_hit:
+        if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+            my_portfolio_item = _search_user_full(username_from_cookie)
+            if my_portfolio_item:
+                my_portfolio_from_rankings = True
+                _prefetch_country_data([my_portfolio_item])
 
-    if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
-        client = _get_etoro_client()
-        if client is not None:
-            try:
-                data = client.get_user_info(username_from_cookie)
-                users = data.get("users", [])
-                if users:
-                    my_portfolio_item = users[0]
-                    _prefetch_country_data([my_portfolio_item])
-                else:
-                    my_portfolio_invalid = True
-                    my_portfolio_error = f"@{username_from_cookie} portfolio does not exist"
-            except EToroClientError:
-                my_portfolio_api_failed = True
-        else:
-            my_portfolio_api_failed = True
-
-    if my_portfolio_api_failed and username_from_cookie != "My Portfolio":
-        my_aum_display = _FALLBACK_AUM
-        my_copiers_value = _FALLBACK_COPIERS
-        my_copiers_change_val = _FALLBACK_COPIERS_CHANGE
-        my_week_gain_html = _FALLBACK_WEEK
-        my_month_gain_html = _FALLBACK_MONTH
-        my_year_gain_html = _FALLBACK_YEAR
-        my_trend_svg_val = _FALLBACK_TREND
-
-    if my_portfolio_item:
-        cid = str(my_portfolio_item.get("userName", my_portfolio_item.get("cid", my_portfolio_item.get("realCID", my_portfolio_item.get("gcid", "")))))
-        if my_portfolio_from_rankings and cid:
-            week_map[cid] = my_portfolio_item.get("gain")
-
-        my_avatar_url = my_portfolio_item.get("avatarUrl")
-        if not my_avatar_url:
-            my_avatar_url = _get_user_avatar(username_from_cookie)
-        my_avatar_html = _avatar_html(my_avatar_url, username_display)
-
-        my_country_val = my_portfolio_item.get("country")
-        if my_country_val is not None:
-            mapped = _ETORO_COUNTRY_MAP.get(str(my_country_val))
-            if mapped:
-                my_country_val = mapped["isoCode"]
+        if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+            client = _get_etoro_client()
+            if client is not None:
+                try:
+                    data = client.get_user_info(username_from_cookie)
+                    users = data.get("users", [])
+                    if users:
+                        my_portfolio_item = users[0]
+                        _prefetch_country_data([my_portfolio_item])
+                        _SPARSE_PORTFOLIO_FIELDS = [
+                            "copiers", "aumValue", "gain", "copiersGain",
+                            "weeklyGain", "displayedValue", "baseLineCopiers",
+                        ]
+                        if not any(my_portfolio_item.get(field) for field in _SPARSE_PORTFOLIO_FIELDS):
+                            my_portfolio_invalid = True
+                            my_portfolio_error = f"@{username_from_cookie} portfolio data is not available publicly"
+                    else:
+                        my_portfolio_invalid = True
+                        my_portfolio_error = f"@{username_from_cookie} portfolio does not exist"
+                except EToroClientError:
+                    my_portfolio_api_failed = True
             else:
-                my_country_val = str(my_country_val)
-        else:
-            country_id = my_portfolio_item.get("countryId")
-            if country_id is not None:
-                mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+                my_portfolio_api_failed = True
+
+    if not _my_portfolio_cache_hit:
+        if my_portfolio_api_failed and username_from_cookie != "My Portfolio":
+            my_aum_display = _FALLBACK_AUM
+            my_copiers_value = _FALLBACK_COPIERS
+            my_copiers_change_val = _FALLBACK_COPIERS_CHANGE
+            my_week_gain_html = _FALLBACK_WEEK
+            my_month_gain_html = _FALLBACK_MONTH
+            my_year_gain_html = _FALLBACK_YEAR
+            my_trend_svg_val = _FALLBACK_TREND
+
+        if my_portfolio_item:
+            cid = str(my_portfolio_item.get("userName", my_portfolio_item.get("cid", my_portfolio_item.get("realCID", my_portfolio_item.get("gcid", "")))))
+            if my_portfolio_from_rankings and cid:
+                week_map[cid] = my_portfolio_item.get("gain")
+
+            my_avatar_url = my_portfolio_item.get("avatarUrl")
+            if not my_avatar_url:
+                my_avatar_url = _get_user_avatar(username_from_cookie)
+            my_avatar_html = _avatar_html(my_avatar_url, username_display)
+
+            my_country_val = my_portfolio_item.get("country")
+            if my_country_val is not None:
+                mapped = _ETORO_COUNTRY_MAP.get(str(my_country_val))
                 if mapped:
                     my_country_val = mapped["isoCode"]
                 else:
-                    my_country_val = str(country_id)
-        if my_country_val is not None:
-            my_country_val = str(my_country_val)
-            _prefetch_country_data([{"country": my_country_val}])
-            my_country_html_val = _country_html(my_country_val)
+                    my_country_val = str(my_country_val)
+            else:
+                country_id = my_portfolio_item.get("countryId")
+                if country_id is not None:
+                    mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+                    if mapped:
+                        my_country_val = mapped["isoCode"]
+                    else:
+                        my_country_val = str(country_id)
+            if my_country_val is not None:
+                my_country_val = str(my_country_val)
+                _prefetch_country_data([{"country": my_country_val}])
+                my_country_html_val = _country_html(my_country_val)
 
-        my_aum_value = my_portfolio_item.get("aumValue")
-        my_aum_tier_desc = my_portfolio_item.get("aumTierDesc")
-        if my_aum_tier_desc is not None or my_aum_value is not None:
-            my_aum_display = my_aum_tier_desc if my_aum_tier_desc else _safe_aum(my_aum_value)
+            my_aum_value = my_portfolio_item.get("aumValue")
+            my_aum_tier_desc = my_portfolio_item.get("aumTierDesc")
+            if my_aum_tier_desc is not None or my_aum_value is not None:
+                my_aum_display = my_aum_tier_desc if my_aum_tier_desc else _safe_aum(my_aum_value)
 
-        my_copiers = my_portfolio_item.get("copiers")
-        my_base_line_copiers = my_portfolio_item.get("baseLineCopiers")
-        if my_copiers is not None or my_base_line_copiers is not None:
-            my_copiers_value = _safe_int(my_copiers)
-            my_copiers_change_val = _copiers_change(my_copiers, my_base_line_copiers)
+            my_copiers = my_portfolio_item.get("copiers")
+            my_base_line_copiers = my_portfolio_item.get("baseLineCopiers")
+            if my_copiers is not None or my_base_line_copiers is not None:
+                my_copiers_value = _safe_int(my_copiers)
+                my_copiers_change_val = _copiers_change(my_copiers, my_base_line_copiers)
 
-        my_week_gain = week_map.get(cid)
-        my_month_gain = month_map.get(cid)
-        my_year_gain = year_map.get(cid)
+            my_week_gain = week_map.get(cid)
+            my_month_gain = month_map.get(cid)
+            my_year_gain = year_map.get(cid)
 
-        if my_week_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
-            my_week_gain = _get_period_gain(username_from_cookie, "1m")
-        if my_month_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
-            my_month_gain = _get_period_gain(username_from_cookie, "3m")
-        if my_year_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
-            my_year_gain = _get_period_gain(username_from_cookie, "1y")
+            if my_week_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+                my_week_gain = _get_period_gain(username_from_cookie, "1m")
+            if my_month_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+                my_month_gain = _get_period_gain(username_from_cookie, "3m")
+            if my_year_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+                my_year_gain = _get_period_gain(username_from_cookie, "1y")
 
-        if my_week_gain is not None or my_month_gain is not None or my_year_gain is not None:
-            my_week_gain_html = _safe_gain(my_week_gain)
-            my_month_gain_html = _safe_gain(my_month_gain)
-            my_year_gain_html = _safe_gain(my_year_gain)
+            if my_week_gain is not None or my_month_gain is not None or my_year_gain is not None:
+                my_week_gain_html = _safe_gain(my_week_gain)
+                my_month_gain_html = _safe_gain(my_month_gain)
+                my_year_gain_html = _safe_gain(my_year_gain)
 
-            if not _using_fallback_rankings:
-                my_trend_points = _get_trend_data(username_from_cookie)
-                if my_trend_points:
-                    my_trend_svg_val = _trend_svg_from_points(my_trend_points)
-                else:
-                    my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
+                if not _using_fallback_rankings:
+                    my_trend_points = _get_trend_data(username_from_cookie)
+                    if my_trend_points:
+                        my_trend_svg_val = _trend_svg_from_points(my_trend_points)
+                    else:
+                        my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
 
-    if not my_portfolio_item or my_portfolio_invalid:
-        if not is_authenticated:
-            my_portfolio_html_row = _render_login_prompt_row()
+        if not my_portfolio_item or my_portfolio_invalid:
+            if not is_authenticated:
+                my_portfolio_html_row = _render_login_prompt_row()
+            else:
+                my_portfolio_html_row = _render_row(
+                    {
+                        "userName": username_from_cookie,
+                        "fullName": username_display,
+                        "avatarUrl": None,
+                        "subType": None,
+                        "country": my_portfolio_item.get("country") if my_portfolio_item else None,
+                        "copiers": my_portfolio_item.get("copiers") if my_portfolio_item else 32800,
+                        "aumValue": my_portfolio_item.get("aumValue") if my_portfolio_item else 14500000.0,
+                        "aumTierDesc": my_portfolio_item.get("aumTierDesc") if my_portfolio_item else None,
+                        "baseLineCopiers": my_portfolio_item.get("baseLineCopiers") if my_portfolio_item else 31850,
+                    },
+                    week_map,
+                    month_map,
+                    year_map,
+                    classes=_MP_CLASSES,
+                    country_html_override=my_country_html_val,
+                    aum_override=my_aum_display,
+                    copiers_value_override=my_copiers_value,
+                    copiers_change_override=my_copiers_change_val,
+                    week_gain_html_override=my_week_gain_html,
+                    month_gain_html_override=my_month_gain_html,
+                    year_gain_html_override=my_year_gain_html,
+                    error_message=my_portfolio_error if my_portfolio_invalid else None,
+                    include_badge=False,
+                )
         else:
             my_portfolio_html_row = _render_row(
-                {
-                    "userName": username_from_cookie,
-                    "fullName": username_display,
-                    "avatarUrl": None,
-                    "subType": None,
-                    "country": my_portfolio_item.get("country") if my_portfolio_item else None,
-                    "copiers": my_portfolio_item.get("copiers") if my_portfolio_item else 32800,
-                    "aumValue": my_portfolio_item.get("aumValue") if my_portfolio_item else 14500000.0,
-                    "aumTierDesc": my_portfolio_item.get("aumTierDesc") if my_portfolio_item else None,
-                    "baseLineCopiers": my_portfolio_item.get("baseLineCopiers") if my_portfolio_item else 31850,
-                },
+                my_portfolio_item,
                 week_map,
                 month_map,
                 year_map,
@@ -1017,30 +1046,14 @@ def get_portfolio_selection_html() -> str:
                 error_message=my_portfolio_error if my_portfolio_invalid else None,
                 include_badge=False,
             )
-    else:
-        my_portfolio_html_row = _render_row(
-            my_portfolio_item,
-            week_map,
-            month_map,
-            year_map,
-            classes=_MP_CLASSES,
-            country_html_override=my_country_html_val,
-            aum_override=my_aum_display,
-            copiers_value_override=my_copiers_value,
-            copiers_change_override=my_copiers_change_val,
-            week_gain_html_override=my_week_gain_html,
-            month_gain_html_override=my_month_gain_html,
-            year_gain_html_override=my_year_gain_html,
-            error_message=my_portfolio_error if my_portfolio_invalid else None,
-            include_badge=False,
-        )
 
-    set_portfolio_cache_to_mongo("portfolio_selection_cache", my_portfolio_cache_key, my_portfolio_html_row, ext=".html", ttl_seconds=_ETORO_PI_TTL)
+        if username_from_cookie != "My Portfolio" and my_portfolio_item and not my_portfolio_invalid and not my_portfolio_api_failed:
+            set_portfolio_cache_to_mongo("portfolio_selection_cache", my_portfolio_cache_key, my_portfolio_html_row, ext=".html", ttl_seconds=_MY_PORTFOLIO_ROW_TTL)
 
     html = f"""<!DOCTYPE html>
-<html>
-<head>
-    <title>Portfolio Function - Select Investor</title>
+    <html>
+    <head>
+        <title>Portfolio Function - Select Investor</title>
     <meta http-equiv=\"Cache-Control\" content=\"no-cache, no-store, must-revalidate\">
     <meta http-equiv=\"Pragma\" content=\"no-cache\">
     <meta http-equiv=\"Expires\" content=\"0\">
@@ -2001,18 +2014,7 @@ def cached_portfolio_selection_html() -> str:
     with open(_debug_path, "a") as _f:
         _f.write("[port] cached_portfolio_selection_html START\n")
     print("[port] cached_portfolio_selection_html START", flush=True)
-    cache_key = "portfolio_selection"
-    cached = get_portfolio_cache_from_mongo("portfolio_selection_cache", cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
-    with open(_debug_path, "a") as _f:
-        _f.write(f"[port] MongoDB read returned: {cached is not None}\n")
-    print(f"[port] cached_portfolio_selection_html MongoDB read returned: {cached is not None}", flush=True)
-    if cached is not None:
-        with open(_debug_path, "a") as _f:
-            _f.write("[port] RETURNING cached HTML\n")
-        print("[port] cached_portfolio_selection_html RETURNING cached HTML", flush=True)
-        return cached
 
-    _port_debug("Full portfolio selection HTML cache miss in MongoDB; regenerating page.")
     rankings_cache_key = "portfolio_selection_rankings"
     if get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl") is None:
         _port_debug("Rankings cache miss; pre-seeding fallback investor data in MongoDB.")
@@ -2031,5 +2033,4 @@ def cached_portfolio_selection_html() -> str:
             _COUNTRY_INFO_CACHE[str(country_id)] = None
 
     html = get_portfolio_selection_html()
-    set_portfolio_cache_to_mongo("portfolio_selection_cache", cache_key, html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
     return html

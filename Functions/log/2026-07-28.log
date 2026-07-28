@@ -285,3 +285,37 @@
 2026-07-28 14:47:59,687 - INFO - [INFO] - Cached index HTML to MongoDB (4559 chars).
 2026-07-28 14:47:59,906 - INFO - [INFO] - Cached index HTML (4559 chars).
 2026-07-28 14:48:18,478 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:40:26,198 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:42:45,744 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 15:42:57,827 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_My Portfolio.
+2026-07-28 15:43:25,737 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:43:30,363 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:43:30,786 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:43:33,950 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:43:38,561 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:44:03,352 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-28 15:44:26,108 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:44:42,303 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-28 15:45:23,495 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:45:43,159 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-28 15:49:33,591 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:50:03,870 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 15:50:36,900 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:50:49,759 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 15:51:17,902 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:53:38,617 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:53:53,044 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 15:58:52,232 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 15:59:15,900 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 16:06:40,800 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 16:06:52,310 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 16:26:51,267 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 16:27:05,857 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 16:28:30,039 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 16:28:44,764 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 18:54:21,751 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 18:54:36,418 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 18:55:04,796 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-28 18:55:30,241 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-28 18:59:23,540 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-28 19:14:52,753 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.

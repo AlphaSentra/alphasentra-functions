@@ -20,9 +20,11 @@ if str(_parent_dir) not in sys.path:
     sys.path.append(str(_parent_dir))
 
 try:
-    from helpers import DatabaseManager
+    from Functions.db.client import DatabaseManager
 except ImportError:
     DatabaseManager = None
+
+from Functions.db.repositories import lookup_etoro_instrument_symbols
 
 from .auth import public_api_session, get_random_private_key
 from .models import (
@@ -339,40 +341,19 @@ class ETPublicClient:
             logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
 
         # --- 3. Pull from MongoDB and compare fields ---
-        db_symbol_map: Dict[str, str] = {}
         instrument_ids = list({str(item["instrumentId"]) for item in raw_positions if item.get("instrumentId")})
         symbol_fulls = list({v for v in etoro_symbol_map.values() if v})
-        if DatabaseManager is not None and (instrument_ids or symbol_fulls):
-            try:
-                db = DatabaseManager().get_client()
-                db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
-                tickers_collection = db[db_name]["tickers"]
+        db_symbol_map = lookup_etoro_instrument_symbols(instrument_ids, symbol_fulls)
 
-                query = {"$or": []}
-                if instrument_ids:
-                    query["$or"].append({"ticker_etoro": {"$in": instrument_ids}})
-                if symbol_fulls:
-                    query["$or"].append({"ticker_etoro": {"$in": symbol_fulls}})
-
-                cursor = tickers_collection.find(
-                    query,
-                    {"ticker_etoro": 1, "ticker": 1},
-                )
-                for doc in cursor:
-                    key = str(doc.get("ticker_etoro", ""))
-                    db_ticker = doc.get("ticker")
-                    if key and db_ticker is not None:
-                        db_symbol_map[key] = str(db_ticker)
-
-                        matched_symbol = etoro_symbol_map.get(key)
-                        if matched_symbol and matched_symbol != str(db_ticker):
-                            logger.info(
-                                f"Symbol mismatch for key '{key}': "
-                                f"eToro says '{matched_symbol}', DB mapping says '{db_ticker}'. "
-                                f"Using DB canonical ticker '{db_ticker}'."
-                            )
-            except Exception as exc:
-                logger.warning("Failed to lookup eToro instrument symbols from DB: %s", exc)
+        if db_symbol_map:
+            for key, db_ticker in db_symbol_map.items():
+                matched_symbol = etoro_symbol_map.get(key)
+                if matched_symbol and matched_symbol != db_ticker:
+                    logger.info(
+                        f"Symbol mismatch for key '{key}': "
+                        f"eToro says '{matched_symbol}', DB mapping says '{db_ticker}'. "
+                        f"Using DB canonical ticker '{db_ticker}'."
+                    )
 
         # --- 4. Build positions list with a progressive fallback chain ---
         positions = []

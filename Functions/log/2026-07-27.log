@@ -40,3 +40,26 @@
 2026-07-27 21:21:01,437 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
 2026-07-27 21:21:11,250 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
 2026-07-27 21:21:23,546 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:24:55,408 - INFO - [INFO] - Cleared cache directory: /Users/daivieth/Documents/_G8I/Development/alphasentra-functions/.cache
+2026-07-27 21:24:57,771 - INFO - [INFO] - Cached index HTML (4559 chars).
+2026-07-27 21:25:10,721 - INFO - [INFO] - Cleared cache directory: /Users/daivieth/Documents/_G8I/Development/alphasentra-functions/.cache
+2026-07-27 21:25:13,141 - INFO - [INFO] - Cached index HTML (4559 chars).
+2026-07-27 21:26:37,834 - INFO - [INFO] - Cached portfolio selection HTML for user etoroteam (50643 chars).
+2026-07-27 21:26:37,835 - INFO - [INFO] - Cached 15 top investor usernames to port_top_investors_username.json.
+2026-07-27 21:26:40,006 - INFO - [INFO] - Caching portfolio reports for 15 investors...
+2026-07-27 21:27:01,637 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:27:19,043 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:27:31,944 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:27:47,202 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:28:07,168 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:28:22,718 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:28:36,303 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:28:57,446 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:29:17,070 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:29:29,801 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:29:49,604 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:30:07,583 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:30:19,461 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:30:38,201 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:31:07,176 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-27 21:31:16,909 - INFO - [INFO] - Portfolio report caching complete: 15 generated, 0 skipped, 0 errors.

@@ -23,8 +23,7 @@ if parent_dir not in sys.path:
 
 load_dotenv() # Load environment variables from .env file
 
-from helpers import DatabaseManager # Import DatabaseManager
-from logging_utils import log_error, log_info # Import logging utilities
+from Functions.db.repositories import increment_ai_prompt_count, get_ai_settings
 
 # Load AI model prompts from environment variables
 DEFAULT_PROMPT = os.getenv("DEFAULT_PROMPT")
@@ -93,38 +92,9 @@ def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
     - This function also increments the `ai_prompt_count` in the `settings` collection and checks against `max_daily_ai_prompt_count`.
     If the limit is reached, it returns an error message without calling the AI model.
     """
-    # Increment ai_prompt_count in the settings collection
-    try:
-        client = DatabaseManager().get_client()
-        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
-        db = client[db_name]
-        settings_collection = db['settings']
-
-        # Retrieve settings to check prompt count against daily limit
-        batch_settings = settings_collection.find_one({"key": "batch_settings", "value": "default"})
-        if batch_settings:
-            current_ai_prompt_count = batch_settings.get("ai_prompt_count", 0)
-            max_daily_ai_prompt_count = batch_settings.get("max_daily_ai_prompt_count")
-
-            if max_daily_ai_prompt_count is not None and current_ai_prompt_count >= max_daily_ai_prompt_count:
-                error_message = f"Daily AI prompt limit reached ({current_ai_prompt_count}/{max_daily_ai_prompt_count})."
-                log_error(error_message, "AI_PROMPT_LIMIT_REACHED", None)
-                return error_message # Return early if limit is reached
-
-        settings_collection.update_one(
-            {
-                "key": "batch_settings",
-                "value": "default"
-            },
-            {
-                "$inc": {
-                    "ai_prompt_count": 1
-                }
-            }
-        )
-        log_info("Incremented ai_prompt_count in settings collection.")
-    except Exception as e:
-        log_error(f"Error incrementing ai_prompt_count: {e}", "AI_PROMPT_COUNT_INCREMENT", e)
+    limit_reached = increment_ai_prompt_count()
+    if limit_reached:
+        return limit_reached
 
     if gemini_model is None:
         gemini_model = os.getenv("GEMINI_DEFAULT", "gemini-2.5-flash-lite")

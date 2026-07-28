@@ -9,6 +9,10 @@ from Functions.port.selection import search_investors_api, get_portfolio_selecti
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.port.cache import exists as cache_exists, get as cache_get, invalidate as cache_invalidate, set as cache_set
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
+from Functions.db.cache import get_index_cache_from_mongo
+from dotenv import load_dotenv
+
+load_dotenv()
 
 app = Flask(__name__)
 
@@ -110,7 +114,7 @@ def _require_etoro_auth():
             return
 
         if request.path == '/' and request.method == 'GET':
-            cached = cache_get(("index",), _ETORO_PI_TTL, ext=".html")
+            cached = get_index_cache_from_mongo()
             if cached is not None:
                 return cached
 

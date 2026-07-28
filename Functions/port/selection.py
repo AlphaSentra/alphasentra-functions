@@ -18,10 +18,8 @@ from Functions.port.cache import get as cache_get, set as cache_set, exists as c
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
 from Functions.etoro.client import EToroClientError, get_public_client_from_env
 
-try:
-    from Functions.helpers import DatabaseManager
-except ImportError:
-    DatabaseManager = None
+from Functions.db import DatabaseManager
+from Functions.db.repositories import ensure_etoro_pi_indexes, search_etoro_pi_db
 
 from Functions.themes import (
     _TEXT_PRIMARY, _TEXT_HEADING, _BRAND_PRIMARY, _HOVER_SURFACE, _BORDER_DEFAULT,
@@ -696,100 +694,6 @@ def _search_user_full(username: str) -> Optional[Dict[str, Any]]:
         return None
 
 
-def _ensure_etoro_pi_indexes(db_name: str, coll) -> None:
-    try:
-        existing = set(idx["key"] for idx in coll.list_indexes())
-        target = {("userName", 1), ("fullName", 1), ("username", 1), ("isPi", 1)}
-        if not target.issubset(existing):
-            for field in ("userName", "fullName", "username"):
-                try:
-                    coll.create_index([(field, 1)], background=True)
-                except Exception:
-                    pass
-            try:
-                coll.create_index([("userName", 1), ("fullName", 1), ("username", 1)], background=True)
-            except Exception:
-                pass
-    except Exception:
-        pass
-
-
-def _search_etoro_pi_db(query: str, limit: int = 20) -> Dict[str, Any]:
-    if DatabaseManager is None:
-        return {"results": [], "error": "MongoDB client not available"}
-
-    q = query.strip().lower()
-    if not q:
-        return {"results": []}
-
-    try:
-        db = DatabaseManager().get_client()
-        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
-        coll = db[db_name]["etoro_pi"]
-        _ensure_etoro_pi_indexes(db_name, coll)
-
-        prefix = {"$regex": f"^{q}", "$options": "i"}
-        cursor = coll.find(
-            {
-                "$or": [
-                    {"userName": prefix},
-                    {"fullName": prefix},
-                    {"username": prefix},
-                ]
-            },
-            {
-                "userName": 1,
-                "fullName": 1,
-                "username": 1,
-                "country": 1,
-                "gain": 1,
-                "copiers": 1,
-                "baseLineCopiers": 1,
-                "aumTierDesc": 1,
-                "avatars": 1,
-                "countryId": 1,
-                "subType": 1,
-            },
-        ).limit(limit)
-
-        results = []
-        seen = set()
-        for doc in cursor:
-            username = str(doc.get("userName") or doc.get("username") or "").strip()
-            if not username or username.lower() in seen:
-                continue
-            seen.add(username.lower())
-
-            full_name = str(doc.get("fullName") or "").strip() or None
-            avatar_url = None
-            avatars = doc.get("avatars") or []
-            if isinstance(avatars, list) and avatars:
-                avatar_url = avatars[0].get("url") if isinstance(avatars[0], dict) else None
-
-            results.append(
-                {
-                    "userName": username,
-                    "username": username,
-                    "fullName": full_name,
-                    "displayName": full_name,
-                    "avatarUrl": avatar_url,
-                    "country": doc.get("country"),
-                    "countryId": doc.get("countryId"),
-                    "copiers": doc.get("copiers"),
-                    "baseLineCopiers": doc.get("baseLineCopiers"),
-                    "gain": doc.get("gain"),
-                    "aumTierDesc": doc.get("aumTierDesc"),
-                    "aumValue": None,
-                    "subType": doc.get("subType") or "",
-                    "isPi": doc.get("isPi", True),
-                }
-            )
-
-        return {"results": results}
-    except Exception as exc:
-        return {"results": [], "error": str(exc)}
-
-
 def search_investors_api(query: str) -> Dict[str, Any]:
     if not query or not query.strip():
         return {"results": []}
@@ -815,7 +719,7 @@ def search_investors_api(query: str) -> Dict[str, Any]:
             _SEARCH_QUERY_CACHE[q] = (now, result)
             return result
 
-    db_result = _search_etoro_pi_db(query, limit=20)
+    db_result = search_etoro_pi_db(query, limit=20)
     _cleanup_expired_cache_entries(now)
     _SEARCH_QUERY_CACHE[q] = (now, db_result)
     return db_result

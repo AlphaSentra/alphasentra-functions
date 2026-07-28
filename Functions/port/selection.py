@@ -370,8 +370,20 @@ def _avatar_html(avatar_url: Optional[str], name: str, avatar_class: str = "inve
 
 def _render_login_prompt_row() -> str:
     login_url = LOGIN_REDIRECT_URL
+    tr_onclick = (
+        f"window.top.location.href='{login_url}'; "
+        f"event.stopPropagation(); "
+        f"event.preventDefault(); "
+        f"return false;"
+    )
+    btn_onclick = (
+        f"window.top.location.href='{login_url}'; "
+        f"event.stopPropagation(); "
+        f"event.preventDefault(); "
+        f"return false;"
+    )
     return (
-        f'<tr class="my-portfolio-row my-portfolio-login-prompt">'
+        f'<tr class="my-portfolio-row my-portfolio-login-prompt" onclick="{tr_onclick}">'
         f'<td colspan="8">'
         f'<div class="my-portfolio-investor">'
         f'<div class="my-portfolio-avatar my-portfolio-login-avatar">'
@@ -390,7 +402,7 @@ def _render_login_prompt_row() -> str:
         f'Sign in to view and add your portfolio'
         f'</span>'
         f'<a href="{login_url}" class="my-portfolio-login-btn"'
-        f' onclick="window.top.location.href=\'{login_url}\'; event.stopPropagation(); event.preventDefault(); return false;">'
+        f' onclick="{btn_onclick}">'
         f'Login &rarr;'
         f'</a>'
         f'</div>'
@@ -625,11 +637,17 @@ def _render_row(
     )
 
 
-def _fetch_rankings() -> List[Dict[str, Any]]:
+def _fetch_rankings(
+    base_period: str = "OneMonthAgo",
+    sort: Optional[str] = "-copiersGain",
+    page_size: int = 20,
+    page: int = 1,
+    search_text: Optional[str] = None,
+) -> List[Dict[str, Any]]:
     with ThreadPoolExecutor(max_workers=4) as executor:
-        future_base = executor.submit(_get_rankings, "OneMonthAgo", "-copiersGain", 20)
-        future_month = executor.submit(_get_rankings, "ThreeMonthsAgo", "-copiersGain", 20)
-        future_year = executor.submit(_get_rankings, "OneYearAgo", "-copiersGain", 20)
+        future_base = executor.submit(_get_rankings, base_period, sort, page_size, page, search_text)
+        future_month = executor.submit(_get_rankings, "ThreeMonthsAgo", sort, None, 1, search_text)
+        future_year = executor.submit(_get_rankings, "OneYearAgo", sort, None, 1, search_text)
 
         base_data = future_base.result()
         month_data = future_month.result()
@@ -795,7 +813,19 @@ _YEAR_MAP = {
 }
 
 
-def get_portfolio_selection_html() -> str:
+def _selection_cache_suffix(base_period="OneMonthAgo", sort="-copiersGain", page_size=20, page=1, search_text=None):
+    if base_period == "OneMonthAgo" and sort == "-copiersGain" and page_size == 20 and page == 1 and not search_text:
+        return ""
+    return f"_{base_period}_{sort}_{page_size}_{page}_{search_text or ''}"
+
+
+def get_portfolio_selection_html(
+    base_period: str = "OneMonthAgo",
+    sort: Optional[str] = "-copiersGain",
+    page_size: int = 20,
+    page: int = 1,
+    search_text: Optional[str] = None,
+) -> str:
     from flask import g
     try:
         start_usage = resource.getrusage(resource.RUSAGE_SELF)
@@ -817,6 +847,12 @@ def get_portfolio_selection_html() -> str:
         username_display = 'My Portfolio'
         username_at_display = "@MyPortfolio"
 
+    _cache_suffix = _selection_cache_suffix(base_period, sort, page_size, page, search_text)
+    _page_cache_key = f"portfolio_selection_page{_cache_suffix}_{username_from_cookie}"
+    _cached_page = get_portfolio_cache_from_mongo("portfolio_selection_cache", _page_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
+    if _cached_page is not None:
+        return _cached_page
+
     _MY_PORTFOLIO_ROW_TTL = 30 * 60
 
     # Try to get cached my_portfolio row for the authenticated user
@@ -826,8 +862,10 @@ def get_portfolio_selection_html() -> str:
     if _my_portfolio_cache_hit:
         _port_debug(f"MongoDB my_portfolio cache HIT for {username_from_cookie}.")
 
+    _cache_suffix = _selection_cache_suffix(base_period, sort, page_size, page, search_text)
+
     # Fetch rankings data (cache the raw result to avoid repeated API calls)
-    rankings_cache_key = "portfolio_selection_rankings"
+    rankings_cache_key = f"portfolio_selection_rankings{_cache_suffix}"
     cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
     
     _using_fallback_rankings = False
@@ -838,7 +876,7 @@ def get_portfolio_selection_html() -> str:
     else:
         _port_debug("MongoDB rankings cache miss; trying eToro rankings API.")
         try:
-            merged, week_map, month_map, year_map = _fetch_rankings()
+            merged, week_map, month_map, year_map = _fetch_rankings(base_period, sort, page_size, page, search_text)
             set_portfolio_cache_to_mongo("portfolio_selection_cache", rankings_cache_key, (merged, week_map, month_map, year_map), ext=".pkl", ttl_seconds=_ETORO_PI_TTL)
         except Exception as exc:
             _port_debug(f"eToro rankings API failed: {exc}")
@@ -857,7 +895,7 @@ def get_portfolio_selection_html() -> str:
         _prefetch_country_data(merged)
 
     # Cache the common rows HTML (shared across all users)
-    common_rows_cache_key = "portfolio_selection_common_rows"
+    common_rows_cache_key = f"portfolio_selection_common_rows{_cache_suffix}"
     rows_html = get_portfolio_cache_from_mongo("portfolio_selection_cache", common_rows_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
     if rows_html is None:
         rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
@@ -895,13 +933,13 @@ def get_portfolio_selection_html() -> str:
             break
 
     if not _my_portfolio_cache_hit:
-        if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+        if not my_portfolio_item and username_from_cookie != "My Portfolio":
             my_portfolio_item = _search_user_full(username_from_cookie)
             if my_portfolio_item:
                 my_portfolio_from_rankings = True
                 _prefetch_country_data([my_portfolio_item])
 
-        if not my_portfolio_item and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+        if not my_portfolio_item and username_from_cookie != "My Portfolio":
             client = _get_etoro_client()
             if client is not None:
                 try:
@@ -980,11 +1018,11 @@ def get_portfolio_selection_html() -> str:
             my_month_gain = month_map.get(cid)
             my_year_gain = year_map.get(cid)
 
-            if my_week_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+            if my_week_gain is None and username_from_cookie != "My Portfolio":
                 my_week_gain = _get_period_gain(username_from_cookie, "1m")
-            if my_month_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+            if my_month_gain is None and username_from_cookie != "My Portfolio":
                 my_month_gain = _get_period_gain(username_from_cookie, "3m")
-            if my_year_gain is None and username_from_cookie != "My Portfolio" and not _using_fallback_rankings:
+            if my_year_gain is None and username_from_cookie != "My Portfolio":
                 my_year_gain = _get_period_gain(username_from_cookie, "1y")
 
             if my_week_gain is not None or my_month_gain is not None or my_year_gain is not None:
@@ -992,12 +1030,11 @@ def get_portfolio_selection_html() -> str:
                 my_month_gain_html = _safe_gain(my_month_gain)
                 my_year_gain_html = _safe_gain(my_year_gain)
 
-                if not _using_fallback_rankings:
-                    my_trend_points = _get_trend_data(username_from_cookie)
-                    if my_trend_points:
-                        my_trend_svg_val = _trend_svg_from_points(my_trend_points)
-                    else:
-                        my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
+                my_trend_points = _get_trend_data(username_from_cookie)
+                if my_trend_points:
+                    my_trend_svg_val = _trend_svg_from_points(my_trend_points)
+                else:
+                    my_trend_svg_val = _trend_svg_for_gains(my_week_gain, my_month_gain, my_year_gain)
 
         if not my_portfolio_item or my_portfolio_invalid:
             if not is_authenticated:
@@ -1991,6 +2028,8 @@ def get_portfolio_selection_html() -> str:
 </html>
 """
 
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", _page_cache_key, html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
+
     try:
         usage = resource.getrusage(resource.RUSAGE_SELF)
         rss = usage.ru_maxrss
@@ -2008,14 +2047,21 @@ def get_portfolio_selection_html() -> str:
     return html
 
 
-def cached_portfolio_selection_html() -> str:
+def cached_portfolio_selection_html(
+    base_period: str = "OneMonthAgo",
+    sort: Optional[str] = "-copiersGain",
+    page_size: int = 20,
+    page: int = 1,
+    search_text: Optional[str] = None,
+) -> str:
     import os as _os
     _debug_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "port_debug.log")
     with open(_debug_path, "a") as _f:
         _f.write("[port] cached_portfolio_selection_html START\n")
     print("[port] cached_portfolio_selection_html START", flush=True)
 
-    rankings_cache_key = "portfolio_selection_rankings"
+    _cache_suffix = _selection_cache_suffix(base_period, sort, page_size, page, search_text)
+    rankings_cache_key = f"portfolio_selection_rankings{_cache_suffix}"
     if get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl") is None:
         _port_debug("Rankings cache miss; pre-seeding fallback investor data in MongoDB.")
         set_portfolio_cache_to_mongo("portfolio_selection_cache", rankings_cache_key, (_FALLBACK_INVESTORS, _WEEK_MAP, _MONTH_MAP, _YEAR_MAP), ext=".pkl", ttl_seconds=_ETORO_PI_TTL)
@@ -2032,5 +2078,5 @@ def cached_portfolio_selection_html() -> str:
         if country_id is not None:
             _COUNTRY_INFO_CACHE[str(country_id)] = None
 
-    html = get_portfolio_selection_html()
+    html = get_portfolio_selection_html(base_period=base_period, sort=sort, page_size=page_size, page=page, search_text=search_text)
     return html

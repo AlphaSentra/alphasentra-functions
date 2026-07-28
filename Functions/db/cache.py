@@ -8,7 +8,7 @@ from typing import Any, Optional
 from urllib.parse import urlparse
 
 from dotenv import load_dotenv
-from pymongo import MongoClient
+from pymongo import MongoClient, UpdateOne
 from pymongo.errors import PyMongoError
 
 from Functions.logging_utils import log_info, log_error
@@ -181,16 +181,14 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
 
             if chunk_ids is not None and extra_chunks:
                 chunk_operations = [
-                    {
-                        "update_one": {
-                            "filter": {"_id": chunk_id},
-                            "update": {"$set": {"value": chunk, "expires_at": expires_at}},
-                            "upsert": True,
-                        }
-                    }
+                    UpdateOne(
+                        {"_id": chunk_id},
+                        {"$set": {"value": chunk, "expires_at": expires_at}},
+                        upsert=True,
+                    )
                     for chunk_id, chunk in zip(chunk_ids[1:], extra_chunks)
                 ]
-                collection.bulk_write([cp["update_one"] for cp in chunk_operations])
+                collection.bulk_write(chunk_operations)
 
             collection.update_one({"_id": doc_id}, payload, upsert=True)
             log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")

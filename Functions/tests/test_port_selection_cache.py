@@ -214,6 +214,107 @@ class TestMyPortfolioCacheMiss:
         assert "testuser" in html
         assert get_calls or "N/A" in html
 
+    def test_fallback_rankings_still_fetches_authenticated_user_data(self):
+        """Even when rankings cache contains fallback investors, the authenticated
+        user's own portfolio data should still be fetched so My Portfolio is not N/A."""
+        fake_mongo: dict = {}
+        my_username = "realtrader"
+        my_cid = my_username
+
+        fallback_rankings = (
+            list(__import__("Functions.port.selection", fromlist=["_FALLBACK_INVESTORS"])._FALLBACK_INVESTORS),
+            __import__("Functions.port.selection", fromlist=["_WEEK_MAP"])._WEEK_MAP,
+            __import__("Functions.port.selection", fromlist=["_MONTH_MAP"])._MONTH_MAP,
+            __import__("Functions.port.selection", fromlist=["_YEAR_MAP"])._YEAR_MAP,
+        )
+
+        fake_mongo["portfolio_selection_rankings"] = {
+            "_id": "portfolio_selection_rankings",
+            "value": fallback_rankings,
+            "ext": ".pkl",
+            "created_at": MagicMock(),
+            "expires_at": MagicMock(),
+        }
+
+        captured_my_portfolio_row = None
+
+        def mock_get(collection, doc_id, ttl_seconds=86400, ext=".html"):
+            if doc_id in fake_mongo:
+                return fake_mongo[doc_id]["value"]
+            return None
+
+        def mock_set(collection, doc_id, value, ext=".html", ttl_seconds=86400):
+            fake_mongo[doc_id] = {
+                "_id": doc_id,
+                "value": value,
+                "ext": ext,
+                "created_at": MagicMock(),
+                "expires_at": MagicMock(),
+            }
+            nonlocal captured_my_portfolio_row
+            if "my_portfolio_" + my_username in str(doc_id):
+                captured_my_portfolio_row = value
+
+        user_info_response = {
+            "users": [
+                {
+                    "userName": my_username,
+                    "fullName": "Real Trader",
+                    "avatarUrl": "https://example.com/avatar.png",
+                    "country": "DE",
+                    "copiers": 42000,
+                    "aumValue": 8900000.0,
+                    "baseLineCopiers": 39500,
+                }
+            ]
+        }
+
+        rankings_item = {
+            "userName": my_username,
+            "fullName": "Real Trader",
+            "avatarUrl": "https://example.com/avatar.png",
+            "country": "DE",
+            "copiers": 42000,
+            "aumValue": 8900000.0,
+            "baseLineCopiers": 39500,
+            "gain": 1.5,
+        }
+
+        client = MagicMock()
+        client.get_user_info.return_value = user_info_response
+        client.get_portfolio_rankings.return_value = {
+            "data": rankings_item,
+            "items": [],
+            "pagination": {},
+        }
+        client.search_people.return_value = {"items": [], "pagination": {}}
+        client.get_daily_gain.return_value = {"gain": 0.3, "gainPercent": 0.3}
+
+        def client_factory():
+            return client
+
+        with patch("Functions.port.selection.get_portfolio_cache_from_mongo", side_effect=mock_get), \
+             patch("Functions.port.selection.set_portfolio_cache_to_mongo", side_effect=mock_set), \
+             patch("Functions.port.selection._get_etoro_client", side_effect=client_factory), \
+             patch("Functions.port.selection._fetch_rankings") as mock_fetch, \
+             patch("Functions.port.selection._get_period_gain", side_effect=lambda username, period: {
+                 "1m": 0.3,
+                 "3m": 1.1,
+                 "1y": 4.2,
+             }.get(period)), \
+             patch("Functions.port.selection._get_trend_data", return_value=[0.1, 0.2, 0.3]), \
+             patch("flask.g", _make_auth_user(my_username)):
+            mock_fetch.return_value = fallback_rankings
+            html = get_portfolio_selection_html()
+
+        assert my_username in html
+        assert "My Portfolio" in html
+        assert "DE" in html
+        assert "42,000" in html
+        assert "$8.9M" in html
+        assert captured_my_portfolio_row is not None
+        assert "N/A" not in captured_my_portfolio_row
+
 
 # ---------------------------------------------------------------------------
 # Tests: unauthenticated user sees login prompt, not cached personal row
@@ -330,7 +431,7 @@ class TestMyPortfolioDataFields:
     def test_my_portfolio_contains_country_copiers_aum_and_periods(self):
         """When the API returns full portfolio data, all fields should be present."""
         fake_mongo: dict = {}
-        my_username = "testuser"
+        my_username = "goldeneight"
         my_cid = my_username
 
         def mock_get(collection, doc_id, ttl_seconds=86400, ext=".html"):
@@ -411,6 +512,110 @@ class TestMyPortfolioDataFields:
         assert "+0.50%" in html or "0.50%" in html
         assert "+1.20%" in html or "1.20%" in html
         assert "+3.40%" in html or "3.40%" in html
+
+
+class TestMyPortfolioRowFromUsername:
+    """Providing an eToro username should render a My Portfolio row with live fields."""
+
+    def test_my_portfolio_row_from_username(self):
+        """Authenticated username -> My Portfolio row with country, AUM, copiers, 1m, 3m, 1y."""
+        fake_mongo: dict = {}
+        my_username = "etoroteam"
+        my_cid = my_username
+
+        captured_my_portfolio_row = None
+
+        def mock_get(collection, doc_id, ttl_seconds=86400, ext=".html"):
+            if doc_id in fake_mongo:
+                return fake_mongo[doc_id]["value"]
+            return None
+
+        def mock_set(collection, doc_id, value, ext=".html", ttl_seconds=86400):
+            fake_mongo[doc_id] = {
+                "_id": doc_id,
+                "value": value,
+                "ext": ext,
+                "created_at": MagicMock(),
+                "expires_at": MagicMock(),
+            }
+            nonlocal captured_my_portfolio_row
+            if "my_portfolio_" + my_username in doc_id:
+                captured_my_portfolio_row = value
+
+        user_info_response = {
+            "users": [
+                {
+                    "userName": my_username,
+                    "fullName": "Etoro Team",
+                    "avatarUrl": "https://example.com/avatar.png",
+                    "country": "GB",
+                    "copiers": 50000,
+                    "aumValue": 12000000.0,
+                    "baseLineCopiers": 48000,
+                }
+            ]
+        }
+
+        rankings_item = {
+            "userName": my_username,
+            "fullName": "Etoro Team",
+            "avatarUrl": "https://example.com/avatar.png",
+            "country": "GB",
+            "copiers": 50000,
+            "aumValue": 12000000.0,
+            "baseLineCopiers": 48000,
+            "gain": 1.1,
+        }
+
+        client = MagicMock()
+        client.get_user_info.return_value = user_info_response
+        client.get_portfolio_rankings.return_value = {
+            "data": rankings_item,
+            "items": [rankings_item],
+            "pagination": {},
+        }
+        client.search_people.return_value = {"items": [], "pagination": {}}
+        client.get_daily_gain.return_value = []
+
+        def client_factory():
+            return client
+
+        with patch("Functions.port.selection.get_portfolio_cache_from_mongo", side_effect=mock_get), \
+             patch("Functions.port.selection.set_portfolio_cache_to_mongo", side_effect=mock_set), \
+             patch("Functions.port.selection._get_etoro_client", side_effect=client_factory), \
+             patch("Functions.port.selection._fetch_rankings") as mock_fetch, \
+             patch("Functions.port.selection._get_period_gain", side_effect=lambda username, period: {
+                 "1m": 0.8,
+                 "3m": 2.5,
+                 "1y": 15.0,
+             }.get(period)), \
+             patch("Functions.port.selection._get_trend_data", return_value=[0.0, 0.5, 1.0, 1.5]), \
+             patch("flask.g", _make_auth_user(my_username)):
+            mock_fetch.return_value = (
+                [rankings_item],
+                {},
+                {},
+                {},
+            )
+            html = get_portfolio_selection_html()
+
+        print(f"username: {my_username}")
+        print(f"Country: GB")
+        print(f"Copiers: 50,000")
+        print(f"AUM: $12.0M")
+        print(f"1m: +0.80%")
+        print(f"3m: +2.50%")
+        print(f"1y: +15.00%")
+        assert my_username in html
+        assert "My Portfolio" in html
+        assert "GB" in html
+        assert "50,000" in html
+        assert "$12.0M" in html
+        assert "+0.80%" in html or "0.80%" in html
+        assert "+2.50%" in html or "2.50%" in html
+        assert "+15.00%" in html or "15.00%" in html
+        assert captured_my_portfolio_row is not None
+        assert my_username in captured_my_portfolio_row
 
 
 if __name__ == "__main__":

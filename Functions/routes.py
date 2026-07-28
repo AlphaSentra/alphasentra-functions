@@ -1,6 +1,6 @@
 import importlib.util
 from pathlib import Path
-from flask import render_template_string
+from flask import render_template_string, request
 
 base_path = Path(__file__).resolve().parent.parent
 
@@ -51,7 +51,18 @@ def sel():
     with open(_debug_path, "a") as _f:
         _f.write("[ROUTE] /port hit\n")
     print("[ROUTE] /port hit, calling cached_portfolio_selection_html()", flush=True)
-    result = cached_portfolio_selection_html()
+    
+    base_period = request.args.get('period', 'OneMonthAgo')
+    sort = request.args.get('sort', '-copiersGain')
+    page_size = request.args.get('pageSize', 20, type=int)
+    page = request.args.get('page', 1, type=int)
+    search_text = request.args.get('searchText', '')
+    if search_text:
+        search_text = search_text.strip()
+    else:
+        search_text = None
+    
+    result = cached_portfolio_selection_html(base_period=base_period, sort=sort, page_size=page_size, page=page, search_text=search_text)
     with open(_debug_path, "a") as _f:
         _f.write(f"[ROUTE] /port returned {len(result)} chars\n")
     print(f"[ROUTE] /port returned {len(result)} chars", flush=True)

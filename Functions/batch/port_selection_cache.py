@@ -18,34 +18,63 @@ from flask import Flask, g
 
 app = Flask(__name__)
 
+_RANKING_COMBOS = [
+    {"base_period": "OneMonthAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
+    {"base_period": "OneMonthAgo", "sort": "-copiersGain", "page_size": 20, "page": 2},
+    {"base_period": "CurrMonth", "sort": "-copiersGain", "page_size": 20, "page": 1},
+    {"base_period": "ThreeMonthsAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
+    {"base_period": "OneYearAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
+]
+
 with app.app_context():
-    from Functions.port.selection import _fetch_rankings
+    from Functions.port.selection import _fetch_rankings, _selection_cache_suffix, get_portfolio_selection_html
 
-    rankings_cache_key = "portfolio_selection_rankings"
-    cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
-    merged = []
-    if cached_rankings is not None:
-        merged = cached_rankings[0] if isinstance(cached_rankings, tuple) else []
-    if not merged:
-        try:
-            merged, _, _, _ = _fetch_rankings()
-        except Exception as exc:
-            log_info(f"Failed to fetch rankings for top investors JSON: {exc}")
-
-    usernames = []
+    all_usernames = []
     seen = set()
-    for item in merged or []:
-        username = None
-        if "userName" in item and str(item["userName"]).strip():
-            username = str(item["userName"]).strip()
-        elif "cid" in item:
-            username = str(item["cid"]).strip()
-        if username and username not in seen:
-            seen.add(username)
-            usernames.append(username)
 
-    set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
-    log_info(f"Cached {len(usernames)} top investor usernames to MongoDB.")
+    for combo in _RANKING_COMBOS:
+        cache_suffix = _selection_cache_suffix(**combo)
+        rankings_cache_key = f"portfolio_selection_rankings{cache_suffix}"
+        cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
+        merged = []
+        if cached_rankings is not None:
+            merged = cached_rankings[0] if isinstance(cached_rankings, tuple) else []
+        if not merged:
+            try:
+                merged, week_map, month_map, year_map = _fetch_rankings(**combo)
+                set_portfolio_cache_to_mongo("portfolio_selection_cache", rankings_cache_key, (merged, week_map, month_map, year_map), ext=".pkl", ttl_seconds=_ETORO_PI_TTL)
+            except Exception as exc:
+                log_info(f"Failed to fetch rankings for combo {combo}: {exc}")
+
+        for item in merged or []:
+            username = None
+            if "userName" in item and str(item["userName"]).strip():
+                username = str(item["userName"]).strip()
+            elif "cid" in item:
+                username = str(item["cid"]).strip()
+            if username and username not in seen:
+                seen.add(username)
+                all_usernames.append(username)
+
+        # Cache full unauthenticated page HTML (sign-in notice)
+        try:
+            g.etoro_authuser = None
+            html = get_portfolio_selection_html(**combo)
+            log_info(f"Cached unauthenticated /port page for combo {combo} ({len(html)} chars)")
+        except Exception as exc:
+            log_info(f"Failed to cache unauthenticated page for combo {combo}: {exc}")
+
+        # Cache full authenticated page HTML for batch user
+        if USERNAME:
+            try:
+                g.etoro_authuser = USERNAME
+                html = get_portfolio_selection_html(**combo)
+                log_info(f"Cached authenticated /port page for {USERNAME} combo {combo} ({len(html)} chars)")
+            except Exception as exc:
+                log_info(f"Failed to cache authenticated page for {USERNAME} combo {combo}: {exc}")
+
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", all_usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
+    log_info(f"Cached {len(all_usernames)} top investor usernames to MongoDB.")
 
     from Functions.port.main import generate_portfolio_html
 
@@ -61,11 +90,11 @@ with app.app_context():
             log_info(f"Failed to cache report for {username}: {exc}")
             return f"error:{username}"
 
-    if usernames:
-        log_info(f"Caching portfolio reports for {len(usernames)} investors...")
+    if all_usernames:
+        log_info(f"Caching portfolio reports for {len(all_usernames)} investors...")
         ok = skip = err = 0
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = {executor.submit(_cache_report, u): u for u in usernames}
+            futures = {executor.submit(_cache_report, u): u for u in all_usernames}
             for future in as_completed(futures):
                 res = future.result()
                 if res.startswith("ok:"):

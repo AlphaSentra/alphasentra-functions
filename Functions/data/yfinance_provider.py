@@ -7,7 +7,7 @@ import yfinance as yf
 
 from .protocols import MarketDataProvider
 from .models import AssetMetadata
-from Functions.port.cache import get as cache_get, set as cache_set
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_PRICE as _PRICE_TTL, CACHE_TTL_SECTOR as _SECTOR_TTL
 
 
@@ -47,8 +47,8 @@ def _to_camel_case(meta: AssetMetadata) -> dict:
 
 class YFinanceProvider(MarketDataProvider):
     def download_price_data(self, tickers, start_date, end_date) -> pd.DataFrame:
-        cache_key = (tuple(sorted(tickers)), str(start_date))
-        cached = cache_get(cache_key, _PRICE_TTL, ext=".pkl")
+        cache_key = str((tuple(sorted(tickers)), str(start_date)))
+        cached = get_portfolio_cache_from_mongo("yfinance_cache", cache_key, ttl_seconds=_PRICE_TTL, ext=".pkl")
         if cached is not None:
             return cached
         data = yf.download(
@@ -60,12 +60,12 @@ class YFinanceProvider(MarketDataProvider):
         )
         if data.empty:
             raise ValueError("No data downloaded for the specified tickers and date range.")
-        cache_set(cache_key, data, ext=".pkl")
+        set_portfolio_cache_to_mongo("yfinance_cache", cache_key, data, ext=".pkl", ttl_seconds=_PRICE_TTL)
         return data
 
     def get_sector_industry_data(self, tickers) -> pd.DataFrame:
-        cache_key = ("sector", tuple(sorted(tickers)))
-        cached = cache_get(cache_key, _SECTOR_TTL, ext=".pkl")
+        cache_key = str(("sector", tuple(sorted(tickers))))
+        cached = get_portfolio_cache_from_mongo("yfinance_cache", cache_key, ttl_seconds=_SECTOR_TTL, ext=".pkl")
         if cached is not None:
             return cached
 
@@ -109,7 +109,7 @@ class YFinanceProvider(MarketDataProvider):
 
         df = pd.DataFrame([_to_camel_case(r) for r in records])
         result = df.set_index("ticker")
-        cache_set(cache_key, result, ext=".pkl")
+        set_portfolio_cache_to_mongo("yfinance_cache", cache_key, result, ext=".pkl", ttl_seconds=_SECTOR_TTL)
         return result
 
     @staticmethod

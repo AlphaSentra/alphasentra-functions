@@ -5,7 +5,7 @@ Portfolio input handler - form display and request processing.
 import json
 from flask import request, jsonify, make_response
 import logging
-from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
 from Functions.port.form import PORTFOLIO_FORM_HTML
 from Functions.port.engine.analyzer import PortfolioFunctionsError
@@ -78,14 +78,11 @@ def _get_cached_portfolio_html(etoro_username: str, etoro_cid: str, benchmark_ti
     """
     if not etoro_username:
         return None
-    cache_key = (
-        etoro_username.strip().lower(),
-        (benchmark_ticker or "").strip().upper(),
-        etoro_cid.strip().lower(),
-    )
-    if not cache_exists(cache_key, _REPORT_TTL, ext=".html"):
-        return None
-    cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
+    if benchmark_ticker or etoro_cid:
+        cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+    else:
+        cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+    cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
     if cached_html is not None:
         logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
     return cached_html
@@ -102,12 +99,11 @@ def get_portfolio_cache_status():
     if not etoro_username:
         return jsonify({"cached": False})
 
-    cache_key = (
-        etoro_username.strip().lower(),
-        (benchmark_ticker or "").strip().upper(),
-        etoro_cid.strip().lower(),
-    )
-    is_cached = cache_exists(cache_key, _REPORT_TTL, ext=".html")
+    if benchmark_ticker or etoro_cid:
+        cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+    else:
+        cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+    is_cached = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html") is not None
     return jsonify({"cached": is_cached})
 
 def handle_portfolio_input():
@@ -118,13 +114,16 @@ def handle_portfolio_input():
         etoro_username = request.form.get("etoro_username", "").strip()
         etoro_cid = request.form.get("etoro_cid", "").strip()
         benchmark_ticker = request.form.get("benchmark_ticker", "").strip()
+    elif request.method == "GET":
+        etoro_username = request.args.get("etoro_username", "").strip()
+        etoro_cid = request.args.get("etoro_cid", "").strip()
+        benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
     if request.method == "POST" and etoro_username:
-        cache_key = (
-            etoro_username.strip().lower(),
-            (benchmark_ticker or "").strip().upper(),
-            etoro_cid.strip().lower(),
-        )
+        if benchmark_ticker or etoro_cid:
+            cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+        else:
+            cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
 
         cached_html = _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker)
         if cached_html is not None:
@@ -142,8 +141,19 @@ def handle_portfolio_input():
                 detail=str(exc).replace("{", "{{").replace("}", "}}"),
             )
             return make_response(error_html)
-        cache_set(cache_key, html, ext=".html")
+        set_portfolio_cache_to_mongo("portfolio_report_cache", str(cache_key), html, ext=".html", ttl_seconds=_REPORT_TTL)
         return make_response(html)
+
+    if request.method == "GET" and etoro_username:
+        if benchmark_ticker or etoro_cid:
+            cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+        else:
+            cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+        cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
+        if cached_html is not None:
+            logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
+            return make_response(cached_html)
+        return PORTFOLIO_FORM_HTML
 
     if request.method == "GET":
         return PORTFOLIO_FORM_HTML

@@ -1,4 +1,3 @@
-import json
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -9,8 +8,8 @@ sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "Functions"))
 sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.logging_utils import log_info
-from Functions.port.cache import get as cache_get, set as cache_set
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
 USERNAME = "etoroteam"
@@ -23,11 +22,11 @@ with app.app_context():
     g.etoro_authuser = USERNAME
     from Functions.port.selection import get_portfolio_selection_html, _fetch_rankings
     html = get_portfolio_selection_html()
-    cache_set(("portfolio_selection",), html, ext=".html")
-    cache_set(("portfolio_selection_my_portfolio", USERNAME), html, ext=".html")
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection", html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", f"portfolio_selection_my_portfolio_{USERNAME}", html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
 
-    rankings_cache_key = ("portfolio_selection_rankings",)
-    cached_rankings = cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl")
+    rankings_cache_key = "portfolio_selection_rankings"
+    cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
     merged = []
     if cached_rankings is not None:
         merged = cached_rankings[0] if isinstance(cached_rankings, tuple) else []
@@ -38,28 +37,30 @@ with app.app_context():
             log_info(f"Failed to fetch rankings for top investors JSON: {exc}")
 
     usernames = []
+    seen = set()
     for item in merged or []:
-        username = str(item.get("userName", item.get("cid", ""))).strip()
-        if username:
+        username = None
+        if "userName" in item and str(item["userName"]).strip():
+            username = str(item["userName"]).strip()
+        elif "cid" in item:
+            username = str(item["cid"]).strip()
+        if username and username not in seen:
+            seen.add(username)
             usernames.append(username)
 
-    cache_set(("portfolio_selection_top_investors",), usernames, ext=".json", filename="port_top_investors_username.json")
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
     log_info(f"Cached portfolio selection HTML for user {USERNAME} ({len(html)} chars).")
-    log_info(f"Cached {len(usernames)} top investor usernames to port_top_investors_username.json.")
+    log_info(f"Cached {len(usernames)} top investor usernames to MongoDB.")
 
     from Functions.port.main import generate_portfolio_html
 
     def _cache_report(username: str) -> str:
-        cache_key = (
-            username.strip().lower(),
-            "",
-            "",
-        )
-        if cache_get(cache_key, _REPORT_TTL, ext=".html") is not None:
+        cache_key = f"portfolio_report_{username.strip().lower()}"
+        if get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html") is not None:
             return f"skip:{username}"
         try:
             report_html = generate_portfolio_html(etoro_username=username, benchmark_ticker="", etoro_cid="")
-            cache_set(cache_key, report_html, ext=".html")
+            set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
             return f"ok:{username}"
         except Exception as exc:
             log_info(f"Failed to cache report for {username}: {exc}")

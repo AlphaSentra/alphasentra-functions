@@ -29,9 +29,13 @@ with open(index_template_path, 'r') as f:
 
 from Functions.port.input import handle_portfolio_input, get_portfolio_cache_status # Import get_portfolio_cache_status
 from Functions.port.selection import get_portfolio_selection_html, cached_portfolio_selection_html
+from Functions.db.cache import get_index_cache_from_mongo
 
 
 def index():
+    cached = get_index_cache_from_mongo()
+    if cached is not None:
+        return cached
     return render_template_string(_INDEX_HTML, routes=ROUTES, theme=theme, font=font)
 
 
@@ -42,7 +46,16 @@ def port_cache_status(): # New route function
     return get_portfolio_cache_status()
 
 def sel():
-    return cached_portfolio_selection_html()
+    import os as _os
+    _debug_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "port_debug.log")
+    with open(_debug_path, "a") as _f:
+        _f.write("[ROUTE] /port hit\n")
+    print("[ROUTE] /port hit, calling cached_portfolio_selection_html()", flush=True)
+    result = cached_portfolio_selection_html()
+    with open(_debug_path, "a") as _f:
+        _f.write(f"[ROUTE] /port returned {len(result)} chars\n")
+    print(f"[ROUTE] /port returned {len(result)} chars", flush=True)
+    return result
 
 
 def eqs():

@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 
 import requests
 
-from Functions.port.cache import get as cache_get, set as cache_set
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_ETORO as _ETORO_TTL
 
 _current_dir = Path(__file__).resolve().parent
@@ -227,8 +227,8 @@ class ETPublicClient:
         Raises:
             EToroClientError: If the request fails or returns a non-2xx status.
         """
-        cache_key = ("gains", username, granularity, min_date, max_date)
-        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        cache_key = str(("gains", username, granularity, min_date, max_date))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
         if cached is not None:
             return cached
         granularity = granularity.capitalize()
@@ -287,18 +287,18 @@ class ETPublicClient:
             total_gain=total_gain,
             gains=gains,
         )
-        cache_set(cache_key, result, ext=".pkl")
+        set_portfolio_cache_to_mongo("etoro_cache", str(cache_key), result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result
 
     def get_investor_portfolio(self, username: str) -> EToroInvestorPortfolio:
         """
         Fetch live open portfolio positions for a Popular Investor and match symbols.
         """
-        cache_key = ("portfolio", username)
-        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        cache_key = str(("portfolio", username))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
         if cached is not None:
             return cached
-        stale = cache_get(cache_key, _ETORO_STALE_TTL, ext=".pkl")
+        stale = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_STALE_TTL, ext=".pkl")
         url = _ETORO_ENDPOINT_PORTFOLIO_LIVE.format(username=username)
 
         def _session_factory():
@@ -322,7 +322,7 @@ class ETPublicClient:
         raw_positions = data.get("positions", [])
         if not raw_positions:
             empty_result = EToroInvestorPortfolio(username=username, positions=[])
-            cache_set(cache_key, empty_result, ext=".pkl")
+            set_portfolio_cache_to_mongo("etoro_cache", cache_key, empty_result, ext=".pkl", ttl_seconds=_ETORO_TTL)
             return empty_result
 
         # Extract unique instrument IDs
@@ -475,7 +475,7 @@ class ETPublicClient:
             positions=positions,
             aggregated_positions=aggregated_positions,
         )
-        cache_set(cache_key, result, ext=".pkl")
+        set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result
     
     def get_trade_history(
@@ -519,8 +519,8 @@ class ETPublicClient:
             resolved_cid = str(explicit_cid)
         else:
             resolved_cid = self.resolve_cid(username)
-        cache_key = ("history", username, resolved_cid, page, items_per_page)
-        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        cache_key = str(("history", username, resolved_cid, page, items_per_page))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
         if cached is not None:
             return cached
     
@@ -553,10 +553,10 @@ class ETPublicClient:
             cid=str(resolved_cid),
             records=records,
             page=data.get("pageNumber", page),
-            items_per_page=data.get("itemsPerPage", items_per_page),
+            items_per_page=data.get("itemsPerPage", page),
             total_items=len(records),
         )
-        cache_set(cache_key, result, ext=".pkl")
+        set_portfolio_cache_to_mongo("etoro_cache", str(cache_key), result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result
     
     def _resolve_cid_from_username(self, username: str) -> str:
@@ -599,12 +599,12 @@ class ETPublicClient:
         Raises:
             EToroClientError: If resolution fails.
         """
-        cache_key = ("cid", username)
-        cached = cache_get(cache_key, _ETORO_TTL, ext=".pkl")
+        cache_key = str(("cid", username))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
         if cached is not None:
             return cached
         result = self._resolve_cid_from_username(username)
-        cache_set(cache_key, result, ext=".pkl")
+        set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result
     
     def resolve_instrument_metadata(self, instrument_ids: list) -> Dict[str, Dict[str, str]]:

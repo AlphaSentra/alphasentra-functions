@@ -14,7 +14,8 @@ import requests
 from flask import request
 from dotenv import load_dotenv
 
-from Functions.port.cache import get as cache_get, set as cache_set, exists as cache_exists
+from Functions.logging_utils import log_info
+from Functions.db.cache import delete_portfolio_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
 from Functions.etoro.client import EToroClientError, get_public_client_from_env
 
@@ -34,6 +35,15 @@ FONT_FAMILY = _font_module.FONT_PRIMARY
 _BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 _ENV_PATH = os.path.join(_BASE_DIR, "..", "..", ".env")
 load_dotenv(dotenv_path=_ENV_PATH, override=False)
+
+_PORT_DEBUG_ENABLED = True
+
+
+def _port_debug(msg: str) -> None:
+    if not _PORT_DEBUG_ENABLED:
+        return
+    sys.stderr.write(f"[port DEBUG] {msg}\n")
+    sys.stderr.flush()
 
 _AVATAR_CACHE: Dict[str, Optional[str]] = {}
 _TREND_CACHE: Dict[str, List[float]] = {}
@@ -808,12 +818,14 @@ def get_portfolio_selection_html() -> str:
         username_at_display = "@MyPortfolio"
 
     # Try to get cached my_portfolio row for this user
-    my_portfolio_cache_key = ("portfolio_selection_my_portfolio", username_from_cookie)
-    my_portfolio_html_row = cache_get(my_portfolio_cache_key, _ETORO_PI_TTL, ext=".html")
+    my_portfolio_cache_key = f"portfolio_selection_my_portfolio_{username_from_cookie}"
+    my_portfolio_html_row = get_portfolio_cache_from_mongo("portfolio_selection_cache", my_portfolio_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
+    if my_portfolio_html_row is None:
+        _port_debug("MongoDB cache unavailable for my_portfolio row; will regenerate.")
 
     # Fetch rankings data (cache the raw result to avoid repeated API calls)
-    rankings_cache_key = ("portfolio_selection_rankings",)
-    cached_rankings = cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl")
+    rankings_cache_key = "portfolio_selection_rankings"
+    cached_rankings = get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl")
     
     _using_fallback_rankings = False
     if cached_rankings is not None:
@@ -821,28 +833,32 @@ def get_portfolio_selection_html() -> str:
         if merged and len(merged) == len(_FALLBACK_INVESTORS) and merged[0].get("cid") == _FALLBACK_INVESTORS[0].get("cid"):
             _using_fallback_rankings = True
     else:
+        _port_debug("MongoDB rankings cache miss; trying eToro rankings API.")
         try:
             merged, week_map, month_map, year_map = _fetch_rankings()
-            cache_set(rankings_cache_key, (merged, week_map, month_map, year_map), ext=".pkl")
+            set_portfolio_cache_to_mongo("portfolio_selection_cache", rankings_cache_key, (merged, week_map, month_map, year_map), ext=".pkl", ttl_seconds=_ETORO_PI_TTL)
         except Exception as exc:
-            print(f"Failed to fetch eToro rankings: {exc}")
+            _port_debug(f"eToro rankings API failed: {exc}")
             merged, week_map, month_map, year_map = [], {}, {}, {}
 
     if not merged:
+        print("[port] merged is empty, using FALLBACK_INVESTORS")
         merged = _FALLBACK_INVESTORS
         week_map = _WEEK_MAP
         month_map = _MONTH_MAP
         year_map = _YEAR_MAP
+    else:
+        print(f"[port] merged has {len(merged)} investors from cache/API")
 
     if merged:
         _prefetch_country_data(merged)
 
     # Cache the common rows HTML (shared across all users)
-    common_rows_cache_key = ("portfolio_selection_common_rows",)
-    rows_html = cache_get(common_rows_cache_key, _ETORO_PI_TTL, ext=".html")
+    common_rows_cache_key = "portfolio_selection_common_rows"
+    rows_html = get_portfolio_cache_from_mongo("portfolio_selection_cache", common_rows_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
     if rows_html is None:
         rows_html = "\n".join(_render_row(item, week_map, month_map, year_map) for item in merged)
-        cache_set(common_rows_cache_key, rows_html, ext=".html")
+        set_portfolio_cache_to_mongo("portfolio_selection_cache", common_rows_cache_key, rows_html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
 
     _FALLBACK_AUM = "$14.5M"
     _FALLBACK_COPIERS = "32,800"
@@ -1019,7 +1035,7 @@ def get_portfolio_selection_html() -> str:
             include_badge=False,
         )
 
-    cache_set(my_portfolio_cache_key, my_portfolio_html_row, ext=".html")
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", my_portfolio_cache_key, my_portfolio_html_row, ext=".html", ttl_seconds=_ETORO_PI_TTL)
 
     html = f"""<!DOCTYPE html>
 <html>
@@ -1980,14 +1996,27 @@ def get_portfolio_selection_html() -> str:
 
 
 def cached_portfolio_selection_html() -> str:
-    cache_key = ("portfolio_selection",)
-    cached = cache_get(cache_key, _ETORO_PI_TTL, ext=".html")
+    import os as _os
+    _debug_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "port_debug.log")
+    with open(_debug_path, "a") as _f:
+        _f.write("[port] cached_portfolio_selection_html START\n")
+    print("[port] cached_portfolio_selection_html START", flush=True)
+    cache_key = "portfolio_selection"
+    cached = get_portfolio_cache_from_mongo("portfolio_selection_cache", cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".html")
+    with open(_debug_path, "a") as _f:
+        _f.write(f"[port] MongoDB read returned: {cached is not None}\n")
+    print(f"[port] cached_portfolio_selection_html MongoDB read returned: {cached is not None}", flush=True)
     if cached is not None:
+        with open(_debug_path, "a") as _f:
+            _f.write("[port] RETURNING cached HTML\n")
+        print("[port] cached_portfolio_selection_html RETURNING cached HTML", flush=True)
         return cached
 
-    rankings_cache_key = ("portfolio_selection_rankings",)
-    if cache_get(rankings_cache_key, _ETORO_PI_TTL, ext=".pkl") is None:
-        cache_set(rankings_cache_key, (_FALLBACK_INVESTORS, _WEEK_MAP, _MONTH_MAP, _YEAR_MAP), ext=".pkl")
+    _port_debug("Full portfolio selection HTML cache miss in MongoDB; regenerating page.")
+    rankings_cache_key = "portfolio_selection_rankings"
+    if get_portfolio_cache_from_mongo("portfolio_selection_cache", rankings_cache_key, ttl_seconds=_ETORO_PI_TTL, ext=".pkl") is None:
+        _port_debug("Rankings cache miss; pre-seeding fallback investor data in MongoDB.")
+        set_portfolio_cache_to_mongo("portfolio_selection_cache", rankings_cache_key, (_FALLBACK_INVESTORS, _WEEK_MAP, _MONTH_MAP, _YEAR_MAP), ext=".pkl", ttl_seconds=_ETORO_PI_TTL)
 
     for item in _FALLBACK_INVESTORS:
         username = str(item.get("userName", item.get("username", item.get("cid", ""))))
@@ -2002,5 +2031,5 @@ def cached_portfolio_selection_html() -> str:
             _COUNTRY_INFO_CACHE[str(country_id)] = None
 
     html = get_portfolio_selection_html()
-    cache_set(cache_key, html, ext=".html")
+    set_portfolio_cache_to_mongo("portfolio_selection_cache", cache_key, html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
     return html

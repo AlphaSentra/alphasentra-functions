@@ -146,8 +146,8 @@ class TestResolveCid:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.resolve_cid("jdoe")
             assert result == "123"
 
@@ -155,8 +155,8 @@ class TestResolveCid:
         """Cache hit skips the network call entirely."""
         client = _make_client()
 
-        with patch("Functions.etoro.client.cache_get", return_value="cached-cid"), \
-             patch("Functions.etoro.client.cache_set") as mock_cache_set:
+        with patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value="cached-cid"), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo") as mock_cache_set:
             result = client.resolve_cid("jdoe")
             assert result == "cached-cid"
             mock_cache_set.assert_not_called()
@@ -169,8 +169,8 @@ class TestResolveCid:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             with pytest.raises(EToroClientError, match="Could not resolve CID"):
                 client.resolve_cid("jdoe")
 
@@ -194,8 +194,8 @@ class TestGetInvestorGainTimeseries:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.get_investor_gain_timeseries("jdoe", "Daily")
             assert result.username == "jdoe"
             assert result.granularity == "Daily"
@@ -208,8 +208,8 @@ class TestGetInvestorGainTimeseries:
         cached = MagicMock()
         cached.username = "jdoe"
 
-        with patch("Functions.etoro.client.cache_get", return_value=cached), \
-             patch("Functions.etoro.client.cache_set") as mock_cache_set:
+        with patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=cached), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo") as mock_cache_set:
             result = client.get_investor_gain_timeseries("jdoe", "Daily")
             assert result == cached
             mock_cache_set.assert_not_called()
@@ -229,8 +229,8 @@ class TestGetInvestorGainTimeseries:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.get_investor_gain_timeseries("jdoe", "Daily")
             assert len(result.gains) == 1
 
@@ -274,8 +274,8 @@ class TestGetInvestorPortfolio:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"), \
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"), \
              patch("Functions.etoro.client.DatabaseManager", return_value=mock_db_manager), \
              patch.object(client, "resolve_instrument_metadata", return_value={"1": {"symbol": "TEST"}}):
             result = client.get_investor_portfolio("jdoe")
@@ -293,8 +293,8 @@ class TestGetInvestorPortfolio:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"), \
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"), \
              patch("Functions.etoro.client.DatabaseManager", None):
             result = client.get_investor_portfolio("jdoe")
             assert len(result.positions) == 0
@@ -309,8 +309,8 @@ class TestGetInvestorPortfolio:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", side_effect=[None, stale]), \
-             patch("Functions.etoro.client.cache_set"), \
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", side_effect=[None, stale]), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"), \
              patch("Functions.etoro.client.DatabaseManager", None):
             result = client.get_investor_portfolio("jdoe")
             assert result == stale
@@ -338,8 +338,8 @@ class TestGetTradeHistory:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"), \
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"), \
              patch.object(client, "resolve_cid", return_value="123"):
             result = client.get_trade_history(username="jdoe")
             assert result.cid == "123"
@@ -358,8 +358,8 @@ class TestGetTradeHistory:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.get_trade_history(username="jdoe", explicit_cid="999")
             assert result.cid == "999"
 
@@ -384,8 +384,8 @@ class TestSearchPeople:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.search_people({"query": "AAPL"})
             assert result == {"items": [{"internalSymbolFull": "AAPL", "displayname": "Apple Inc."}]}
 
@@ -422,8 +422,8 @@ class TestGetPortfolioRankings:
 
         with patch("Functions.etoro.client.public_api_session", return_value=mock_session), \
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.get_portfolio_rankings("jdoe", {"period": "1y"})
             assert result == {"rankings": [{"userName": "top_investor", "gain": 100.0}]}
 
@@ -497,8 +497,8 @@ class TestResolveInstrumentMetadata:
              patch("Functions.etoro.client.get_random_private_key", return_value="random-key"), \
              patch("Functions.etoro.client._load_instrument_cache", return_value={}), \
              patch("Functions.etoro.client._save_instrument_cache"), \
-             patch("Functions.etoro.client.cache_get", return_value=None), \
-             patch("Functions.etoro.client.cache_set"):
+             patch("Functions.etoro.client.get_portfolio_cache_from_mongo", return_value=None), \
+             patch("Functions.etoro.client.set_portfolio_cache_to_mongo"):
             result = client.resolve_instrument_metadata(["1"])
             assert "1" in result
             assert result["1"]["symbol"] == "AAPL"

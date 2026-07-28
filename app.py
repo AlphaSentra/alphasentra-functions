@@ -7,9 +7,8 @@ from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
 from Functions.port.selection import search_investors_api, get_portfolio_selection_html
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
-from Functions.port.cache import exists as cache_exists, get as cache_get, invalidate as cache_invalidate, set as cache_set
+from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
-from Functions.db.cache import get_index_cache_from_mongo
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -21,9 +20,9 @@ _COOKIE_MAX_AGE = 86400
 
 def _warm_portfolio_cache():
     try:
-        cache_invalidate(("portfolio_selection_rankings",))
+        delete_portfolio_cache_from_mongo("portfolio_selection_cache", "portfolio_selection_rankings")
         html = get_portfolio_selection_html()
-        cache_set(("portfolio_selection",), html, ext=".html")
+        set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection", html, ext=".html", ttl_seconds=_ETORO_PI_TTL)
     except Exception:
         pass
 
@@ -97,18 +96,18 @@ def _require_etoro_auth():
                 benchmark_ticker = request.form.get('benchmark_ticker', '').strip()
             elif request.method == 'GET':
                 etoro_username = request.args.get('etoro_username', '').strip()
+                etoro_cid = request.args.get('etoro_cid', '').strip()
+                benchmark_ticker = request.args.get('benchmark_ticker', '').strip()
 
             if etoro_username:
-                cache_key = (
-                    etoro_username.strip().lower(),
-                    (benchmark_ticker or "").strip().upper(),
-                    etoro_cid.strip().lower(),
-                )
-                if cache_exists(cache_key, _REPORT_TTL, ext=".html"):
-                    cached_html = cache_get(cache_key, _REPORT_TTL, ext=".html")
-                    if cached_html is not None:
-                        return make_response(cached_html)
-                    return
+                if benchmark_ticker or etoro_cid:
+                    cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+                else:
+                    cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+                cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
+                if cached_html is not None:
+                    return make_response(cached_html)
+                return
 
         if request.path == '/port' and request.method == 'GET':
             return

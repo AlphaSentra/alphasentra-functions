@@ -62,38 +62,41 @@ def set_index_cache_to_mongo(value: str, ext: str = ".html", ttl_seconds: int = 
     if not uris:
         raise ValueError("No valid URIs found in MONGODB_URI_CACHE")
 
-    selected_uri = random.choice(uris)
-    parsed = urlparse(selected_uri)
-    db_name = (parsed.path or "").lstrip("/") or os.getenv("MONGODB_DATABASE_CACHE", "alphasentra-cache")
+    last_exception = None
+    for uri in uris:
+        client = None
+        try:
+            parsed = urlparse(uri)
+            db_name = (parsed.path or "").lstrip("/") or os.getenv("MONGODB_DATABASE_CACHE", "alphasentra-cache")
+            client = MongoClient(uri, serverSelectionTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, connectTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, socketTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS)
+            db = client[db_name]
+            collection = db["function_index_cache"]
 
-    client = None
-    try:
-        client = MongoClient(selected_uri, serverSelectionTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, connectTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, socketTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS)
-        db = client[db_name]
-        collection = db["function_index_cache"]
+            collection.create_index("expires_at", expireAfterSeconds=0)
 
-        collection.create_index("expires_at", expireAfterSeconds=0)
+            expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+            collection.update_one(
+                {"_id": "index"},
+                {
+                    "$set": {
+                        "value": value,
+                        "ext": ext,
+                        "created_at": datetime.utcnow(),
+                        "expires_at": expires_at,
+                    }
+                },
+                upsert=True,
+            )
+            log_info(f"Cached index HTML to MongoDB ({len(value)} chars).")
+        except PyMongoError as e:
+            last_exception = e
+            log_error(f"Failed to cache index HTML to MongoDB uri={uri}", "MONGO_CACHE", e)
+        finally:
+            if client:
+                client.close()
 
-        expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
-        collection.update_one(
-            {"_id": "index"},
-            {
-                "$set": {
-                    "value": value,
-                    "ext": ext,
-                    "created_at": datetime.utcnow(),
-                    "expires_at": expires_at,
-                }
-            },
-            upsert=True,
-        )
-        log_info(f"Cached index HTML to MongoDB ({len(value)} chars).")
-    except PyMongoError as e:
-        log_error("Failed to cache index HTML to MongoDB", "MONGO_CACHE", e)
-        raise
-    finally:
-        if client:
-            client.close()
+    if last_exception is not None:
+        raise last_exception
 
 
 def _get_cache_db(uri: str):
@@ -192,7 +195,6 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
 
             collection.update_one({"_id": doc_id}, payload, upsert=True)
             log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")
-            return
         except PyMongoError as e:
             last_exception = e
             log_error(f"Failed to cache portfolio data to MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)

@@ -183,3 +183,69 @@
 2026-07-29 19:52:10,325 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'choose3395').
 2026-07-29 19:52:20,841 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BTC-USD', 'GLW', 'MRVL', 'NVDA', 'TSLA', 'TSM', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
 2026-07-29 19:52:31,967 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'choose3395').
+2026-07-29 20:26:32,538 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-29 20:26:35,926 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-29 20:26:36,143 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-29 20:26:39,381 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-29 20:27:56,753 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-29 20:27:59,638 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-29 20:27:59,864 - INFO - [INFO] - Cached unauthenticated /port page for combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (53596 chars)
+2026-07-29 20:28:32,286 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-29 20:28:32,499 - INFO - [INFO] - Cached authenticated /port page for etoroteam combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (52971 chars)
+2026-07-29 20:28:47,969 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-29 20:28:50,711 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-29 20:28:50,931 - INFO - [INFO] - Cached 20 top investor usernames to MongoDB.
+2026-07-29 20:28:55,361 - INFO - [INFO] - Caching portfolio reports for 20 investors...
+2026-07-29 20:29:44,273 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-29 20:29:47,260 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.
+2026-07-29 20:41:55,305 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-29 20:41:57,842 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-29 20:43:00,393 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-29 20:43:03,180 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-29 20:43:06,195 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-29 20:43:09,210 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-29 20:43:09,430 - INFO - [INFO] - Cached unauthenticated /port page for combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54455 chars)
+2026-07-29 20:43:37,240 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_etoroteam.
+2026-07-29 20:43:39,881 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_etoroteam.
+2026-07-29 20:43:43,367 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-29 20:43:46,441 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-29 20:43:46,655 - INFO - [INFO] - Cached authenticated /port page for etoroteam combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54770 chars)
+2026-07-29 20:43:59,854 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-29 20:44:02,897 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-29 20:44:06,042 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-29 20:44:08,779 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-29 20:44:08,998 - INFO - [INFO] - Cached 20 top investor usernames to MongoDB.
+2026-07-29 20:44:12,237 - INFO - [INFO] - Caching portfolio reports for 20 investors...
+2026-07-29 20:44:24,568 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-29 20:44:27,308 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-29 20:44:27,524 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-29 20:45:12,427 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.
+2026-07-29 20:45:27,180 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.
+2026-07-29 20:49:44,110 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-29 20:49:47,890 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-29 20:49:48,107 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-29 20:51:03,297 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-29 20:51:05,738 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-29 20:51:05,946 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-29 20:51:43,503 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-29 20:51:46,105 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-29 20:52:42,799 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-29 20:52:46,078 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-29 20:52:49,178 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-29 20:52:53,154 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-29 20:52:53,435 - INFO - [INFO] - Cached unauthenticated /port page for combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54349 chars)
+2026-07-29 20:53:23,221 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_etoroteam.
+2026-07-29 20:53:25,894 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_etoroteam.
+2026-07-29 20:53:28,971 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-29 20:53:31,889 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-29 20:53:32,107 - INFO - [INFO] - Cached authenticated /port page for etoroteam combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54664 chars)
+2026-07-29 20:53:43,379 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-29 20:53:45,864 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-29 20:53:48,400 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-29 20:53:51,074 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-29 20:53:51,288 - INFO - [INFO] - Cached 20 top investor usernames to MongoDB.
+2026-07-29 20:53:54,081 - INFO - [INFO] - Caching portfolio reports for 20 investors...
+2026-07-29 20:54:37,062 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-29 20:54:39,561 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-29 20:54:42,509 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.
+2026-07-29 20:54:45,491 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.

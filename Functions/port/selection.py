@@ -668,8 +668,8 @@ def _fetch_rankings(
 ) -> List[Dict[str, Any]]:
     with ThreadPoolExecutor(max_workers=4) as executor:
         future_base = executor.submit(_get_rankings, base_period, sort, page_size, page, search_text)
-        future_month = executor.submit(_get_rankings, "ThreeMonthsAgo", sort, None, 1, search_text)
-        future_year = executor.submit(_get_rankings, "OneYearAgo", sort, None, 1, search_text)
+        future_month = executor.submit(_get_rankings, "ThreeMonthsAgo", sort, page_size, 1, search_text)
+        future_year = executor.submit(_get_rankings, "OneYearAgo", sort, page_size, 1, search_text)
 
         base_data = future_base.result()
         month_data = future_month.result()
@@ -970,13 +970,6 @@ def get_portfolio_selection_html(
                     if users:
                         my_portfolio_item = users[0]
                         _prefetch_country_data([my_portfolio_item])
-                        _SPARSE_PORTFOLIO_FIELDS = [
-                            "copiers", "aumValue", "gain", "copiersGain",
-                            "weeklyGain", "displayedValue", "baseLineCopiers",
-                        ]
-                        if not any(my_portfolio_item.get(field) for field in _SPARSE_PORTFOLIO_FIELDS):
-                            my_portfolio_invalid = True
-                            my_portfolio_error = f"@{username_from_cookie} portfolio data is not available publicly"
                     else:
                         my_portfolio_invalid = True
                         my_portfolio_error = f"@{username_from_cookie} portfolio does not exist"

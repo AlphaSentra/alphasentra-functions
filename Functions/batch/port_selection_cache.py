@@ -55,6 +55,11 @@ with app.app_context():
             if username and username not in seen:
                 seen.add(username)
                 all_usernames.append(username)
+                if len(all_usernames) >= 20:
+                    break
+
+        if len(all_usernames) >= 20:
+            break
 
         # Cache full unauthenticated page HTML (sign-in notice)
         try:

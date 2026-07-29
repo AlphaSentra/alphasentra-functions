@@ -84,9 +84,18 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
         session = session_factory()
         try:
             resp = session.get(url, **kwargs)
-        except requests.RequestException:
+        except requests.RequestException as exc:
+            logger.warning("eToro API error on attempt %d for %s: %s", attempt + 1, url, exc)
             _maybe_pause_after_api_call()
-            raise
+            if attempt == max_retries - 1:
+                raise EToroClientError(
+                    f"GET {url} failed after {max_retries} attempts: {exc}"
+                ) from exc
+            if attempt < max_retries - 1:
+                delay = base_delay * (1.1 ** attempt) + __import__('random').uniform(0, 1.0)
+                logger.info("Retrying %s in %.1fs...", url, delay)
+                time.sleep(delay)
+            continue
         _maybe_pause_after_api_call()
         try:
             if resp.status_code == 401:

@@ -1,0 +1,152 @@
+2026-07-30 07:26:04,197 - INFO - [INFO] - Cached unauthenticated /port page for combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54349 chars)
+2026-07-30 07:26:07,006 - INFO - [INFO] - Cached authenticated /port page for etoroteam combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54664 chars)
+2026-07-30 07:26:57,229 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings.
+2026-07-30 07:28:03,143 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_common_rows.
+2026-07-30 07:28:06,767 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_My Portfolio.
+2026-07-30 07:28:06,976 - INFO - [INFO] - Cached unauthenticated /port page for combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54334 chars)
+2026-07-30 07:28:33,379 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_etoroteam.
+2026-07-30 07:28:36,231 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_etoroteam.
+2026-07-30 07:28:36,438 - INFO - [INFO] - Cached authenticated /port page for etoroteam combo {'base_period': 'OneMonthAgo', 'sort': '-copiersGain', 'page_size': 20, 'page': 1} (54650 chars)
+2026-07-30 07:28:51,362 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_rankings_OneMonthAgo_-copiersGain_20_2_.
+2026-07-30 07:28:53,831 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_top_investors.
+2026-07-30 07:28:54,050 - INFO - [INFO] - Cached 20 top investor usernames to MongoDB.
+2026-07-30 07:28:57,825 - INFO - [INFO] - Caching portfolio reports for 20 investors...
+2026-07-30 07:29:25,509 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'Martyn87').
+2026-07-30 07:29:38,401 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BARC.L', 'BLND.L', 'BRK', 'BTC-USD', 'BWY.L', 'DNLM.L', 'DRX.L', 'EMG.L', 'FGP.L', 'FRES.L', 'GNC.L', 'INPP.L', 'LGEN.L', 'LLOY.L', 'PRU.L', 'SDLF.L', 'STAN.L', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:29:46,012 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'Martyn87').
+2026-07-30 07:29:53,893 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'Martyn87', '5174515', 1, 9999999).
+2026-07-30 07:30:05,146 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'Martyn87', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:30:12,735 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('BARC.L', 'BLND.L', 'BRK', 'BWY.L', 'DNLM.L', 'DRX.L', 'EMG.L', 'FGP.L', 'FRES.L', 'GNC.L', 'INPP.L', 'LGEN.L', 'LLOY.L', 'PRU.L', 'SDLF.L', 'STAN.L', 'USD=X', '^FTSE')).
+2026-07-30 07:30:17,880 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:30:27,314 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_martyn87.
+2026-07-30 07:30:47,203 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'Positive_Vector').
+2026-07-30 07:31:06,994 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AMT', 'APH', 'APTV', 'AVGO', 'BTC-USD', 'C', 'CBRE', 'CEG', 'CSGP', 'GE', 'GEV', 'GOOG', 'GS', 'JPM', 'MSFT', 'MU', 'NEM', 'NFLX', 'NRG', 'NVDA', 'ORCL', 'STX-USD', 'TMUS', 'USD=X', 'VST', 'WDC', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:31:17,322 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'Positive_Vector').
+2026-07-30 07:31:25,085 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'Positive_Vector', '20206025', 1, 9999999).
+2026-07-30 07:31:34,332 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'Positive_Vector', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:31:42,301 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('AMT', 'APH', 'APTV', 'AVGO', 'C', 'CBRE', 'CEG', 'CSGP', 'GE', 'GEV', 'GOOG', 'GS', 'JPM', 'MSFT', 'MU', 'NEM', 'NFLX', 'NRG', 'NVDA', 'ORCL', 'STX-USD', 'TMUS', 'USD=X', 'VST', 'WDC', '^GSPC')).
+2026-07-30 07:31:46,826 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:31:55,222 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_positive_vector.
+2026-07-30 07:32:14,048 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'pmrodriguez').
+2026-07-30 07:32:23,586 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BTC-USD', 'LGEN.L', 'ORCL', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:32:31,650 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'pmrodriguez').
+2026-07-30 07:32:40,166 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'pmrodriguez', '30286249', 1, 9999999).
+2026-07-30 07:32:53,897 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'pmrodriguez', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:33:01,868 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('LGEN.L', 'ORCL', 'USD=X', '^GSPC')).
+2026-07-30 07:33:04,619 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:33:10,884 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_pmrodriguez.
+2026-07-30 07:33:30,193 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'joanfigueroa47').
+2026-07-30 07:33:40,189 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AVGO', 'BTC-USD', 'ETN', 'NVDA', 'PWR', 'TSM', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:33:50,095 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'joanfigueroa47').
+2026-07-30 07:33:58,301 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'joanfigueroa47', '17409164', 1, 9999999).
+2026-07-30 07:34:07,312 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'joanfigueroa47', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:34:15,157 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('AVGO', 'ETN', 'NVDA', 'PWR', 'TSM', 'USD=X', '^GSPC')).
+2026-07-30 07:34:18,247 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:34:25,235 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_joanfigueroa47.
+2026-07-30 07:34:42,447 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'choose3395').
+2026-07-30 07:35:14,854 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BTC-USD', 'GLW', 'MRVL', 'NVDA', 'TSLA', 'TSM', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:35:24,508 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'choose3395').
+2026-07-30 07:35:33,953 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'choose3395', '13121897', 1, 9999999).
+2026-07-30 07:35:43,401 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'choose3395', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:35:53,951 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('GLW', 'MRVL', 'NVDA', 'TSLA', 'TSM', 'USD=X', '^GSPC')).
+2026-07-30 07:35:56,970 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:36:06,374 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_choose3395.
+2026-07-30 07:36:33,748 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'Haukro').
+2026-07-30 07:37:07,681 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('3750.HK', 'ACN', 'APLE', 'ARCC', 'ATADL.L', 'AUSS.OL', 'BETSB.ST', 'BTC-USD', 'BWLPG.OL', 'CS.PA', 'CSG.AS', 'DOX', 'ELEC.PA', 'EN.PA', 'ENB', 'EPD', 'FDJU.PA', 'FTS', 'GSK.L', 'HAUTO.OL', 'HLUNB.CO', 'IMB.L', 'INSW', 'LMP.L', 'LOG.MC', 'MAIN', 'MNODL.L', 'MPLX', 'MTS.AX', 'NG.L', 'NHF.AX', 'NN.AS', 'NONG.OL', 'NORAM.OL', 'NOVO-B.CO', 'NOW', 'NTGY.MC', 'NVTKL.L', 'O', 'OGZDL.L', 'OHI', 'OTL.OL', 'PBR', 'PHP.L', 'RCAT', 'RHM.DE', 'RIO.L', 'ROSNL.L', 'SDLF.L', 'SMSD.L', 'SRG.MI', 'SVSTL.L', 'TBCG.L', 'TTE.PA', 'TX', 'UNI.MI', 'USD=X', 'VAR.OL', 'VEI.OL', 'VICI', 'VIS.MC', 'VRDN', 'WAWI.OL', 'ZZb.ST', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:37:17,179 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'Haukro').
+2026-07-30 07:37:31,846 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'Haukro', '13430469', 1, 9999999).
+2026-07-30 07:37:48,997 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'Haukro', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:37:58,426 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('3750.HK', 'ACN', 'APLE', 'ARCC', 'ATADL.L', 'AUSS.OL', 'BETSB.ST', 'BTC-USD', 'BWLPG.OL', 'CS.PA', 'CSG.AS', 'DOX', 'ELEC.PA', 'EN.PA', 'ENB', 'EPD', 'FDJU.PA', 'FTS', 'GSK.L', 'HAUTO.OL', 'HLUNB.CO', 'IMB.L', 'INSW', 'LMP.L', 'LOG.MC', 'MAIN', 'MNODL.L', 'MPLX', 'MTS.AX', 'NG.L', 'NHF.AX', 'NN.AS', 'NONG.OL', 'NORAM.OL', 'NOVO-B.CO', 'NOW', 'NTGY.MC', 'NVTKL.L', 'O', 'OGZDL.L', 'OHI', 'OTL.OL', 'PBR', 'PHP.L', 'RCAT', 'RHM.DE', 'RIO.L', 'ROSNL.L', 'SDLF.L', 'SMSD.L', 'SRG.MI', 'SVSTL.L', 'TBCG.L', 'TTE.PA', 'TX', 'UNI.MI', 'USD=X', 'VAR.OL', 'VEI.OL', 'VICI', 'VIS.MC', 'VRDN', 'WAWI.OL', 'ZZb.ST', '^GSPC')).
+2026-07-30 07:38:05,783 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:38:16,437 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_haukro.
+2026-07-30 07:38:35,213 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'iolostanel').
+2026-07-30 07:38:48,690 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('ACN', 'ADBE', 'BTC-USD', 'IBM', 'JBLU', 'ORCL', 'PFE', 'PHUN', 'PUM.DE', 'RRTL.DE', 'STEM', 'TLT', 'TMF', 'TSLA', 'USD=X', 'WATT', 'XIFR', 'ZS', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:38:56,372 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'iolostanel').
+2026-07-30 07:39:04,175 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'iolostanel', '32152533', 1, 9999999).
+2026-07-30 07:39:13,296 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'iolostanel', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:39:21,552 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('ACN', 'ADBE', 'IBM', 'JBLU', 'ORCL', 'PFE', 'PHUN', 'PUM.DE', 'RRTL.DE', 'STEM', 'TLT', 'TMF', 'TSLA', 'USD=X', 'WATT', 'XIFR', 'ZS', '^GSPC')).
+2026-07-30 07:39:25,351 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:39:32,371 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_iolostanel.
+2026-07-30 07:39:49,769 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'GlobalAlphaS').
+2026-07-30 07:40:01,890 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AVGO', 'BRK', 'BTC-USD', 'GOOG', 'GOOGL', 'INTC', 'JPM', 'LLY', 'META', 'MSFT', 'MU', 'NVDA', 'ORCL', 'PAH3.DE', 'PYPL', 'TLT', 'TSLA', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:40:09,687 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'GlobalAlphaS').
+2026-07-30 07:40:17,276 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'GlobalAlphaS', '15454006', 1, 9999999).
+2026-07-30 07:40:28,856 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'GlobalAlphaS', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:40:37,211 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('AVGO', 'BRK', 'GOOG', 'GOOGL', 'INTC', 'JPM', 'LLY', 'META', 'MSFT', 'MU', 'NVDA', 'ORCL', 'PAH3.DE', 'PYPL', 'TLT', 'TSLA', 'USD=X', '^GSPC')).
+2026-07-30 07:40:40,964 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:41:00,095 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_globalalphas.
+2026-07-30 07:41:16,961 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'Tankianek').
+2026-07-30 07:41:19,448 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_tankianek.
+2026-07-30 07:41:38,580 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'Palinved').
+2026-07-30 07:41:51,937 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AMZN', 'B', 'BKNG', 'BTC-USD', 'BTSG', 'BXSL', 'CCL', 'CDE', 'CRDO', 'CSTM', 'DY', 'EAT', 'EGY', 'EPD', 'EPR', 'ET', 'GOOGL', 'INCY', 'JRVR', 'KGC', 'META', 'MFC', 'MPLX', 'MSFT', 'MU', 'NEM', 'PAA', 'PARR', 'SBLK', 'SNDK', 'SSRM', 'STRL', 'TTMI', 'USD=X', 'VISN', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:42:02,170 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'Palinved').
+2026-07-30 07:42:09,806 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'Palinved', '28732101', 1, 9999999).
+2026-07-30 07:42:23,843 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'Palinved', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:42:32,123 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('AMZN', 'B', 'BKNG', 'BTSG', 'BXSL', 'CCL', 'CDE', 'CRDO', 'CSTM', 'DY', 'EAT', 'EGY', 'EPD', 'EPR', 'ET', 'GOOGL', 'INCY', 'JRVR', 'KGC', 'META', 'MFC', 'MPLX', 'MSFT', 'MU', 'NEM', 'PAA', 'PARR', 'SBLK', 'SNDK', 'SSRM', 'STRL', 'TTMI', 'USD=X', 'VISN', '^GSPC')).
+2026-07-30 07:42:36,830 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:42:45,600 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_palinved.
+2026-07-30 07:43:05,422 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'TrevinaYoussef').
+2026-07-30 07:43:21,150 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AAPL', 'ABBV', 'AMD', 'AMZN', 'ASML', 'AVGO', 'AZN', 'AZN.L', 'BAC', 'BRK', 'BTC-USD', 'CEG', 'COHR', 'CRWV', 'DIS', 'EMAAR.DU', 'GOOG', 'GOOGL', 'GSK.L', 'JPM', 'LITE', 'LLY', 'MA', 'MC.PA', 'META', 'MRVL', 'MSFT', 'MU', 'NBIS', 'NOW', 'NVDA', 'PFE', 'PLTR', 'SHOP', 'SMSN.L', 'TEM', 'TSLA', 'TSM', 'UAL', 'USD=X', 'V', 'VST', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:43:29,151 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'TrevinaYoussef').
+2026-07-30 07:43:36,588 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'TrevinaYoussef', '15229029', 1, 9999999).
+2026-07-30 07:43:45,710 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'TrevinaYoussef', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:43:54,110 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('AAPL', 'ABBV', 'AMD', 'AMZN', 'ASML', 'AVGO', 'AZN', 'AZN.L', 'BAC', 'BRK', 'CEG', 'COHR', 'CRWV', 'DIS', 'EMAAR.DU', 'GOOG', 'GOOGL', 'GSK.L', 'JPM', 'LITE', 'LLY', 'MA', 'MC.PA', 'META', 'MRVL', 'MSFT', 'MU', 'NBIS', 'NOW', 'NVDA', 'PFE', 'PLTR', 'SHOP', 'SMSN.L', 'TEM', 'TSLA', 'TSM', 'UAL', 'USD=X', 'V', 'VST', '^GSPC')).
+2026-07-30 07:44:00,692 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:44:09,996 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_trevinayoussef.
+2026-07-30 07:44:37,090 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'rhypsky').
+2026-07-30 07:44:53,391 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('01211.HK', 'ADBE', 'AMD', 'AMZN', 'BRK', 'BTC-USD', 'CSPX.L', 'CVX', 'DELL', 'GOOGL', 'IB01.L', 'IGV', 'LRCX', 'MCD', 'META', 'MSFT', 'NFLX', 'NOW', 'NU', 'NVDA', 'PEP', 'PFE', 'TOL', 'TSM', 'TTD', 'USD=X', 'V', 'VZ', 'XOM', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:45:03,151 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'rhypsky').
+2026-07-30 07:45:11,161 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'rhypsky', '41204365', 1, 9999999).
+2026-07-30 07:45:24,418 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'rhypsky', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:45:24,933 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:45:27,161 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:45:27,373 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:45:33,492 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('01211.HK', 'ADBE', 'AMD', 'AMZN', 'BRK', 'CSPX.L', 'CVX', 'DELL', 'GOOGL', 'IB01.L', 'IGV', 'LRCX', 'MCD', 'META', 'MSFT', 'NFLX', 'NOW', 'NU', 'NVDA', 'PEP', 'PFE', 'TOL', 'TSM', 'TTD', 'USD=X', 'V', 'VZ', 'XOM', '^GSPC')).
+2026-07-30 07:45:38,989 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:45:40,932 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:45:44,285 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:45:44,507 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:45:47,302 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_rhypsky.
+2026-07-30 07:45:50,191 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:45:53,176 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:45:53,392 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:46:05,130 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'josu24').
+2026-07-30 07:46:17,719 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BTC-USD', 'CELH', 'ETOR', 'GRID', 'JPST', 'LEN', 'META', 'NVR', 'PDD', 'QQQ', 'SHV', 'TQQQ', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:46:25,677 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'josu24').
+2026-07-30 07:46:35,411 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'josu24', '19583334', 1, 9999999).
+2026-07-30 07:46:45,369 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'josu24', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:46:53,539 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('CELH', 'ETOR', 'GRID', 'JPST', 'LEN', 'META', 'NVR', 'PDD', 'QQQ', 'SHV', 'TQQQ', 'USD=X', '^GSPC')).
+2026-07-30 07:46:57,760 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:47:05,579 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_josu24.
+2026-07-30 07:47:26,278 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:47:27,262 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'DennisFantoni').
+2026-07-30 07:47:28,617 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:47:28,829 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:47:29,377 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:47:31,629 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:47:31,835 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:47:38,463 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('ASLE', 'BTC-USD', 'CAN', 'EDN', 'GCO', 'LUXE', 'REI', 'RMTI', 'SDRL', 'UFI', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:47:46,101 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'DennisFantoni').
+2026-07-30 07:47:56,375 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'DennisFantoni', '21396203', 1, 9999999).
+2026-07-30 07:48:06,740 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_my_portfolio_goldeneight.
+2026-07-30 07:48:08,384 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'DennisFantoni', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:48:10,384 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_selection_cache id=portfolio_selection_page_goldeneight.
+2026-07-30 07:48:16,368 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('ASLE', 'CAN', 'EDN', 'GCO', 'LUXE', 'REI', 'RMTI', 'SDRL', 'UFI', 'USD=X', '^GSPC')).
+2026-07-30 07:48:20,360 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:48:32,492 - INFO - [INFO] - Checked index cache at cluster0.e8wpcc2.mongodb.net but no cached value found.
+2026-07-30 07:48:34,149 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_dennisfantoni.
+2026-07-30 07:48:34,745 - INFO - [INFO] - Checked index cache at cluster0.pjfsz7t.mongodb.net but no cached value found.
+2026-07-30 07:48:34,959 - INFO - [INFO] - Index cache not found after checking 2 Mongo URIs.
+2026-07-30 07:48:55,358 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'HelalAljabri').
+2026-07-30 07:49:14,079 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('BTC-USD', 'CRM', 'INTU', 'META', 'MSFT', 'ORCL', 'UBER', 'USD=X', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:49:25,383 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'HelalAljabri').
+2026-07-30 07:49:34,309 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'HelalAljabri', '36294823', 1, 9999999).
+2026-07-30 07:49:44,135 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'HelalAljabri', 'daily', '2000-01-01', '2026-07-30').
+2026-07-30 07:49:51,865 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=('sector', ('CRM', 'INTU', 'META', 'MSFT', 'ORCL', 'UBER', 'USD=X', '^GSPC')).
+2026-07-30 07:49:54,213 - INFO - [INFO] - Incremented ai_prompt_count in settings collection.
+2026-07-30 07:49:59,051 - INFO - [INFO] - Cached portfolio data to MongoDB collection=portfolio_report_cache id=portfolio_report_helalaljabri.
+2026-07-30 07:50:16,838 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('portfolio', 'nonvisedarte').
+2026-07-30 07:50:28,453 - INFO - [INFO] - Cached portfolio data to MongoDB collection=yfinance_cache id=(('AMAT', 'AMD', 'BTC-USD', 'CB', 'CNQ', 'DELL', 'INTC', 'ITUB', 'KLAC', 'LMT', 'LRCX', 'MRK', 'MRVL', 'MU', 'STX', 'WDC', 'XOM', '^990100-USD-STRD', '^AXJO', '^FTSE', '^GSPC', '^STOXX50E'), '2000-01-01 00:00:00').
+2026-07-30 07:50:36,748 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('cid', 'nonvisedarte').
+2026-07-30 07:50:45,616 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('history', 'nonvisedarte', '16470480', 1, 9999999).
+2026-07-30 07:50:57,388 - INFO - [INFO] - Cached portfolio data to MongoDB collection=etoro_cache id=('gains', 'nonvisedarte', 'daily', '2000-01-01', '2026-07-30').

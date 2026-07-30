@@ -174,36 +174,31 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
             }
         }
 
-    last_exception = None
-    for uri in uris:
-        client = None
-        try:
-            client, db = _get_cache_db(uri)
-            collection = db[collection_name]
-            collection.create_index("expires_at", expireAfterSeconds=0)
+    uri = random.choice(uris)
+    client = None
+    try:
+        client, db = _get_cache_db(uri)
+        collection = db[collection_name]
+        collection.create_index("expires_at", expireAfterSeconds=0)
 
-            if chunk_ids is not None and extra_chunks:
-                chunk_operations = [
-                    UpdateOne(
-                        {"_id": chunk_id},
-                        {"$set": {"value": chunk, "expires_at": expires_at}},
-                        upsert=True,
-                    )
-                    for chunk_id, chunk in zip(chunk_ids[1:], extra_chunks)
-                ]
-                collection.bulk_write(chunk_operations)
+        if chunk_ids is not None and extra_chunks:
+            chunk_operations = [
+                UpdateOne(
+                    {"_id": chunk_id},
+                    {"$set": {"value": chunk, "expires_at": expires_at}},
+                    upsert=True,
+                )
+                for chunk_id, chunk in zip(chunk_ids[1:], extra_chunks)
+            ]
+            collection.bulk_write(chunk_operations)
 
-            collection.update_one({"_id": doc_id}, payload, upsert=True)
-            log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")
-        except PyMongoError as e:
-            last_exception = e
-            log_error(f"Failed to cache portfolio data to MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)
-        finally:
-            if client:
-                client.close()
-
-    if last_exception is not None:
-        log_error(f"Failed to cache portfolio data to MongoDB after trying {len(uris)} URIs collection={collection_name}", "MONGO_CACHE", last_exception)
+        collection.update_one({"_id": doc_id}, payload, upsert=True)
+        log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")
+    except PyMongoError as e:
+        log_error(f"Failed to cache portfolio data to MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)
+    finally:
+        if client:
+            client.close()
 
 
 def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None:

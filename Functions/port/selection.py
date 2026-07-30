@@ -710,6 +710,17 @@ def _fetch_rankings(
     year_map = _build_gain_map(year_data.get("results", []), "gain")
 
     if merged:
+        for item in merged:
+            cid = str(item.get("userName", item.get("cid", "")))
+            if not cid:
+                continue
+            if cid not in week_map or week_map[cid] is None:
+                week_map[cid] = _get_period_gain(cid, "1m")
+            if cid not in month_map or month_map[cid] is None:
+                month_map[cid] = _get_period_gain(cid, "3m")
+            if cid not in year_map or year_map[cid] is None:
+                year_map[cid] = _get_period_gain(cid, "1y")
+
         _prefetch_country_data(merged)
 
     return merged, week_map, month_map, year_map
@@ -1827,7 +1838,7 @@ def get_portfolio_selection_html(
 
             function getInitials(name) {{
                 if (!name) return '?';
-                const parts = name.trim().split(/\s+/);
+                const parts = name.trim().split(/\\s+/);
                 return parts.slice(0, 2).map(p => p[0]).join('').toUpperCase();
             }}
 

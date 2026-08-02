@@ -2080,10 +2080,6 @@ def cached_portfolio_selection_html(
     page: int = 1,
     search_text: Optional[str] = None,
 ) -> str:
-    import os as _os
-    _debug_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "port_debug.log")
-    with open(_debug_path, "a") as _f:
-        _f.write("[port] cached_portfolio_selection_html START\n")
     print("[port] cached_portfolio_selection_html START", flush=True)
 
     _cache_suffix = _selection_cache_suffix(base_period, sort, page_size, page, search_text)

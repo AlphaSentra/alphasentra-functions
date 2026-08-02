@@ -46,10 +46,6 @@ def port_cache_status(): # New route function
     return get_portfolio_cache_status()
 
 def sel():
-    import os as _os
-    _debug_path = _os.path.join(_os.path.dirname(_os.path.abspath(__file__)), "..", "port_debug.log")
-    with open(_debug_path, "a") as _f:
-        _f.write("[ROUTE] /port hit\n")
     print("[ROUTE] /port hit, calling cached_portfolio_selection_html()", flush=True)
     
     base_period = request.args.get('period', 'OneMonthAgo')
@@ -63,8 +59,6 @@ def sel():
         search_text = None
     
     result = cached_portfolio_selection_html(base_period=base_period, sort=sort, page_size=page_size, page=page, search_text=search_text)
-    with open(_debug_path, "a") as _f:
-        _f.write(f"[ROUTE] /port returned {len(result)} chars\n")
     print(f"[ROUTE] /port returned {len(result)} chars", flush=True)
     return result
 

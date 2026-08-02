@@ -2,7 +2,6 @@ import base64
 import json
 import os
 import pickle
-import random
 from datetime import datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -11,12 +10,12 @@ from dotenv import load_dotenv
 from pymongo import MongoClient, UpdateOne
 from pymongo.errors import PyMongoError
 
-from Functions.logging_utils import log_info, log_error
+from Functions.logging_utils import log_info, log_error, log_warning
 
 load_dotenv()
 
-_DEFAULT_CACHE_CLIENT_TIMEOUT_MS = 15000
-_MAX_BSON_DOCUMENT_SIZE = 14 * 1024 * 1024  # 14MB stays safely under MongoDB 16MB limit
+_DEFAULT_CACHE_CLIENT_TIMEOUT_MS = 15000  # 15s for large payloads / slow network
+_MAX_BSON_DOCUMENT_SIZE = 10 * 1024 * 1024
 
 
 def get_index_cache_from_mongo() -> Optional[str]:
@@ -28,7 +27,8 @@ def get_index_cache_from_mongo() -> Optional[str]:
     if not uris:
         return None
 
-    for uri in uris:
+    for idx, uri in enumerate(uris, start=1):
+        log_warning(f"Attempting to read index cache from URI {idx}/{len(uris)}: {uri}", "FALLBACK")
         client = None
         try:
             client = MongoClient(uri, serverSelectionTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, connectTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS, socketTimeoutMS=_DEFAULT_CACHE_CLIENT_TIMEOUT_MS)
@@ -38,6 +38,7 @@ def get_index_cache_from_mongo() -> Optional[str]:
             collection = db["function_index_cache"]
             doc = collection.find_one({"_id": "index"})
             if doc and doc.get("value"):
+                log_warning(f"Successfully read index cache from URI {idx}/{len(uris)}: {uri}", "FALLBACK")
                 return doc["value"]
             log_info(f"Checked index cache at {parsed.hostname} but no cached value found.")
         except PyMongoError as e:
@@ -63,7 +64,8 @@ def set_index_cache_to_mongo(value: str, ext: str = ".html", ttl_seconds: int = 
         raise ValueError("No valid URIs found in MONGODB_URI_CACHE")
 
     last_exception = None
-    for uri in uris:
+    for idx, uri in enumerate(uris, start=1):
+        log_warning(f"Attempting to set index cache to URI {idx}/{len(uris)}: {uri}", "FALLBACK")
         client = None
         try:
             parsed = urlparse(uri)
@@ -88,6 +90,8 @@ def set_index_cache_to_mongo(value: str, ext: str = ".html", ttl_seconds: int = 
                 upsert=True,
             )
             log_info(f"Cached index HTML to MongoDB ({len(value)} chars).")
+            log_warning(f"Successfully set index cache to URI {idx}/{len(uris)}: {uri}", "FALLBACK")
+            return
         except PyMongoError as e:
             last_exception = e
             log_error(f"Failed to cache index HTML to MongoDB uri={uri}", "MONGO_CACHE", e)
@@ -134,7 +138,7 @@ def _chunk_value(value: str, doc_id: str):
     num_chunks = max(1, (len(value) + chunk_size - 1) // chunk_size)
     chunk_ids = _get_chunk_ids(doc_id, num_chunks)
     chunks = [value[i:i + chunk_size] for i in range(0, len(value), chunk_size)]
-    return chunks[0], chunk_ids, chunks[1:]
+    return None, chunk_ids, chunks
 
 
 def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, ext: str = ".html", ttl_seconds: int = 86400) -> None:
@@ -162,7 +166,6 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
             "$set": {
                 "chunked": True,
                 "chunk_ids": chunk_ids,
-                "value": main_value,
                 **base_payload,
             }
         }
@@ -174,31 +177,42 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
             }
         }
 
-    uri = random.choice(uris)
-    client = None
-    try:
-        client, db = _get_cache_db(uri)
-        collection = db[collection_name]
-        collection.create_index("expires_at", expireAfterSeconds=0)
+    last_exception = None
+    for idx, uri in enumerate(uris, start=1):
+        log_warning(f"Attempting to cache portfolio data to URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
+        client = None
+        try:
+            client, db = _get_cache_db(uri)
+            collection = db[collection_name]
+            collection.create_index("expires_at", expireAfterSeconds=0)
 
-        if chunk_ids is not None and extra_chunks:
-            chunk_operations = [
-                UpdateOne(
-                    {"_id": chunk_id},
-                    {"$set": {"value": chunk, "expires_at": expires_at}},
-                    upsert=True,
-                )
-                for chunk_id, chunk in zip(chunk_ids[1:], extra_chunks)
-            ]
-            collection.bulk_write(chunk_operations)
+            if chunk_ids is not None and extra_chunks:
+                chunk_operations = [
+                    UpdateOne(
+                        {"_id": chunk_id},
+                        {"$set": {"value": chunk, "expires_at": expires_at}},
+                        upsert=True,
+                    )
+                    for chunk_id, chunk in zip(chunk_ids, extra_chunks)
+                ]
+                batch_size = 5
+                for i in range(0, len(chunk_operations), batch_size):
+                    log_info(f"Caching portfolio data to MongoDB collection={collection_name} id={doc_id} chunked batch {i // batch_size + 1}/{(len(chunk_operations) + batch_size - 1) // batch_size}.")
+                    collection.bulk_write(chunk_operations[i:i + batch_size])
+            log_info(f"Caching portfolio data to MongoDB collection={collection_name} id={doc_id}.")
+            collection.update_one({"_id": doc_id}, payload, upsert=True)
+            log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")
+            log_warning(f"Successfully cached portfolio data to URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
+            return
+        except PyMongoError as e:
+            last_exception = e
+            log_error(f"Failed to cache portfolio data to MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)
+        finally:
+            if client:
+                client.close()
 
-        collection.update_one({"_id": doc_id}, payload, upsert=True)
-        log_info(f"Cached portfolio data to MongoDB collection={collection_name} id={doc_id}.")
-    except PyMongoError as e:
-        log_error(f"Failed to cache portfolio data to MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)
-    finally:
-        if client:
-            client.close()
+    if last_exception is not None:
+        raise last_exception
 
 
 def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None:
@@ -211,7 +225,8 @@ def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None
         return
 
     last_exception = None
-    for uri in uris:
+    for idx, uri in enumerate(uris, start=1):
+        log_warning(f"Attempting to delete portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
         client = None
         try:
             client, db = _get_cache_db(uri)
@@ -225,6 +240,7 @@ def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None
                     collection.delete_many({"_id": {"$in": [doc_id] + chunk_ids}})
                 else:
                     collection.delete_one({"_id": doc_id})
+            log_warning(f"Successfully deleted portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
             return
         except PyMongoError as e:
             last_exception = e
@@ -234,7 +250,7 @@ def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None
                 client.close()
 
     if last_exception is not None:
-        log_error(f"Failed to delete portfolio cache from MongoDB after trying {len(uris)} URIs collection={collection_name}", "MONGO_CACHE", last_exception)
+        raise last_exception
 
 
 def get_portfolio_cache_from_mongo(collection_name: str, doc_id: str, ttl_seconds: int = 86400, ext: str = ".html") -> Optional[Any]:
@@ -246,31 +262,36 @@ def get_portfolio_cache_from_mongo(collection_name: str, doc_id: str, ttl_second
     if not uris:
         return None
 
-    for uri in uris:
+    for idx, uri in enumerate(uris, start=1):
+        log_warning(f"Attempting to read portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
         client = None
         try:
             client, db = _get_cache_db(uri)
             collection = db[collection_name]
             doc = collection.find_one({"_id": doc_id})
+            if doc and doc.get("chunked"):
+                chunk_ids = doc.get("chunk_ids") or []
+                if not chunk_ids:
+                    return None
+                chunks = []
+                missing = False
+                for chunk_id in chunk_ids:
+                    chunk_doc = collection.find_one({"_id": chunk_id})
+                    if chunk_doc and chunk_doc.get("value") is not None:
+                        chunks.append(chunk_doc["value"])
+                    else:
+                        missing = True
+                        break
+                if missing:
+                    return None
+                reassembled = "".join(chunks)
+                log_warning(f"Successfully read portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
+                return _deserialize_value(reassembled, doc.get("ext", ext))
+
             if doc and doc.get("value") is not None:
-                if doc.get("chunked"):
-                    chunk_ids = doc.get("chunk_ids") or []
-                    if not chunk_ids:
-                        return None
-                    chunks = [doc.get("value", "")]
-                    missing = False
-                    for chunk_id in chunk_ids[1:]:
-                        chunk_doc = collection.find_one({"_id": chunk_id})
-                        if chunk_doc and chunk_doc.get("value") is not None:
-                            chunks.append(chunk_doc["value"])
-                        else:
-                            missing = True
-                            break
-                    if missing:
-                        return None
-                    reassembled = "".join(chunks)
-                    return _deserialize_value(reassembled, doc.get("ext", ext))
+                log_warning(f"Successfully read portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
                 return _deserialize_value(doc["value"], doc.get("ext", ext))
+            log_info(f"Portfolio cache not found at URI {idx}/{len(uris)}: {uri} collection={collection_name}")
         except PyMongoError:
             continue
         finally:

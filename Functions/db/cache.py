@@ -1,7 +1,8 @@
-import base64
+import gzip
 import json
 import os
 import pickle
+from bson.binary import Binary
 from datetime import datetime, timedelta
 from typing import Any, Optional
 from urllib.parse import urlparse
@@ -110,19 +111,29 @@ def _get_cache_db(uri: str):
     return client, client[db_name]
 
 
-def _serialize_value(value: Any, ext: str = ".html") -> Any:
+def _serialize_value(value: Any, ext: str = ".html") -> bytes:
     if ext == ".json":
-        return json.dumps(value)
+        raw = json.dumps(value).encode("utf-8")
+        return gzip.compress(raw)
     elif ext == ".pkl":
-        return base64.b64encode(pickle.dumps(value)).decode("ascii")
+        raw = pickle.dumps(value)
+        return gzip.compress(raw)
+    elif ext == ".html":
+        raw = value.encode("utf-8")
+        return gzip.compress(raw)
     return value
 
 
 def _deserialize_value(value: Any, ext: str = ".html") -> Any:
-    if ext == ".json":
-        return json.loads(value)
-    elif ext == ".pkl":
-        return pickle.loads(base64.b64decode(value.encode("ascii")))
+    if ext in (".json", ".pkl", ".html"):
+        raw_bytes = value if isinstance(value, bytes) else value.binary_data
+        raw = gzip.decompress(raw_bytes)
+        if ext == ".json":
+            return json.loads(raw)
+        elif ext == ".pkl":
+            return pickle.loads(raw)
+        elif ext == ".html":
+            return raw.decode("utf-8")
     return value
 
 
@@ -130,7 +141,7 @@ def _get_chunk_ids(doc_id: str, num_chunks: int) -> list:
     return [f"{doc_id}_chunk_{i}" for i in range(num_chunks)]
 
 
-def _chunk_value(value: str, doc_id: str):
+def _chunk_value(value: bytes, doc_id: str):
     if len(value) <= _MAX_BSON_DOCUMENT_SIZE:
         return value, None, None
 
@@ -284,7 +295,7 @@ def get_portfolio_cache_from_mongo(collection_name: str, doc_id: str, ttl_second
                         break
                 if missing:
                     return None
-                reassembled = "".join(chunks)
+                reassembled = b"".join(bytes(c) for c in chunks)
                 log_warning(f"Successfully read portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
                 return _deserialize_value(reassembled, doc.get("ext", ext))
 

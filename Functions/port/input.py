@@ -72,26 +72,31 @@ _ERROR_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
-def _get_cached_portfolio_html(etoro_username: str, etoro_cid: str, benchmark_ticker: str) -> str | None:
-    """
-    Checks if a portfolio report is cached and returns its HTML content.
-    """
+def _cache_key(etoro_username, etoro_cid, benchmark_ticker):
+    if benchmark_ticker or etoro_cid:
+        return f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
+    return f"portfolio_report_{etoro_username.strip().lower()}"
+
+def _ai_cache_key(etoro_username: str, etoro_cid: str, benchmark_ticker: str) -> str:
+    suffix = f"_{(benchmark_ticker or '').strip().upper()}_{(etoro_cid or '').strip().lower()}" if benchmark_ticker or etoro_cid else ""
+    return f"portfolio_report_ai_{etoro_username.strip().lower()}{suffix}"
+
+def _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker):
     if not etoro_username:
         return None
-    if benchmark_ticker or etoro_cid:
-        cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
-    else:
-        cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+    cache_key = _cache_key(etoro_username, etoro_cid, benchmark_ticker)
     cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
     if cached_html is not None:
         logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
     return cached_html
 
+def _get_cached_ai_content(etoro_username, etoro_cid, benchmark_ticker):
+    if not etoro_username:
+        return None
+    ai_key = _ai_cache_key(etoro_username, etoro_cid, benchmark_ticker)
+    return get_portfolio_cache_from_mongo("portfolio_report_cache", ai_key, ttl_seconds=_REPORT_TTL, ext=".json")
+
 def get_portfolio_cache_status():
-    """
-    API endpoint to check if a portfolio report is cached.
-    Returns JSON: {"cached": true/false}
-    """
     etoro_username = request.form.get("etoro_username", "").strip()
     etoro_cid = request.form.get("etoro_cid", "").strip()
     benchmark_ticker = request.form.get("benchmark_ticker", "").strip()
@@ -99,10 +104,7 @@ def get_portfolio_cache_status():
     if not etoro_username:
         return jsonify({"cached": False})
 
-    if benchmark_ticker or etoro_cid:
-        cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
-    else:
-        cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+    cache_key = _cache_key(etoro_username, etoro_cid, benchmark_ticker)
     is_cached = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html") is not None
     return jsonify({"cached": is_cached})
 
@@ -120,20 +122,57 @@ def handle_portfolio_input():
         benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
 
     if request.method == "POST" and etoro_username:
-        if benchmark_ticker or etoro_cid:
-            cache_key = f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
-        else:
-            cache_key = f"portfolio_report_{etoro_username.strip().lower()}"
+        cache_key = _cache_key(etoro_username, etoro_cid, benchmark_ticker)
+        static_key = f"{cache_key}_static"
+        ai_key = _ai_cache_key(etoro_username, etoro_cid, benchmark_ticker)
+
+        from Functions.port.main import generate_portfolio_html, merge_static_html_with_ai
 
         cached_html = _get_cached_portfolio_html(etoro_username, etoro_cid, benchmark_ticker)
         if cached_html is not None:
+            cached_ai = _get_cached_ai_content(etoro_username, etoro_cid, benchmark_ticker)
+            if cached_ai is None:
+                try:
+                    html, ai_content = generate_portfolio_html(
+                        etoro_username=etoro_username,
+                        benchmark_ticker=benchmark_ticker,
+                        etoro_cid=etoro_cid,
+                        return_ai_content=True,
+                    )
+                    set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)
+                    set_portfolio_cache_to_mongo("portfolio_report_cache", ai_key, ai_content, ext=".json", ttl_seconds=_REPORT_TTL)
+                    return make_response(html)
+                except PortfolioFunctionsError as exc:
+                    logger.error("PortfolioFunctionsError while backfilling AI for username=%s: %s", etoro_username, exc)
+                except Exception as exc:
+                    logger.error("Failed to backfill AI cache for username=%s: %s", etoro_username, exc)
             return make_response(cached_html)
 
-        from Functions.port.main import generate_portfolio_html
+        cached_static = get_portfolio_cache_from_mongo("portfolio_report_cache", static_key, ttl_seconds=_REPORT_TTL, ext=".html")
+        cached_ai = _get_cached_ai_content(etoro_username, etoro_cid, benchmark_ticker)
+
         try:
-            html = generate_portfolio_html(etoro_username=etoro_username,
-                                           benchmark_ticker=benchmark_ticker,
-                                           etoro_cid=etoro_cid)
+            if cached_static is not None and cached_ai is not None:
+                html = merge_static_html_with_ai(cached_static, cached_ai, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
+                set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)
+                return make_response(html)
+
+            html, ai_content = generate_portfolio_html(
+                etoro_username=etoro_username,
+                benchmark_ticker=benchmark_ticker,
+                etoro_cid=etoro_cid,
+                return_ai_content=True,
+            )
+            static_html = generate_portfolio_html(
+                etoro_username=etoro_username,
+                benchmark_ticker=benchmark_ticker,
+                etoro_cid=etoro_cid,
+                skip_ai=True,
+            )
+            set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
+            set_portfolio_cache_to_mongo("portfolio_report_cache", ai_key, ai_content, ext=".json", ttl_seconds=_REPORT_TTL)
+            set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)
+            return make_response(html)
         except PortfolioFunctionsError as exc:
             logger.error("PortfolioFunctionsError for username=%s: %s", etoro_username, exc)
             error_html = _ERROR_HTML.format(
@@ -141,8 +180,6 @@ def handle_portfolio_input():
                 detail=str(exc).replace("{", "{{").replace("}", "}}"),
             )
             return make_response(error_html)
-        set_portfolio_cache_to_mongo("portfolio_report_cache", str(cache_key), html, ext=".html", ttl_seconds=_REPORT_TTL)
-        return make_response(html)
 
     if request.method == "GET" and etoro_username:
         if benchmark_ticker or etoro_cid:
@@ -152,7 +189,35 @@ def handle_portfolio_input():
         cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
         if cached_html is not None:
             logger.info("Portfolio cache hit username=%s benchmark=%s", etoro_username, benchmark_ticker)
+            cached_ai = _get_cached_ai_content(etoro_username, etoro_cid, benchmark_ticker)
+            if cached_ai is None:
+                from Functions.port.main import generate_portfolio_html
+                try:
+                    html, ai_content = generate_portfolio_html(
+                        etoro_username=etoro_username,
+                        benchmark_ticker=benchmark_ticker,
+                        etoro_cid=etoro_cid,
+                        return_ai_content=True,
+                    )
+                    ai_key = _ai_cache_key(etoro_username, etoro_cid, benchmark_ticker)
+                    set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)
+                    set_portfolio_cache_to_mongo("portfolio_report_cache", ai_key, ai_content, ext=".json", ttl_seconds=_REPORT_TTL)
+                    return make_response(html)
+                except PortfolioFunctionsError as exc:
+                    logger.error("PortfolioFunctionsError while backfilling AI for username=%s: %s", etoro_username, exc)
+                except Exception as exc:
+                    logger.error("Failed to backfill AI cache for username=%s: %s", etoro_username, exc)
             return make_response(cached_html)
+
+        static_key = f"{cache_key}_static"
+        cached_static = get_portfolio_cache_from_mongo("portfolio_report_cache", static_key, ttl_seconds=_REPORT_TTL, ext=".html")
+        cached_ai = _get_cached_ai_content(etoro_username, etoro_cid, benchmark_ticker)
+        if cached_static is not None and cached_ai is not None:
+            from Functions.port.main import merge_static_html_with_ai
+            html = merge_static_html_with_ai(cached_static, cached_ai, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
+            set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)
+            return make_response(html)
+
         return PORTFOLIO_FORM_HTML
 
     if request.method == "GET":

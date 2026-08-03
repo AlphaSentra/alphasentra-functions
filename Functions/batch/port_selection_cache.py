@@ -13,6 +13,7 @@ from Functions.logging_utils import log_info
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
 USERNAME = "etoroteam"
+SKIP_AI = True
 
 from flask import Flask, g
 
@@ -85,11 +86,55 @@ with app.app_context():
 
     def _cache_report(username: str) -> str:
         cache_key = f"portfolio_report_{username.strip().lower()}"
-        if get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html") is not None:
+        static_key = f"{cache_key}_static"
+        ai_cache_key = f"portfolio_report_ai_{username.strip().lower()}"
+        cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
+        if cached_html is not None:
             return f"skip:{username}"
         try:
-            report_html = generate_portfolio_html(etoro_username=username, benchmark_ticker="", etoro_cid="")
+            if SKIP_AI:
+                report_html = generate_portfolio_html(
+                    etoro_username=username,
+                    benchmark_ticker="",
+                    etoro_cid="",
+                    skip_ai=True,
+                )
+                set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
+                return f"ok:{username}"
+
+            cached_ai = get_portfolio_cache_from_mongo("portfolio_report_cache", ai_cache_key, ttl_seconds=_REPORT_TTL, ext=".json")
+            if cached_ai is not None:
+                report_html = generate_portfolio_html(
+                    etoro_username=username,
+                    benchmark_ticker="",
+                    etoro_cid="",
+                    cached_ai_content=cached_ai,
+                )
+                set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
+                static_html = generate_portfolio_html(
+                    etoro_username=username,
+                    benchmark_ticker="",
+                    etoro_cid="",
+                    skip_ai=True,
+                )
+                set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
+                return f"ok:{username}"
+
+            report_html, ai_content = generate_portfolio_html(
+                etoro_username=username,
+                benchmark_ticker="",
+                etoro_cid="",
+                return_ai_content=True,
+            )
+            static_html = generate_portfolio_html(
+                etoro_username=username,
+                benchmark_ticker="",
+                etoro_cid="",
+                skip_ai=True,
+            )
             set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
+            set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
+            set_portfolio_cache_to_mongo("portfolio_report_cache", ai_cache_key, ai_content, ext=".json", ttl_seconds=_REPORT_TTL)
             return f"ok:{username}"
         except Exception as exc:
             log_info(f"Failed to cache report for {username}: {exc}")

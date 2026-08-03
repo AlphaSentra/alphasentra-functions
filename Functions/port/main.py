@@ -8,6 +8,11 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import logging
+import pickle
+import gzip
+from datetime import datetime
+from typing import Any, Dict, Optional, Tuple
+
 import pandas as pd
 import argparse
 import time
@@ -22,7 +27,68 @@ logger = logging.getLogger(__name__)
 # Import our modules
 from engine.analyzer import PortfolioAnalyzer, PortfolioFunctionsError
 from data.provider_factory import get_market_data_provider
-from engine.output.html import generate_html_report
+from engine.output.html import generate_html_report, generate_ai_content_fragment
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
+from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+
+
+def _analyzer_cache_key(etoro_username: str, benchmark_ticker: str, etoro_cid: str) -> str:
+    suffix = f"_{(benchmark_ticker or '').strip().upper()}_{(etoro_cid or '').strip().lower()}" if benchmark_ticker or etoro_cid else ""
+    return f"portfolio_report_{etoro_username.strip().lower()}{suffix}_analyzer"
+
+
+def _serialize_analyzer_output(
+    metrics: Dict[str, Dict],
+    charts: Dict[str, str],
+    start: Optional[datetime],
+    holdings_df: pd.DataFrame,
+    returns_series: Optional[pd.Series],
+    benchmark_ticker: str,
+    price_data: pd.DataFrame,
+    risk_df: pd.DataFrame,
+    sector_industry_df: pd.DataFrame,
+    portfolio_df: pd.DataFrame,
+    config: Dict[str, Any],
+    trades_table_html: str,
+    positions: pd.DataFrame,
+) -> bytes:
+    payload = {
+        "metrics": metrics,
+        "charts": charts,
+        "start": start.isoformat() if start else None,
+        "holdings_df": holdings_df.to_dict() if holdings_df is not None else None,
+        "returns_series": returns_series.to_dict() if returns_series is not None else None,
+        "benchmark_ticker": benchmark_ticker,
+        "price_data": price_data.to_dict() if price_data is not None else None,
+        "risk_df": risk_df.to_dict() if risk_df is not None else None,
+        "sector_industry_df": sector_industry_df.to_dict() if sector_industry_df is not None else None,
+        "portfolio_df": portfolio_df.to_dict() if portfolio_df is not None else None,
+        "config": config,
+        "trades_table_html": trades_table_html,
+        "positions": positions.to_dict() if positions is not None else None,
+    }
+    return gzip.compress(pickle.dumps(payload))
+
+
+def _deserialize_analyzer_output(data: bytes) -> Optional[Dict[str, Any]]:
+    if not data:
+        return None
+    payload = pickle.loads(gzip.decompress(data))
+    return {
+        "metrics": payload["metrics"],
+        "charts": payload["charts"],
+        "start": datetime.fromisoformat(payload["start"]) if payload["start"] else None,
+        "holdings_df": pd.DataFrame(payload["holdings_df"]) if payload["holdings_df"] is not None else pd.DataFrame(),
+        "returns_series": pd.Series(payload["returns_series"]) if payload["returns_series"] is not None else None,
+        "benchmark_ticker": payload["benchmark_ticker"],
+        "price_data": pd.DataFrame(payload["price_data"]) if payload["price_data"] is not None else pd.DataFrame(),
+        "risk_df": pd.DataFrame(payload["risk_df"]) if payload["risk_df"] is not None else pd.DataFrame(),
+        "sector_industry_df": pd.DataFrame(payload["sector_industry_df"]) if payload["sector_industry_df"] is not None else pd.DataFrame(),
+        "portfolio_df": pd.DataFrame(payload["portfolio_df"]) if payload["portfolio_df"] is not None else pd.DataFrame(),
+        "config": payload["config"],
+        "trades_table_html": payload["trades_table_html"],
+        "positions": pd.DataFrame(payload["positions"]) if payload["positions"] is not None else pd.DataFrame(),
+    }
 
 
 def _log_report_time(label: str, start_time: float):
@@ -195,7 +261,7 @@ _ERROR_HTML = """<!DOCTYPE html>
 </html>"""
 
 
-def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> str:
+def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "", cached_ai_content=None, return_ai_content: bool = False, skip_ai: bool = False):
     """
     Generate portfolio HTML report and return it as a string.
     This function is used by the Flask web application.
@@ -204,9 +270,12 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         etoro_username: Optional eToro username for report title customization.
         benchmark_ticker: Optional benchmark ticker to override auto-selection.
         etoro_cid: Optional eToro customer ID to avoid username resolution.
+        cached_ai_content: Optional dict with pre-generated AI commentary text.
+        return_ai_content: If True, return a tuple of (html, ai_content_dict).
+        skip_ai: If True, generate HTML without AI content and without LLM calls.
 
     Returns:
-        HTML string of the portfolio report.
+        HTML string of the portfolio report, or tuple if return_ai_content is True.
     """
     report_start = time.perf_counter()
     config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
@@ -214,14 +283,62 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())
 
     logger.info("Starting portfolio function...")
-    try:
-        metrics, charts, start = analyzer.run_analysis()
-    except PortfolioFunctionsError as exc:
-        logger.error("PortfolioFunctionsError for username=%s: %s", etoro_username, exc)
-        return _ERROR_HTML.format(
-            username=etoro_username or "portfolio",
-            detail=str(exc).replace("{", "{{").replace("}", "}}"),
+    analyzer_cache_key = _analyzer_cache_key(etoro_username, benchmark_ticker, etoro_cid)
+    cached_analyzer_bytes = get_portfolio_cache_from_mongo("portfolio_report_cache", analyzer_cache_key, ttl_seconds=_REPORT_TTL, ext=".pkl")
+    if cached_analyzer_bytes is not None:
+        logger.info("Analyzer cache hit for %s", etoro_username)
+        cached = _deserialize_analyzer_output(cached_analyzer_bytes)
+        if cached:
+            analyzer.metrics = cached["metrics"]
+            analyzer.charts = cached["charts"]
+            analyzer.start = cached["start"]
+            analyzer.holdings_df = cached["holdings_df"]
+            analyzer.returns = {"total": cached["returns_series"]} if cached["returns_series"] is not None else {}
+            analyzer.benchmark_ticker = cached["benchmark_ticker"]
+            analyzer.prices = cached["price_data"]
+            analyzer.risk_df = cached["risk_df"]
+            analyzer.sector_industry_df = cached["sector_industry_df"]
+            analyzer.portfolio = cached["portfolio_df"]
+            analyzer.trades_table_html = cached["trades_table_html"]
+            analyzer.positions = cached["positions"]
+            metrics, charts, start = analyzer.metrics, analyzer.charts, analyzer.start
+        else:
+            cached_analyzer_bytes = None
+
+    if cached_analyzer_bytes is None:
+        try:
+            metrics, charts, start = analyzer.run_analysis()
+        except PortfolioFunctionsError as exc:
+            logger.error("PortfolioFunctionsError for username=%s: %s", etoro_username, exc)
+            error_html = _ERROR_HTML.format(
+                username=etoro_username or "portfolio",
+                detail=str(exc).replace("{", "{{").replace("}", "}}"),
+            )
+            if return_ai_content:
+                return error_html, {}
+            return error_html
+
+        trades_table = getattr(analyzer, 'trades_table_html', '')
+        holdings_df = getattr(analyzer, 'holdings_df', pd.DataFrame())
+        positions = getattr(analyzer, 'positions', pd.DataFrame())
+        prices = analyzer.prices
+
+        serialized = _serialize_analyzer_output(
+            metrics=metrics,
+            charts=charts,
+            start=start,
+            holdings_df=holdings_df,
+            returns_series=analyzer.returns.get('total'),
+            benchmark_ticker=analyzer.benchmark_ticker,
+            price_data=prices,
+            risk_df=analyzer.risk_df,
+            sector_industry_df=analyzer.sector_industry_df,
+            portfolio_df=analyzer.portfolio,
+            config=config,
+            trades_table_html=trades_table,
+            positions=positions,
         )
+        set_portfolio_cache_to_mongo("portfolio_report_cache", analyzer_cache_key, serialized, ext=".pkl", ttl_seconds=_REPORT_TTL)
 
     trades_table = getattr(analyzer, 'trades_table_html', '')
     holdings_df = getattr(analyzer, 'holdings_df', pd.DataFrame())
@@ -229,6 +346,10 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     prices = analyzer.prices
 
     logger.info("Generating HTML report...")
+    effective_cached_ai = cached_ai_content
+    if skip_ai and effective_cached_ai is None:
+        effective_cached_ai = {"intel_commentary_text": "", "overview_ai_interpretation": ""}
+
     html = generate_html_report(
         metrics,
         charts,
@@ -245,11 +366,42 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         config=config,
         returns_series=analyzer.returns.get('total'),
         benchmark_ticker=analyzer.benchmark_ticker,
+        cached_ai_content=effective_cached_ai,
     )
 
     _log_report_time("Portfolio HTML report", report_start)
 
+    if return_ai_content:
+        if skip_ai:
+            ai_content = effective_cached_ai or {"intel_commentary_text": "", "overview_ai_interpretation": ""}
+        elif cached_ai_content is not None:
+            ai_content = cached_ai_content
+        else:
+            ai_content = generate_ai_content_fragment(
+                metrics, charts, config['title'], start,
+                holdings_df=holdings_df,
+                returns_series=analyzer.returns.get('total'),
+                benchmark_ticker=analyzer.benchmark_ticker,
+                price_data=prices,
+            )
+        return html, ai_content
+
     return html
+
+
+def merge_static_html_with_ai(static_html: str, ai_content: dict, etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> str:
+    """
+    Merge a previously generated static HTML report with AI content.
+    Re-runs analysis but skips LLM calls by injecting cached AI.
+    """
+    if not ai_content:
+        return static_html
+    return generate_portfolio_html(
+        etoro_username=etoro_username,
+        benchmark_ticker=benchmark_ticker,
+        etoro_cid=etoro_cid,
+        cached_ai_content=ai_content,
+    )
 
 
 def generate_ai_commentary_text(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "") -> str:

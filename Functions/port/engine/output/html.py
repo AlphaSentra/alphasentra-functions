@@ -224,22 +224,22 @@ def generate_portfolio_ai_commentary(metrics, charts, title, start, **kwargs):
     return "\n\n".join(parts) if parts else "No commentary available."
 
 
-def generate_html_report(metrics, charts, title, start, **kwargs):
-    include_yield = kwargs.get('include_yield', True)
-    trades_table = kwargs.get('trades_table', '')
+def generate_static_html_report(metrics, charts, title, start, **kwargs):
+    """Generate static HTML report without AI content."""
+    kwargs['cached_ai_content'] = {"intel_commentary_text": "", "overview_ai_interpretation": ""}
+    return generate_html_report(metrics, charts, title, start, **kwargs)
+
+
+def generate_ai_content_fragment(metrics, charts, title, start, **kwargs):
+    """Generate AI commentary text fragment without rendering the full HTML report."""
     holdings_df = kwargs.get('holdings_df')
-    position_values = kwargs.get('position_values')
-    price_data = kwargs.get('price_data')
-    risk_df = kwargs.get('risk_df')
-    sector_industry_df = kwargs.get('sector_industry_df')
-    portfolio_df = kwargs.get('portfolio_df')
     returns_series = kwargs.get('returns_series')
     benchmark_ticker = kwargs.get('benchmark_ticker')
-    config = kwargs.get('config', {})
+    price_data = kwargs.get('price_data')
 
-    # Generate intel commentary first (used by both intel tab and overview summary)
-    current_commentary = ""
     intel_commentary_text = ""
+    overview_ai_interpretation = ""
+
     if ENABLED_MODULES.get("intel", True):
         current_commentary = generate_portfolio_ai_commentary(
             metrics,
@@ -259,19 +259,77 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
         if not intel_commentary_text or intel_commentary_text.startswith("Error generating content") or intel_commentary_text.startswith("Daily AI prompt limit"):
             intel_commentary_text = ""
 
-    # Generate overview AI interpretation from intel commentary text
-    overview_ai_interpretation = ""
-    if intel_commentary_text:
-        try:
-            decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
-            current_date = datetime.now().strftime("%b %d, %Y")
-            decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
-            combined_summary = f"{decrypted_summary_prompt}\n\n{intel_commentary_text}" if decrypted_summary_prompt else intel_commentary_text
-            overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
-            if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
+        if intel_commentary_text:
+            try:
+                decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
+                current_date = datetime.now().strftime("%b %d, %Y")
+                decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
+                combined_summary = f"{decrypted_summary_prompt}\n\n{intel_commentary_text}" if decrypted_summary_prompt else intel_commentary_text
+                overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
+                if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
+                    overview_ai_interpretation = ""
+            except Exception:
                 overview_ai_interpretation = ""
-        except Exception:
-            overview_ai_interpretation = ""
+
+    return {
+        "intel_commentary_text": intel_commentary_text,
+        "overview_ai_interpretation": overview_ai_interpretation,
+    }
+
+
+def generate_html_report(metrics, charts, title, start, **kwargs):
+    include_yield = kwargs.get('include_yield', True)
+    trades_table = kwargs.get('trades_table', '')
+    holdings_df = kwargs.get('holdings_df')
+    position_values = kwargs.get('position_values')
+    price_data = kwargs.get('price_data')
+    risk_df = kwargs.get('risk_df')
+    sector_industry_df = kwargs.get('sector_industry_df')
+    portfolio_df = kwargs.get('portfolio_df')
+    returns_series = kwargs.get('returns_series')
+    benchmark_ticker = kwargs.get('benchmark_ticker')
+    config = kwargs.get('config', {})
+
+    intel_commentary_text = ""
+    overview_ai_interpretation = ""
+
+    cached_ai = kwargs.get('cached_ai_content')
+    if cached_ai is not None:
+        intel_commentary_text = cached_ai.get('intel_commentary_text', '')
+        overview_ai_interpretation = cached_ai.get('overview_ai_interpretation', '')
+    else:
+        current_commentary = ""
+        intel_commentary_text = ""
+        if ENABLED_MODULES.get("intel", True):
+            current_commentary = generate_portfolio_ai_commentary(
+                metrics,
+                charts,
+                title,
+                start,
+                holdings_df=holdings_df,
+                returns_series=returns_series,
+                benchmark_ticker=benchmark_ticker,
+                price_data=price_data,
+            )
+            decrypted_prompt = decrypt_string(PORT_INTEL_REPORT_PROMPT)
+            current_date = datetime.now().strftime("%b %d, %Y")
+            decrypted_prompt = decrypted_prompt.replace("{current_date}", current_date)
+            combined_prompt = f"{decrypted_prompt}\n\n{current_commentary}" if decrypted_prompt else current_commentary
+            intel_commentary_text = get_gen_ai_response(prompt=combined_prompt)
+            if not intel_commentary_text or intel_commentary_text.startswith("Error generating content") or intel_commentary_text.startswith("Daily AI prompt limit"):
+                intel_commentary_text = ""
+
+        if intel_commentary_text:
+            try:
+                decrypted_summary_prompt = decrypt_string(PORT_INTEL_SUMMARY_PROMPT)
+                current_date = datetime.now().strftime("%b %d, %Y")
+                decrypted_summary_prompt = decrypted_summary_prompt.replace("{current_date}", current_date)
+                combined_summary = f"{decrypted_summary_prompt}\n\n{intel_commentary_text}" if decrypted_summary_prompt else intel_commentary_text
+                overview_ai_interpretation = get_gen_ai_response(prompt=combined_summary)
+                if not overview_ai_interpretation or overview_ai_interpretation.startswith("Error generating content") or overview_ai_interpretation.startswith("Daily AI prompt limit"):
+                    overview_ai_interpretation = ""
+            except Exception:
+                overview_ai_interpretation = ""
 
     tabs_content = ""
 

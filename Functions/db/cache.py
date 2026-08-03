@@ -3,7 +3,7 @@ import json
 import os
 import pickle
 from bson.binary import Binary
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 from urllib.parse import urlparse
 
@@ -38,9 +38,12 @@ def get_index_cache_from_mongo() -> Optional[str]:
             db = client[db_name]
             collection = db["function_index_cache"]
             doc = collection.find_one({"_id": "index"})
-            if doc and doc.get("value"):
+            if doc and doc.get("value") is not None:
                 log_warning(f"Successfully read index cache from URI {idx}/{len(uris)}: {uri}", "FALLBACK")
-                return doc["value"]
+                try:
+                    return _deserialize_value(doc["value"], doc.get("ext", ".html"))
+                except Exception:
+                    return doc["value"]
             log_info(f"Checked index cache at {parsed.hostname} but no cached value found.")
         except PyMongoError as e:
             log_error(f"Failed to read index cache from {uri}", "MONGO_CACHE", e)
@@ -64,6 +67,9 @@ def set_index_cache_to_mongo(value: str, ext: str = ".html", ttl_seconds: int = 
     if not uris:
         raise ValueError("No valid URIs found in MONGODB_URI_CACHE")
 
+    serialized_value = _serialize_value(value, ext)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
+
     last_exception = None
     for idx, uri in enumerate(uris, start=1):
         log_warning(f"Attempting to set index cache to URI {idx}/{len(uris)}: {uri}", "FALLBACK")
@@ -77,14 +83,13 @@ def set_index_cache_to_mongo(value: str, ext: str = ".html", ttl_seconds: int = 
 
             collection.create_index("expires_at", expireAfterSeconds=0)
 
-            expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
             collection.update_one(
                 {"_id": "index"},
                 {
                     "$set": {
-                        "value": value,
+                        "value": serialized_value,
                         "ext": ext,
-                        "created_at": datetime.utcnow(),
+                        "created_at": datetime.now(timezone.utc),
                         "expires_at": expires_at,
                     }
                 },
@@ -162,13 +167,13 @@ def set_portfolio_cache_to_mongo(collection_name: str, doc_id: str, value: Any, 
         return
 
     serialized_value = _serialize_value(value, ext)
-    expires_at = datetime.utcnow() + timedelta(seconds=ttl_seconds)
+    expires_at = datetime.now(timezone.utc) + timedelta(seconds=ttl_seconds)
 
     main_value, chunk_ids, extra_chunks = _chunk_value(serialized_value, doc_id)
 
     base_payload = {
         "ext": ext,
-        "created_at": datetime.utcnow(),
+        "created_at": datetime.now(timezone.utc),
         "expires_at": expires_at,
     }
 

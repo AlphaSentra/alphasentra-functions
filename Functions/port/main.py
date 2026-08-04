@@ -347,8 +347,18 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
 
     logger.info("Generating HTML report...")
     effective_cached_ai = cached_ai_content
+    ai_content = None
     if skip_ai and effective_cached_ai is None:
         effective_cached_ai = {"intel_commentary_text": "", "overview_ai_interpretation": ""}
+    elif return_ai_content and not skip_ai and cached_ai_content is None:
+        ai_content = generate_ai_content_fragment(
+            metrics, charts, config['title'], start,
+            holdings_df=holdings_df,
+            returns_series=analyzer.returns.get('total'),
+            benchmark_ticker=analyzer.benchmark_ticker,
+            price_data=prices,
+        )
+        effective_cached_ai = ai_content
 
     html = generate_html_report(
         metrics,
@@ -372,18 +382,17 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     _log_report_time("Portfolio HTML report", report_start)
 
     if return_ai_content:
-        if skip_ai:
-            ai_content = effective_cached_ai or {"intel_commentary_text": "", "overview_ai_interpretation": ""}
-        elif cached_ai_content is not None:
-            ai_content = cached_ai_content
-        else:
-            ai_content = generate_ai_content_fragment(
-                metrics, charts, config['title'], start,
-                holdings_df=holdings_df,
-                returns_series=analyzer.returns.get('total'),
-                benchmark_ticker=analyzer.benchmark_ticker,
-                price_data=prices,
-            )
+        if ai_content is not None:
+            return html, ai_content
+        if cached_ai_content is not None:
+            return html, cached_ai_content
+        ai_content = generate_ai_content_fragment(
+            metrics, charts, config['title'], start,
+            holdings_df=holdings_df,
+            returns_series=analyzer.returns.get('total'),
+            benchmark_ticker=analyzer.benchmark_ticker,
+            price_data=prices,
+        )
         return html, ai_content
 
     return html

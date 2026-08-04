@@ -3,6 +3,7 @@ Portfolio input handler - form display and request processing.
 """
 
 import json
+import os
 from flask import request, jsonify, make_response
 import logging
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
@@ -72,6 +73,142 @@ _ERROR_HTML = """<!DOCTYPE html>
 </body>
 </html>"""
 
+
+def _user_exists_in_core_db(etoro_username: str) -> bool:
+    if not etoro_username:
+        return False
+    try:
+        from Functions.db.client import DatabaseManager
+        db = DatabaseManager().get_client()
+        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+        coll = db[db_name]["users"]
+        username = etoro_username.strip()
+        doc = coll.find_one(
+            {"etoro_username": {"$regex": f"^{username}$", "$options": "i"}},
+            {"_id": 1},
+        )
+        return doc is not None
+    except Exception:
+        return False
+
+
+_USER_NOT_FOUND_HTML = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Not Available</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        @keyframes fade-in {{ 0%, 100% {{ opacity: 0; }} 50% {{ opacity: 1; }} }}
+        @keyframes fade-out {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0; }} }}
+        .animated-gradient-background {{
+          position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background-color: #000; z-index: 0;
+        }}
+        .animated-gradient-background::before,
+        .animated-gradient-background::after {{
+          content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background-size: 100% 100%; background-repeat: no-repeat;
+        }}
+        .animated-gradient-background::before {{
+          background-image: radial-gradient(ellipse 80% 50% at 50% 120%, rgba(180, 50, 50, 0.4), transparent);
+          animation: fade-out 10s infinite;
+        }}
+        .animated-gradient-background::after {{
+          background-image: radial-gradient(ellipse 80% 50% at 50% 120%, rgba(255, 100, 50, 0.3), transparent);
+          animation: fade-in 10s infinite;
+        }}
+        body {{ margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #000; color: #e0e0e0; }}
+        .form-background-wrapper {{ position: relative; min-height: 100vh; overflow: hidden; background-color: #000; }}
+        .form-foreground {{ position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; box-sizing: border-box; }}
+        .message-card {{
+          background: #1a1a1a; border: 1px solid #3a2020; border-radius: 12px;
+          max-width: 600px; width: 100%; padding: 2.5rem; box-shadow: 0 0 40px rgba(255, 60, 60, 0.08);
+        }}
+        .message-icon {{ font-size: 2.5rem; margin-bottom: 1rem; }}
+        .message-title {{ font-size: 1.4rem; font-weight: 700; color: #ff6b6b; margin-bottom: 0.75rem; letter-spacing: 0.02em; }}
+        .message-text {{ font-size: 0.95rem; color: #b0b0b0; line-height: 1.6; margin-bottom: 1.25rem; }}
+        .back-link {{ display: inline-block; margin-top: 1.5rem; color: #5ce0d8; text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }}
+        .back-link:hover {{ color: #7fecf5; }}
+    </style>
+</head>
+<body>
+    <div class="animated-gradient-background"></div>
+    <div class="form-background-wrapper">
+        <div class="form-foreground">
+            <div class="message-card">
+                <div class="message-icon">&#9888;</div>
+                <div class="message-title">Portfolio Not Available</div>
+                <div class="message-text">
+                    This portfolio has not been analysed yet. It is only reserved for member's portfolio.
+                </div>
+                <a class="back-link" href="/port">Back to portfolio selection</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+_PROCESSING_HTML = """<!DOCTYPE html>
+<html>
+<head>
+    <title>Portfolio Processing</title>
+    <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+    <meta http-equiv="Pragma" content="no-cache">
+    <meta http-equiv="Expires" content="0">
+    <style>
+        @keyframes fade-in {{ 0%, 100% {{ opacity: 0; }} 50% {{ opacity: 1; }} }}
+        @keyframes fade-out {{ 0%, 100% {{ opacity: 1; }} 50% {{ opacity: 0; }} }}
+        .animated-gradient-background {{
+          position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background-color: #000; z-index: 0;
+        }}
+        .animated-gradient-background::before,
+        .animated-gradient-background::after {{
+          content: ""; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+          background-size: 100% 100%; background-repeat: no-repeat;
+        }}
+        .animated-gradient-background::before {{
+          background-image: radial-gradient(ellipse 80% 50% at 50% 120%, rgba(180, 50, 50, 0.4), transparent);
+          animation: fade-out 10s infinite;
+        }}
+        .animated-gradient-background::after {{
+          background-image: radial-gradient(ellipse 80% 50% at 50% 120%, rgba(255, 100, 50, 0.3), transparent);
+          animation: fade-in 10s infinite;
+        }}
+        body {{ margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #000; color: #e0e0e0; }}
+        .form-background-wrapper {{ position: relative; min-height: 100vh; overflow: hidden; background-color: #000; }}
+        .form-foreground {{ position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; box-sizing: border-box; }}
+        .message-card {{
+          background: #1a1a1a; border: 1px solid #3a2020; border-radius: 12px;
+          max-width: 600px; width: 100%; padding: 2.5rem; box-shadow: 0 0 40px rgba(255, 60, 60, 0.08);
+        }}
+        .message-icon {{ font-size: 2.5rem; margin-bottom: 1rem; }}
+        .message-title {{ font-size: 1.4rem; font-weight: 700; color: #ff6b6b; margin-bottom: 0.75rem; letter-spacing: 0.02em; }}
+        .message-text {{ font-size: 0.95rem; color: #b0b0b0; line-height: 1.6; margin-bottom: 1.25rem; }}
+        .back-link {{ display: inline-block; margin-top: 1.5rem; color: #5ce0d8; text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }}
+        .back-link:hover {{ color: #7fecf5; }}
+    </style>
+</head>
+<body>
+    <div class="animated-gradient-background"></div>
+    <div class="form-background-wrapper">
+        <div class="form-foreground">
+            <div class="message-card">
+                <div class="message-icon">&#8987;</div>
+                <div class="message-title">Portfolio Processing</div>
+                <div class="message-text">
+                    The portfolio for <strong>{username}</strong> is being processed and will be accessible in about 10 to 15 minutes.
+                </div>
+                <a class="back-link" href="/port">Back to portfolio selection</a>
+            </div>
+        </div>
+    </div>
+</body>
+</html>"""
+
+
 def _cache_key(etoro_username, etoro_cid, benchmark_ticker):
     if benchmark_ticker or etoro_cid:
         return f"portfolio_report_{etoro_username.strip().lower()}_{(benchmark_ticker or '').strip().upper()}_{etoro_cid.strip().lower()}"
@@ -120,6 +257,17 @@ def handle_portfolio_input():
         etoro_username = request.args.get("etoro_username", "").strip()
         etoro_cid = request.args.get("etoro_cid", "").strip()
         benchmark_ticker = request.args.get("benchmark_ticker", "").strip()
+
+    if etoro_username:
+        cache_key = _cache_key(etoro_username, etoro_cid, benchmark_ticker)
+        cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
+        if cached_html is not None:
+            return make_response(cached_html)
+
+        if not _user_exists_in_core_db(etoro_username):
+            return make_response(_USER_NOT_FOUND_HTML.format(username=etoro_username))
+
+        return make_response(_PROCESSING_HTML.format(username=etoro_username))
 
     if request.method == "POST" and etoro_username:
         cache_key = _cache_key(etoro_username, etoro_cid, benchmark_ticker)

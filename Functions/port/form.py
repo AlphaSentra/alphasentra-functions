@@ -393,7 +393,23 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                     const data = await response.json();
 
                     if (data.cached) {{
-                        form.submit();
+                        overlay.classList.add('active');
+                        wrapper.classList.add('hiding-form');
+                        list.innerHTML = '';
+                        clearAllTimeouts();
+
+                        submitted = true;
+                        const formData = new FormData(form);
+                        fetch('/etopi', {{
+                            method: 'POST',
+                            body: formData
+                        }}).then(response => response.text()).then(html => {{
+                            document.open();
+                            document.write(html);
+                            document.close();
+                        }}).catch(error => {{
+                            console.error('Error generating report:', error);
+                        }});
                     }} else {{
                         overlay.classList.add('active');
                         wrapper.classList.add('hiding-form');

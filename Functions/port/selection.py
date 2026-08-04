@@ -1163,6 +1163,7 @@ def get_portfolio_selection_html(
             font-family: {FONT_FAMILY};
             padding: 20px;
             position: relative;
+            display: none;
         }}
 
         .search-input {{

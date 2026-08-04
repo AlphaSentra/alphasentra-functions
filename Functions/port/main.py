@@ -161,7 +161,7 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
         Dictionary containing all configuration options.
     """
     print("=" * 60)
-    print("PORTFOLIO FUNCTION")
+    print(f"PROCESSING PORTFOLIO: {etoro_username}")
     print("=" * 60)
 
     report_title = f"{etoro_username}" if etoro_username else "PORT"

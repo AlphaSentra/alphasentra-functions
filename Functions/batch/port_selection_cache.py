@@ -13,7 +13,7 @@ from Functions.logging_utils import log_info
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
 USERNAME = "etoroteam"
-SKIP_AI = True
+SKIP_AI = False
 
 from flask import Flask, g
 

@@ -912,10 +912,14 @@ class PortfolioAnalyzer:
         raw_portfolio = getattr(self, '_etoro_portfolio_raw', None)
         unmapped_ids = getattr(raw_portfolio, 'unmapped_instrument_ids', []) if raw_portfolio else []
         if unmapped_ids:
-            raise UnmappedInstrumentsError(
-                f"Found {len(unmapped_ids)} unmapped instruments.",
-                unmapped_ids,
-            )
+            from Functions.db.repositories import lookup_etoro_instrument_symbols
+            existing_in_db = set(lookup_etoro_instrument_symbols(unmapped_ids, []).keys())
+            truly_unmapped = [iid for iid in unmapped_ids if iid in existing_in_db]
+            if truly_unmapped:
+                raise UnmappedInstrumentsError(
+                    f"Found {len(truly_unmapped)} unmapped instruments that exist in DB.",
+                    truly_unmapped,
+                )
 
         self.start = self.parse_inception_date()
         if not self.etoro_cid:

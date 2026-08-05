@@ -1,8 +1,26 @@
+"""
+Batch pre-cache the portfolio selection (/port) page and portfolio reports.
+
+This script is executed as a standalone job (not as a web request). It:
+  1. Pre-fetches ranking data and the unauthenticated /port page for each
+     ranking combo so the first real browser request hits cache.
+  2. Caches the authenticated /port page for the batch user (etoroteam).
+  3. Caches the full /port page for every user in MongoDB that has an
+     ``etoro_username`` value.
+  4. Caches the portfolio report page (and its AI/static variants) for the
+     top investors discovered in step 1.
+"""
+
 import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 
+# ---------------------------------------------------------------------------
+# Path bootstrap
+# The repository layout places shared code under ``Functions/``, so we inject
+# the project root and key sub-packages onto ``sys.path`` before importing.
+# ---------------------------------------------------------------------------
 _HERE = Path(__file__).resolve()
 _ROOT = _HERE.parent.parent.parent
 sys.path.insert(0, str(_ROOT))
@@ -14,6 +32,11 @@ from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
+# ---------------------------------------------------------------------------
+# Batch configuration
+# ``USERNAME`` is used to warm the authenticated /port page cache.
+# ``SKIP_AI`` controls whether AI content is generated for portfolio reports.
+# ---------------------------------------------------------------------------
 USERNAME = "etoroteam"
 SKIP_AI = False
 
@@ -21,6 +44,11 @@ from flask import Flask, g
 
 app = Flask(__name__)
 
+# ---------------------------------------------------------------------------
+# Ranking combos to pre-cache.
+# Each combo represents a different sort/filter view of the Pro Investor
+# rankings table that the /port page can display.
+# ---------------------------------------------------------------------------
 _RANKING_COMBOS = [
     {"base_period": "OneMonthAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
     {"base_period": "OneMonthAgo", "sort": "-copiersGain", "page_size": 20, "page": 2},
@@ -29,6 +57,11 @@ _RANKING_COMBOS = [
     {"base_period": "OneYearAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
 ]
 
+# ---------------------------------------------------------------------------
+# Phase 1: warm ranking and /port page caches.
+# We need a Flask app context because ``get_portfolio_selection_html`` reads
+# ``flask.g.etoro_authuser`` to decide which portfolio row to render.
+# ---------------------------------------------------------------------------
 with app.app_context():
     from Functions.port.selection import _fetch_rankings, _selection_cache_suffix, get_portfolio_selection_html
 
@@ -64,7 +97,7 @@ with app.app_context():
         if len(all_usernames) >= 20:
             break
 
-        # Cache full unauthenticated page HTML (sign-in notice)
+        # Cache full unauthenticated page HTML (shows sign-in prompt)
         try:
             g.etoro_authuser = None
             html = get_portfolio_selection_html(**combo)
@@ -72,7 +105,7 @@ with app.app_context():
         except Exception as exc:
             log_info(f"Failed to cache unauthenticated page for combo {combo}: {exc}")
 
-        # Cache full authenticated page HTML for batch user
+        # Cache full authenticated page HTML for the batch user
         if USERNAME:
             try:
                 g.etoro_authuser = USERNAME
@@ -107,19 +140,10 @@ with app.app_context():
     log_info(f"Found {len(db_users)} users in database with etoro_username.")
 
     def _cache_port_page(username: str, combo: dict) -> str:
-        cache_suffix = _selection_cache_suffix(**combo)
-        page_cache_key = f"portfolio_selection_page{cache_suffix}_{username}"
-        cached_page = get_portfolio_cache_from_mongo(
-            "portfolio_selection_cache",
-            page_cache_key,
-            ttl_seconds=_ETORO_PI_TTL,
-            ext=".html",
-        )
-        if cached_page is not None:
-            return "skip"
         try:
             g.etoro_authuser = username
             html = get_portfolio_selection_html(**combo)
+            log_info(f"Cached /port page for {username} combo {combo} ({len(html)} chars)")
             return "ok"
         except Exception as exc:
             log_info(f"Failed to cache /port page for {username} combo {combo}: {exc}")
@@ -127,9 +151,11 @@ with app.app_context():
 
     if db_users:
         log_info(f"Caching /port pages for {len(db_users)} database users across {len(_RANKING_COMBOS)} combos...")
-        ok = skip = err = 0
+        ok = err = 0
         total = len(db_users) * len(_RANKING_COMBOS)
         done = 0
+        # ``max_workers=1`` is intentional: eToro's public API is rate-limited
+        # and parallel requests cause 429 / IP bans.
         with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {}
             for combo in _RANKING_COMBOS:
@@ -142,8 +168,6 @@ with app.app_context():
                     result = future.result()
                     if result == "ok":
                         ok += 1
-                    elif result == "skip":
-                        skip += 1
                     else:
                         err += 1
                 except Exception as exc:
@@ -151,8 +175,8 @@ with app.app_context():
                     err += 1
                 done += 1
                 if done % 100 == 0 or done == total:
-                    log_info(f"Progress: {done}/{total} /port pages cached ({ok} ok, {skip} skip, {err} err)")
-        log_info(f"/port page caching complete for database users: {ok} generated, {skip} skipped, {err} errors.")
+                    log_info(f"Progress: {done}/{total} /port pages cached ({ok} ok, {err} err)")
+        log_info(f"/port page caching complete for database users: {ok} generated, {err} errors.")
 
     from Functions.port.main import generate_portfolio_html
 
@@ -215,6 +239,8 @@ with app.app_context():
     if all_usernames:
         log_info(f"Caching portfolio reports for {len(all_usernames)} investors...")
         ok = skip = err = 0
+        # ``max_workers=1`` is intentional: eToro's public API is rate-limited
+        # and parallel requests cause 429 / IP bans.
         with ThreadPoolExecutor(max_workers=1) as executor:
             futures = {executor.submit(_cache_report, u): u for u in all_usernames}
             for future in as_completed(futures):

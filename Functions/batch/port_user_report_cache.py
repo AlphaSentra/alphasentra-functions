@@ -197,7 +197,7 @@ with app.app_context():
             log_info(f"Found {len(users)} active users with etoro_username.")
             log_info(f"Caching portfolio reports for {len(users)} users...")
             ok = skip = err = 0
-            with ThreadPoolExecutor(max_workers=1) as executor:
+            with ThreadPoolExecutor(max_workers=2) as executor:
                 futures = {executor.submit(_cache_report, u): u for u in users}
                 for future in as_completed(futures):
                     if _shutdown_requested:

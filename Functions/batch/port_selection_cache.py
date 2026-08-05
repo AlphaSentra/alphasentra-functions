@@ -1,3 +1,4 @@
+import os
 import sys
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -9,6 +10,7 @@ sys.path.insert(0, str(_ROOT / "Functions"))
 sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
+from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
@@ -81,6 +83,76 @@ with app.app_context():
 
     set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", all_usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
     log_info(f"Cached {len(all_usernames)} top investor usernames to MongoDB.")
+
+    # ------------------------------------------------------------------
+    # Cache /port page for all users in the database with etoro_username
+    # ------------------------------------------------------------------
+    db = DatabaseManager().get_client()
+    db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+    coll = db[db_name]["users"]
+
+    cursor = coll.find(
+        {"etoro_username": {"$exists": True, "$ne": ""}},
+        {"etoro_username": 1, "_id": 0},
+    )
+
+    db_users = []
+    seen_users = set()
+    for doc in cursor:
+        username = str(doc.get("etoro_username", "")).strip()
+        if username and username not in seen_users:
+            seen_users.add(username)
+            db_users.append(username)
+
+    log_info(f"Found {len(db_users)} users in database with etoro_username.")
+
+    def _cache_port_page(username: str, combo: dict) -> str:
+        cache_suffix = _selection_cache_suffix(**combo)
+        page_cache_key = f"portfolio_selection_page{cache_suffix}_{username}"
+        cached_page = get_portfolio_cache_from_mongo(
+            "portfolio_selection_cache",
+            page_cache_key,
+            ttl_seconds=_ETORO_PI_TTL,
+            ext=".html",
+        )
+        if cached_page is not None:
+            return "skip"
+        try:
+            g.etoro_authuser = username
+            html = get_portfolio_selection_html(**combo)
+            return "ok"
+        except Exception as exc:
+            log_info(f"Failed to cache /port page for {username} combo {combo}: {exc}")
+            return "error"
+
+    if db_users:
+        log_info(f"Caching /port pages for {len(db_users)} database users across {len(_RANKING_COMBOS)} combos...")
+        ok = skip = err = 0
+        total = len(db_users) * len(_RANKING_COMBOS)
+        done = 0
+        with ThreadPoolExecutor(max_workers=1) as executor:
+            futures = {}
+            for combo in _RANKING_COMBOS:
+                for username in db_users:
+                    futures[executor.submit(_cache_port_page, username, combo)] = (username, combo)
+
+            for future in as_completed(futures):
+                username, combo = futures[future]
+                try:
+                    result = future.result()
+                    if result == "ok":
+                        ok += 1
+                    elif result == "skip":
+                        skip += 1
+                    else:
+                        err += 1
+                except Exception as exc:
+                    log_info(f"Failed to cache /port page for {username} combo {combo}: {exc}")
+                    err += 1
+                done += 1
+                if done % 100 == 0 or done == total:
+                    log_info(f"Progress: {done}/{total} /port pages cached ({ok} ok, {skip} skip, {err} err)")
+        log_info(f"/port page caching complete for database users: {ok} generated, {skip} skipped, {err} errors.")
 
     from Functions.port.main import generate_portfolio_html
 

@@ -140,14 +140,18 @@ with app.app_context():
     log_info(f"Found {len(db_users)} users in database with etoro_username.")
 
     def _cache_port_page(username: str, combo: dict) -> str:
-        try:
-            g.etoro_authuser = username
-            html = get_portfolio_selection_html(**combo)
-            log_info(f"Cached /port page for {username} combo {combo} ({len(html)} chars)")
-            return "ok"
-        except Exception as exc:
-            log_info(f"Failed to cache /port page for {username} combo {combo}: {exc}")
-            return "error"
+        # ``ThreadPoolExecutor`` runs this in a worker thread that has no Flask
+        # app context, so we must push one here before touching ``flask.g`` or
+        # calling ``get_portfolio_selection_html``.
+        with app.app_context():
+            try:
+                g.etoro_authuser = username
+                html = get_portfolio_selection_html(**combo)
+                log_info(f"Cached /port page for {username} combo {combo} ({len(html)} chars)")
+                return "ok"
+            except Exception as exc:
+                log_info(f"Failed to cache /port page for {username} combo {combo}: {exc}")
+                return "error"
 
     if db_users:
         log_info(f"Caching /port pages for {len(db_users)} database users across {len(_RANKING_COMBOS)} combos...")

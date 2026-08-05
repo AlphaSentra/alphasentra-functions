@@ -125,6 +125,10 @@ _ERROR_HTML = """<!DOCTYPE html>
                 overlay.classList.add('active');
             }}
 
+            function hideOverlay() {{
+                overlay.classList.remove('active');
+            }}
+
             document.addEventListener('click', function(e) {{
                 const link = e.target.closest('a');
                 if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
@@ -144,6 +148,18 @@ _ERROR_HTML = """<!DOCTYPE html>
                 const btn = e.target.closest('button[type="submit"]');
                 if (btn && btn.closest('form')) {{
                     showOverlay();
+                }}
+            }});
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
                 }}
             }});
         }})();
@@ -281,6 +297,10 @@ _USER_NOT_FOUND_HTML = """<!DOCTYPE html>
                 overlay.classList.add('active');
             }}
 
+            function hideOverlay() {{
+                overlay.classList.remove('active');
+            }}
+
             document.addEventListener('click', function(e) {{
                 const link = e.target.closest('a');
                 if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
@@ -300,6 +320,18 @@ _USER_NOT_FOUND_HTML = """<!DOCTYPE html>
                 const btn = e.target.closest('button[type="submit"]');
                 if (btn && btn.closest('form')) {{
                     showOverlay();
+                }}
+            }});
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
                 }}
             }});
         }})();
@@ -403,7 +435,7 @@ _PROCESSING_HTML = """<!DOCTYPE html>
                 <div class="message-icon">&#8987;</div>
                 <div class="message-title">Portfolio Processing</div>
                 <div class="message-text">
-                    The portfolio for <strong>{username}</strong> is being processed and will be accessible in about 10 to 15 minutes.
+                    The portfolio for <strong>{username}</strong> is being processed and will be accessible in about 10 to 15 minutes. Please check back later.
                 </div>
                 <a class="back-link" href="/port">Back to portfolio selection</a>
             </div>
@@ -416,6 +448,10 @@ _PROCESSING_HTML = """<!DOCTYPE html>
 
             function showOverlay() {{
                 overlay.classList.add('active');
+            }}
+
+            function hideOverlay() {{
+                overlay.classList.remove('active');
             }}
 
             document.addEventListener('click', function(e) {{
@@ -437,6 +473,18 @@ _PROCESSING_HTML = """<!DOCTYPE html>
                 const btn = e.target.closest('button[type="submit"]');
                 if (btn && btn.closest('form')) {{
                     showOverlay();
+                }}
+            }});
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
                 }}
             }});
         }})();

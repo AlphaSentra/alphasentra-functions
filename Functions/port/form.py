@@ -515,6 +515,10 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                 overlay.classList.add('active');
             }}
 
+            function hideOverlay() {{
+                overlay.classList.remove('active');
+            }}
+
             document.addEventListener('click', function(e) {{
                 const link = e.target.closest('a');
                 if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
@@ -534,6 +538,18 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
                 const btn = e.target.closest('button[type="submit"]');
                 if (btn && btn.closest('form')) {{
                     showOverlay();
+                }}
+            }});
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
                 }}
             }});
         }})();

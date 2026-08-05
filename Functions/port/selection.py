@@ -2038,6 +2038,10 @@ def get_portfolio_selection_html(
                 overlay.classList.add('hidden');
             }}
 
+            function showOverlay() {{
+                overlay.classList.remove('hidden');
+            }}
+
             if (document.readyState === 'complete') {{
                 setTimeout(hideOverlay, 400);
             }} else {{
@@ -2045,6 +2049,19 @@ def get_portfolio_selection_html(
                     setTimeout(hideOverlay, 400);
                 }});
             }}
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    submitted = false;
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
+                }}
+            }});
 
             window.addEventListener('beforeunload', function() {{
                 submitted = true;
@@ -2058,6 +2075,10 @@ def get_portfolio_selection_html(
 
             function showOverlay() {{
                 overlay.classList.remove('hidden');
+            }}
+
+            function hideOverlay() {{
+                overlay.classList.add('hidden');
             }}
 
             document.addEventListener('click', function(e) {{
@@ -2079,6 +2100,18 @@ def get_portfolio_selection_html(
                 const btn = e.target.closest('button[type="submit"]');
                 if (btn && btn.closest('form')) {{
                     showOverlay();
+                }}
+            }});
+
+            window.addEventListener('pageshow', function(e) {{
+                if (e.persisted) {{
+                    hideOverlay();
+                }}
+            }});
+
+            document.addEventListener('visibilitychange', function() {{
+                if (document.visibilityState === 'visible') {{
+                    hideOverlay();
                 }}
             }});
         }})();

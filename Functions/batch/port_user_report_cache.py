@@ -35,7 +35,7 @@ sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.db.client import DatabaseManager
-from Functions.logging_utils import log_info, log_error
+from Functions.logging_utils import log_info, log_error, log_warning
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
 
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "30"))
@@ -73,6 +73,9 @@ with app.app_context():
     # ------------------------------------------------------------------
     # 2. Cache generation logic per user.
     # ------------------------------------------------------------------
+    MAX_REPORT_RETRIES = 5
+    REPORT_RETRY_BASE_DELAY = 15
+
     def _cache_report(username: str) -> str:
         """Generate and cache portfolio artifacts for a single user.
 
@@ -98,19 +101,50 @@ with app.app_context():
         if cached_html is not None:
             return f"skip:{username}"
 
-        try:
-            cached_ai = get_portfolio_cache_from_mongo(
-                "portfolio_report_cache",
-                ai_cache_key,
-                ttl_seconds=_REPORT_TTL,
-                ext=".json",
-            )
-            if cached_ai is not None:
-                report_html = generate_portfolio_html(
+        from Functions.port.engine.analyzer import UnmappedInstrumentsError
+
+        for attempt in range(MAX_REPORT_RETRIES + 1):
+            try:
+                cached_ai = get_portfolio_cache_from_mongo(
+                    "portfolio_report_cache",
+                    ai_cache_key,
+                    ttl_seconds=_REPORT_TTL,
+                    ext=".json",
+                )
+                if cached_ai is not None:
+                    report_html = generate_portfolio_html(
+                        etoro_username=username,
+                        benchmark_ticker="",
+                        etoro_cid="",
+                        cached_ai_content=cached_ai,
+                    )
+                    static_html = generate_portfolio_html(
+                        etoro_username=username,
+                        benchmark_ticker="",
+                        etoro_cid="",
+                        skip_ai=True,
+                    )
+                    set_portfolio_cache_to_mongo(
+                        "portfolio_report_cache",
+                        cache_key,
+                        report_html,
+                        ext=".html",
+                        ttl_seconds=_REPORT_TTL,
+                    )
+                    set_portfolio_cache_to_mongo(
+                        "portfolio_report_cache",
+                        static_key,
+                        static_html,
+                        ext=".html",
+                        ttl_seconds=_REPORT_TTL,
+                    )
+                    return f"ok:{username}"
+
+                report_html, ai_content = generate_portfolio_html(
                     etoro_username=username,
                     benchmark_ticker="",
                     etoro_cid="",
-                    cached_ai_content=cached_ai,
+                    return_ai_content=True,
                 )
                 static_html = generate_portfolio_html(
                     etoro_username=username,
@@ -132,45 +166,46 @@ with app.app_context():
                     ext=".html",
                     ttl_seconds=_REPORT_TTL,
                 )
+                set_portfolio_cache_to_mongo(
+                    "portfolio_report_cache",
+                    ai_cache_key,
+                    ai_content,
+                    ext=".json",
+                    ttl_seconds=_REPORT_TTL,
+                )
                 return f"ok:{username}"
+            except UnmappedInstrumentsError as exc:
+                if attempt < MAX_REPORT_RETRIES:
+                    log_warning(
+                        f"Attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1} for {username}: "
+                        f"Unmapped instruments found {exc.unmapped_ids}. "
+                        f"Retrying in {REPORT_RETRY_BASE_DELAY * (2 ** attempt)}s...",
+                        "PORT_USER_REPORT_UNMAPPED_RETRY",
+                    )
+                    time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
+                else:
+                    log_error(
+                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                        f"due to unmapped instruments: {exc.unmapped_ids}",
+                        "PORT_USER_REPORT_UNMAPPED_FAIL",
+                    )
+                    return f"error:{username}"
+            except Exception as exc:
+                if attempt < MAX_REPORT_RETRIES:
+                    log_error(
+                        f"Failed to cache report for {username} (attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1}). "
+                        f"Retrying in {REPORT_RETRY_BASE_DELAY * (2 ** attempt)}s. Error: {exc}",
+                        "PORT_USER_REPORT_RETRY",
+                    )
+                    time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
+                else:
+                    log_error(
+                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
+                        "PORT_USER_REPORT_FAIL",
+                    )
+                    return f"error:{username}"
 
-            report_html, ai_content = generate_portfolio_html(
-                etoro_username=username,
-                benchmark_ticker="",
-                etoro_cid="",
-                return_ai_content=True,
-            )
-            static_html = generate_portfolio_html(
-                etoro_username=username,
-                benchmark_ticker="",
-                etoro_cid="",
-                skip_ai=True,
-            )
-            set_portfolio_cache_to_mongo(
-                "portfolio_report_cache",
-                cache_key,
-                report_html,
-                ext=".html",
-                ttl_seconds=_REPORT_TTL,
-            )
-            set_portfolio_cache_to_mongo(
-                "portfolio_report_cache",
-                static_key,
-                static_html,
-                ext=".html",
-                ttl_seconds=_REPORT_TTL,
-            )
-            set_portfolio_cache_to_mongo(
-                "portfolio_report_cache",
-                ai_cache_key,
-                ai_content,
-                ext=".json",
-                ttl_seconds=_REPORT_TTL,
-            )
-            return f"ok:{username}"
-        except Exception as exc:
-            log_error(f"Failed to cache report for {username}: {exc}", "PORT_USER_REPORT")
-            return f"error:{username}"
+        return f"error:{username}"
 
     # ------------------------------------------------------------------
     # 3. Execute caching across all active users, then sleep and repeat.

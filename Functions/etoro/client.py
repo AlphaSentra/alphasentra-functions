@@ -366,6 +366,7 @@ class ETPublicClient:
 
         # --- 4. Build positions list with a progressive fallback chain ---
         positions = []
+        unmapped_instrument_ids = []
         for item in raw_positions:
             iid = str(item.get("instrumentId", ""))
             symbol_full = etoro_symbol_map.get(iid)
@@ -385,6 +386,7 @@ class ETPublicClient:
                     "position will be skipped (tickers.ticker is mandatory).",
                     iid, symbol_full,
                 )
+                unmapped_instrument_ids.append(iid)
                 continue
 
             logger.info(
@@ -483,6 +485,7 @@ class ETPublicClient:
             username=username,
             positions=positions,
             aggregated_positions=aggregated_positions,
+            unmapped_instrument_ids=unmapped_instrument_ids,
         )
         set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result

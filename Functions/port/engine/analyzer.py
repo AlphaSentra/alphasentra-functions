@@ -50,6 +50,13 @@ class PortfolioFunctionsError(Exception):
     pass
 
 
+class UnmappedInstrumentsError(PortfolioFunctionsError):
+    """Raised when not all instruments could be mapped to the local database."""
+    def __init__(self, message, unmapped_ids):
+        super().__init__(message)
+        self.unmapped_ids = unmapped_ids
+
+
 class PortfolioAnalyzer:
     def __init__(self, config: Dict[str, Any], market_data_provider: Optional[MarketDataProvider] = None):
         self.config = config
@@ -900,6 +907,14 @@ class PortfolioAnalyzer:
                 "eToro portfolio failed to load. "
                 "Check ETORO_PUBLIC_KEY/ETORO_PRIVATE_KEY env vars and the eToro username. "
                 f"Details: {portfolio_error}"
+            )
+
+        raw_portfolio = getattr(self, '_etoro_portfolio_raw', None)
+        unmapped_ids = getattr(raw_portfolio, 'unmapped_instrument_ids', []) if raw_portfolio else []
+        if unmapped_ids:
+            raise UnmappedInstrumentsError(
+                f"Found {len(unmapped_ids)} unmapped instruments.",
+                unmapped_ids,
             )
 
         self.start = self.parse_inception_date()

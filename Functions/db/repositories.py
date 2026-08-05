@@ -1,4 +1,5 @@
 import os
+import time
 from typing import Tuple, Dict, Any, List, Optional
 
 from Functions.db.client import DatabaseManager
@@ -184,25 +185,39 @@ def lookup_etoro_instrument_symbols(instrument_ids: List[str], symbol_fulls: Lis
     if not instrument_ids and not symbol_fulls:
         return db_symbol_map
 
-    try:
-        db = DatabaseManager().get_client()
-        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
-        tickers_collection = db[db_name]["tickers"]
+    max_retries = 5
+    base_delay = 1
 
-        query: Dict[str, Any] = {"$or": []}
-        if instrument_ids:
-            query["$or"].append({"ticker_etoro": {"$in": instrument_ids}})
-        if symbol_fulls:
-            query["$or"].append({"ticker_etoro": {"$in": symbol_fulls}})
+    for attempt in range(max_retries + 1):
+        try:
+            db = DatabaseManager().get_client()
+            db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+            tickers_collection = db[db_name]["tickers"]
 
-        cursor = tickers_collection.find(query, {"ticker_etoro": 1, "ticker": 1})
-        for doc in cursor:
-            key = str(doc.get("ticker_etoro", ""))
-            db_ticker = doc.get("ticker")
-            if key and db_ticker is not None:
-                db_symbol_map[key] = str(db_ticker)
-    except Exception as exc:
-        from Functions.logging_utils import log_error
-        log_error("Failed to lookup eToro instrument symbols from DB", "MONGODB_LOOKUP", exc)
+            query: Dict[str, Any] = {"$or": []}
+            if instrument_ids:
+                query["$or"].append({"ticker_etoro": {"$in": instrument_ids}})
+            if symbol_fulls:
+                query["$or"].append({"ticker_etoro": {"$in": symbol_fulls}})
+
+            cursor = tickers_collection.find(query, {"ticker_etoro": 1, "ticker": 1})
+            for doc in cursor:
+                key = str(doc.get("ticker_etoro", ""))
+                db_ticker = doc.get("ticker")
+                if key and db_ticker is not None:
+                    db_symbol_map[key] = str(db_ticker)
+            return db_symbol_map
+        except Exception as exc:
+            if attempt < max_retries:
+                from Functions.logging_utils import log_warning
+                log_warning(
+                    f"DB lookup failed for instrument symbols (attempt {attempt + 1}/{max_retries + 1}). Retrying in {base_delay * (2 ** attempt)}s. Error: {exc}",
+                    "MONGODB_LOOKUP_RETRY",
+                )
+                time.sleep(base_delay * (2 ** attempt))
+            else:
+                from Functions.logging_utils import log_error
+                log_error("Failed to lookup eToro instrument symbols from DB after multiple retries", "MONGODB_LOOKUP", exc)
+                return db_symbol_map
 
     return db_symbol_map

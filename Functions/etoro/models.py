@@ -49,6 +49,7 @@ class EToroInvestorPortfolio:
     username: str
     positions: List[EToroPortfolioPosition]
     aggregated_positions: List[EToroAggregatedPosition] = field(default_factory=list)
+    unmapped_instrument_ids: List[str] = field(default_factory=list)
 
 
 @dataclass

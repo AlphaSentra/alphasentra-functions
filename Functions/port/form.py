@@ -229,9 +229,55 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             0%, 100% {{ opacity: 1; }}
             50% {{ opacity: 0.6; }}
         }}
+
+        /* Navigation loading overlay */
+        .nav-loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }}
+
+        .nav-loading-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+
+        .nav-loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: nav-spin 0.8s linear infinite;
+        }}
+
+        .nav-loading-text {{
+            margin-top: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes nav-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
     </style>
 </head>
 <body>
+    <div class="nav-loading-overlay" id="nav-loading-overlay">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">Loading...</div>
+    </div>
     <div class="form-background-wrapper">
         <div class="animated-gradient-background"></div>
         <div class="form-foreground">
@@ -461,6 +507,36 @@ PORTFOLIO_FORM_HTML = f"""<!DOCTYPE html>
             }});
         }})();
 
+        (function() {{
+            const overlay = document.getElementById('nav-loading-overlay');
+            if (!overlay) return;
+
+            function showOverlay() {{
+                overlay.classList.add('active');
+            }}
+
+            document.addEventListener('click', function(e) {{
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
+                    showOverlay();
+                    return;
+                }}
+
+                const el = e.target.closest('[onclick]');
+                if (el) {{
+                    const onclick = (el.getAttribute('onclick') || '');
+                    if (onclick.includes('window.location') || onclick.includes('window.top.location')) {{
+                        showOverlay();
+                        return;
+                    }}
+                }}
+
+                const btn = e.target.closest('button[type="submit"]');
+                if (btn && btn.closest('form')) {{
+                    showOverlay();
+                }}
+            }});
+        }})();
     </script>
 </body>
 </html>

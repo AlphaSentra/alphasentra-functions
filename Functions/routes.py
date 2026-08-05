@@ -26,6 +26,74 @@ with open(index_template_path, 'r') as f:
     _INDEX_HTML = f.read()
 
 
+def _redirect_html(title: str, message: str, url: str) -> str:
+    return f"""
+    <!DOCTYPE html>
+    <html>
+    <head>
+        <title>{title}</title>
+        <style>
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: system-ui, -apple-system, sans-serif;
+                background-color: #0f172a;
+                color: #e2e8f0;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                min-height: 100vh;
+            }}
+            .redirect-container {{
+                text-align: center;
+            }}
+            .spinner {{
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255, 255, 255, 0.2);
+                border-top-color: #38bdf8;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+                margin: 0 auto 16px;
+            }}
+            .message {{
+                font-size: 14px;
+                color: #94a3b8;
+                margin-bottom: 16px;
+            }}
+            .fallback-link {{
+                color: #38bdf8;
+                text-decoration: none;
+                font-size: 13px;
+            }}
+            .fallback-link:hover {{
+                text-decoration: underline;
+            }}
+            @keyframes spin {{
+                to {{ transform: rotate(360deg); }}
+            }}
+        </style>
+        <script>
+            if (window.top !== window.self) {{
+                window.top.location.href = "{url}";
+            }} else {{
+                window.location.href = "{url}";
+            }}
+        </script>
+    </head>
+    <body>
+        <div class="redirect-container">
+            <div class="spinner"></div>
+            <div class="message">{message}</div>
+            <a class="fallback-link" href="{url}">Click here if not redirected</a>
+        </div>
+        <noscript>
+            <meta http-equiv="refresh" content="0;url={url}">
+        </noscript>
+    </body>
+    </html>
+    """
+
 
 from Functions.port.input import handle_portfolio_input, get_portfolio_cache_status # Import get_portfolio_cache_status
 from Functions.port.selection import get_portfolio_selection_html, cached_portfolio_selection_html
@@ -64,107 +132,19 @@ def sel():
 
 
 def eqs():
-    url = "https://app.alphasentra.com/screener?asset_class=EQ"
-    html = f"""
-    <html>
-    <head>
-        <title>EQS Screener</title>
-        <script>
-            if (window.top !== window.self) {{
-                window.top.location.href = "{url}";
-            }} else {{
-                window.location.href = "{url}";
-            }}
-        </script>
-    </head>
-    <body>
-        <p>Redirecting to Screener...</p>
-        <noscript>
-            <meta http-equiv="refresh" content="0;url={url}">
-            <a href="{url}">Click here if not redirected</a>
-        </noscript>
-    </body>
-    </html>
-    """
-    return html
+    return _redirect_html("EQS Screener", "Redirecting to Screener...", "https://app.alphasentra.com/screener?asset_class=EQ")
 
 
 def wcr():
-    url = "https://app.alphasentra.com/screener?asset_class=FX"
-    html = f"""
-    <html>
-    <head>
-        <title>WCR Screener</title>
-        <script>
-            if (window.top !== window.self) {{
-                window.top.location.href = "{url}";
-            }} else {{
-                window.location.href = "{url}";
-            }}
-        </script>
-    </head>
-    <body>
-        <p>Redirecting to Screener...</p>
-        <noscript>
-            <meta http-equiv="refresh" content="0;url={url}">
-            <a href="{url}">Click here if not redirected</a>
-        </noscript>
-    </body>
-    </html>
-    """
-    return html
+    return _redirect_html("WCR Screener", "Redirecting to Screener...", "https://app.alphasentra.com/screener?asset_class=FX")
 
 
 def ana():
-    url = "https://app.alphasentra.com/search"
-    html = f"""
-    <html>
-    <head>
-        <title>Analyse</title>
-        <script>
-            if (window.top !== window.self) {{
-                window.top.location.href = "{url}";
-            }} else {{
-                window.location.href = "{url}";
-            }}
-        </script>
-    </head>
-    <body>
-        <p>Redirecting to Analyse...</p>
-        <noscript>
-            <meta http-equiv="refresh" content="0;url={url}">
-            <a href="{url}">Click here if not redirected</a>
-        </noscript>
-    </body>
-    </html>
-    """
-    return html
+    return _redirect_html("Analyse", "Redirecting to Analyse...", "https://app.alphasentra.com/search")
 
 
 def cryp():
-    url = "https://app.alphasentra.com/screener?asset_class=CR"
-    html = f"""
-    <html>
-    <head>
-        <title>CRYP Screener</title>
-        <script>
-            if (window.top !== window.self) {{
-                window.top.location.href = "{url}";
-            }} else {{
-                window.location.href = "{url}";
-            }}
-        </script>
-    </head>
-    <body>
-        <p>Redirecting to Screener...</p>
-        <noscript>
-            <meta http-equiv="refresh" content="0;url={url}">
-            <a href="{url}">Click here if not redirected</a>
-        </noscript>
-    </body>
-    </html>
-    """
-    return html
+    return _redirect_html("CRYP Screener", "Redirecting to Screener...", "https://app.alphasentra.com/screener?asset_class=CR")
 
 
 

@@ -2051,6 +2051,38 @@ def get_portfolio_selection_html(
             }});
         }})();
     </script>
+    <script>
+        (function() {{
+            const overlay = document.getElementById('loading-overlay');
+            if (!overlay) return;
+
+            function showOverlay() {{
+                overlay.classList.remove('hidden');
+            }}
+
+            document.addEventListener('click', function(e) {{
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
+                    showOverlay();
+                    return;
+                }}
+
+                const el = e.target.closest('[onclick]');
+                if (el) {{
+                    const onclick = (el.getAttribute('onclick') || '');
+                    if (onclick.includes('window.location') || onclick.includes('window.top.location')) {{
+                        showOverlay();
+                        return;
+                    }}
+                }}
+
+                const btn = e.target.closest('button[type="submit"]');
+                if (btn && btn.closest('form')) {{
+                    showOverlay();
+                }}
+            }});
+        }})();
+    </script>
 </body>
 </html>
 """

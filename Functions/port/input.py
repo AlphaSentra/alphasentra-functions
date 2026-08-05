@@ -51,9 +51,55 @@ _ERROR_HTML = """<!DOCTYPE html>
         .error-details {{ font-size: 0.8rem; color: #777; background: #111; padding: 0.75rem 1rem; border-radius: 6px; border: 1px solid #2a2a2a; word-break: break-word; white-space: pre-wrap; font-family: 'Courier New', monospace; }}
         .back-link {{ display: inline-block; margin-top: 1.5rem; color: #5ce0d8; text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }}
         .back-link:hover {{ color: #7fecf5; }}
+
+        /* Navigation loading overlay */
+        .nav-loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }}
+
+        .nav-loading-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+
+        .nav-loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: nav-spin 0.8s linear infinite;
+        }}
+
+        .nav-loading-text {{
+            margin-top: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes nav-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
     </style>
 </head>
 <body>
+    <div class="nav-loading-overlay" id="nav-loading-overlay">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">Loading...</div>
+    </div>
     <div class="animated-gradient-background"></div>
     <div class="form-background-wrapper">
         <div class="form-foreground">
@@ -70,6 +116,38 @@ _ERROR_HTML = """<!DOCTYPE html>
             </div>
         </div>
     </div>
+    <script>
+        (function() {{
+            const overlay = document.getElementById('nav-loading-overlay');
+            if (!overlay) return;
+
+            function showOverlay() {{
+                overlay.classList.add('active');
+            }}
+
+            document.addEventListener('click', function(e) {{
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
+                    showOverlay();
+                    return;
+                }}
+
+                const el = e.target.closest('[onclick]');
+                if (el) {{
+                    const onclick = (el.getAttribute('onclick') || '');
+                    if (onclick.includes('window.location') || onclick.includes('window.top.location')) {{
+                        showOverlay();
+                        return;
+                    }}
+                }}
+
+                const btn = e.target.closest('button[type="submit"]');
+                if (btn && btn.closest('form')) {{
+                    showOverlay();
+                }}
+            }});
+        }})();
+    </script>
 </body>
 </html>"""
 
@@ -131,9 +209,56 @@ _USER_NOT_FOUND_HTML = """<!DOCTYPE html>
         .message-text {{ font-size: 0.95rem; color: #b0b0b0; line-height: 1.6; margin-bottom: 1.25rem; }}
         .back-link {{ display: inline-block; margin-top: 1.5rem; color: #5ce0d8; text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }}
         .back-link:hover {{ color: #7fecf5; }}
-    </style>
+    
+        /* Navigation loading overlay */
+        .nav-loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }}
+
+        .nav-loading-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+
+        .nav-loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: nav-spin 0.8s linear infinite;
+        }}
+
+        .nav-loading-text {{
+            margin-top: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes nav-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+</style>
 </head>
 <body>
+    <div class="nav-loading-overlay" id="nav-loading-overlay">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">Loading...</div>
+    </div>
+
     <div class="animated-gradient-background"></div>
     <div class="form-background-wrapper">
         <div class="form-foreground">
@@ -147,6 +272,38 @@ _USER_NOT_FOUND_HTML = """<!DOCTYPE html>
             </div>
         </div>
     </div>
+    <script>
+        (function() {{
+            const overlay = document.getElementById('nav-loading-overlay');
+            if (!overlay) return;
+
+            function showOverlay() {{
+                overlay.classList.add('active');
+            }}
+
+            document.addEventListener('click', function(e) {{
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
+                    showOverlay();
+                    return;
+                }}
+
+                const el = e.target.closest('[onclick]');
+                if (el) {{
+                    const onclick = (el.getAttribute('onclick') || '');
+                    if (onclick.includes('window.location') || onclick.includes('window.top.location')) {{
+                        showOverlay();
+                        return;
+                    }}
+                }}
+
+                const btn = e.target.closest('button[type="submit"]');
+                if (btn && btn.closest('form')) {{
+                    showOverlay();
+                }}
+            }});
+        }})();
+    </script>
 </body>
 </html>"""
 
@@ -189,9 +346,56 @@ _PROCESSING_HTML = """<!DOCTYPE html>
         .message-text {{ font-size: 0.95rem; color: #b0b0b0; line-height: 1.6; margin-bottom: 1.25rem; }}
         .back-link {{ display: inline-block; margin-top: 1.5rem; color: #5ce0d8; text-decoration: none; font-size: 0.9rem; font-weight: 500; transition: color 0.2s; }}
         .back-link:hover {{ color: #7fecf5; }}
-    </style>
+    
+        /* Navigation loading overlay */
+        .nav-loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }}
+
+        .nav-loading-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+
+        .nav-loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: nav-spin 0.8s linear infinite;
+        }}
+
+        .nav-loading-text {{
+            margin-top: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes nav-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+</style>
 </head>
 <body>
+    <div class="nav-loading-overlay" id="nav-loading-overlay">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">Loading...</div>
+    </div>
+
     <div class="animated-gradient-background"></div>
     <div class="form-background-wrapper">
         <div class="form-foreground">
@@ -205,6 +409,38 @@ _PROCESSING_HTML = """<!DOCTYPE html>
             </div>
         </div>
     </div>
+    <script>
+        (function() {{
+            const overlay = document.getElementById('nav-loading-overlay');
+            if (!overlay) return;
+
+            function showOverlay() {{
+                overlay.classList.add('active');
+            }}
+
+            document.addEventListener('click', function(e) {{
+                const link = e.target.closest('a');
+                if (link && link.href && !link.href.startsWith('javascript:') && !link.target && !link.hasAttribute('download')) {{
+                    showOverlay();
+                    return;
+                }}
+
+                const el = e.target.closest('[onclick]');
+                if (el) {{
+                    const onclick = (el.getAttribute('onclick') || '');
+                    if (onclick.includes('window.location') || onclick.includes('window.top.location')) {{
+                        showOverlay();
+                        return;
+                    }}
+                }}
+
+                const btn = e.target.closest('button[type="submit"]');
+                if (btn && btn.closest('form')) {{
+                    showOverlay();
+                }}
+            }});
+        }})();
+    </script>
 </body>
 </html>"""
 

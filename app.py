@@ -128,6 +128,89 @@ def _unauthorized_response():
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
+    <style>
+        body {{
+            margin: 0;
+            padding: 0;
+            font-family: system-ui, -apple-system, sans-serif;
+            background-color: #0f172a;
+            color: #e2e8f0;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            min-height: 100vh;
+        }}
+        .redirect-container {{
+            text-align: center;
+        }}
+        .spinner {{
+            width: 40px;
+            height: 40px;
+            border: 3px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #38bdf8;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin: 0 auto 16px;
+        }}
+        .message {{
+            font-size: 14px;
+            color: #94a3b8;
+            margin-bottom: 16px;
+        }}
+        .fallback-link {{
+            color: #38bdf8;
+            text-decoration: none;
+            font-size: 13px;
+        }}
+        .fallback-link:hover {{
+            text-decoration: underline;
+        }}
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+
+        /* Navigation loading overlay */
+        .nav-loading-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            backdrop-filter: blur(4px);
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 99999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.2s ease;
+        }}
+
+        .nav-loading-overlay.active {{
+            opacity: 1;
+            pointer-events: auto;
+        }}
+
+        .nav-loading-spinner {{
+            width: 48px;
+            height: 48px;
+            border: 4px solid rgba(255, 255, 255, 0.2);
+            border-top-color: #fff;
+            border-radius: 50%;
+            animation: nav-spin 0.8s linear infinite;
+        }}
+
+        .nav-loading-text {{
+            margin-top: 16px;
+            color: #fff;
+            font-size: 14px;
+            font-weight: 500;
+            letter-spacing: 0.05em;
+        }}
+
+        @keyframes nav-spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+    </style>
     <script>
         if (window.top !== window.self) {{
             window.top.location.href = "{LOGIN_REDIRECT_URL}";
@@ -137,10 +220,17 @@ def _unauthorized_response():
     </script>
 </head>
 <body>
-    <p>Redirecting to login...</p>
+    <div class="nav-loading-overlay" id="nav-loading-overlay">
+        <div class="nav-loading-spinner"></div>
+        <div class="nav-loading-text">Loading...</div>
+    </div>
+    <div class="redirect-container">
+        <div class="spinner"></div>
+        <div class="message">Redirecting to login...</div>
+        <a class="fallback-link" href="{LOGIN_REDIRECT_URL}">Click here if not redirected</a>
+    </div>
     <noscript>
         <meta http-equiv="refresh" content="0;url={LOGIN_REDIRECT_URL}">
-        <a href="{LOGIN_REDIRECT_URL}">Click here if not redirected</a>
     </noscript>
 </body>
 </html>

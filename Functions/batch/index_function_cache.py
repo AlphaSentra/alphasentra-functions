@@ -14,7 +14,7 @@ import Functions.routes as routes_mod
 html_index_rows = [
     ("/", "Function Index"),
     ("/ana", "Analyse"),
-    ("/port", "Portfolio Investor Selection"),
+    ("/port", "Portfolio & Risk Analytics"),
     ("/eqs", "Stocks AI Screener"),
     ("/wcr", "Forex AI Screener"),
     ("/cryp", "Cryptocurrency AI Screener"),

@@ -2,7 +2,7 @@ name: Batch Portf Report Cache Job
 
 on:
   schedule:
-    - cron: '0 23 * * *'
+    - cron: '*/5 * * * *'
   workflow_dispatch:
 
 jobs:

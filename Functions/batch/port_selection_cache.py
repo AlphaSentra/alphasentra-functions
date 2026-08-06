@@ -197,6 +197,7 @@ with app.app_context():
             return f"skip:{username}"
 
         from Functions.port.engine.analyzer import UnmappedInstrumentsError
+        from Functions.etoro.client import InvalidSymbolError
 
         for attempt in range(MAX_REPORT_RETRIES + 1):
             try:
@@ -224,6 +225,7 @@ with app.app_context():
                         benchmark_ticker="",
                         etoro_cid="",
                         skip_ai=True,
+                        log_header=False,
                     )
                     set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
                     return f"ok:{username}"
@@ -239,6 +241,7 @@ with app.app_context():
                     benchmark_ticker="",
                     etoro_cid="",
                     skip_ai=True,
+                    log_header=False,
                 )
                 set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
                 set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
@@ -256,6 +259,20 @@ with app.app_context():
                     log_error(
                         f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to unmapped instruments: {exc.unmapped_ids}",
+                    )
+                    return f"error:{username}"
+            except InvalidSymbolError as exc:
+                if attempt < MAX_REPORT_RETRIES:
+                    log_warning(
+                        f"Attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1} for {username}: "
+                        f"Invalid symbol from eToro API: {exc}. "
+                        f"Retrying in {REPORT_RETRY_BASE_DELAY * (2 ** attempt)}s...",
+                    )
+                    time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
+                else:
+                    log_error(
+                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                        f"due to invalid symbols: {exc}",
                     )
                     return f"error:{username}"
             except Exception as exc:

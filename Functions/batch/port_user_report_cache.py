@@ -123,6 +123,7 @@ with app.app_context():
                         benchmark_ticker="",
                         etoro_cid="",
                         skip_ai=True,
+                        log_header=False,
                     )
                     set_portfolio_cache_to_mongo(
                         "portfolio_report_cache",
@@ -151,6 +152,7 @@ with app.app_context():
                     benchmark_ticker="",
                     etoro_cid="",
                     skip_ai=True,
+                    log_header=False,
                 )
                 set_portfolio_cache_to_mongo(
                     "portfolio_report_cache",

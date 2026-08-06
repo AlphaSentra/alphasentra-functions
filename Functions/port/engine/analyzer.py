@@ -107,7 +107,7 @@ class PortfolioAnalyzer:
             return False, "eToro username is not configured."
 
         try:
-            from Functions.etoro.client import get_public_client_from_env
+            from Functions.etoro.client import get_public_client_from_env, InvalidSymbolError
             client = client or get_public_client_from_env()
             portfolio = client.get_investor_portfolio(self.etoro_username)
 
@@ -156,6 +156,8 @@ class PortfolioAnalyzer:
             logger.info("eToro live portfolio fast-path loaded successfully (%d positions).", len(agg_positions))
             return True, None
 
+        except InvalidSymbolError:
+            raise
         except Exception as exc:
             error_msg = f"{type(exc).__name__}: {exc}\n{traceback.format_exc()}"
             logger.warning("eToro portfolio failed to load: %s", exc)

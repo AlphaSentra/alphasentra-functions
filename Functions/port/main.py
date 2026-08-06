@@ -160,14 +160,9 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
     Returns:
         Dictionary containing all configuration options.
     """
-    print("=" * 60)
-    print(f"PROCESSING PORTFOLIO: {etoro_username}")
-    print("=" * 60)
-
     report_title = f"{etoro_username}" if etoro_username else "PORT"
 
     include_yield = True
-
 
     max_position_size = 20.0
 
@@ -175,10 +170,8 @@ def get_interactive_input(no_browser: bool, etoro_username: str = "", benchmark_
 
     min_position_size = 0.5
 
-    # Optimization lookback period
     opt_lookback = '1y'
 
-    # Initial investment (for transaction mode)
     initial_investment = 100000.0
 
     config = {
@@ -355,7 +348,7 @@ _ERROR_HTML = """<!DOCTYPE html>
 </html>"""
 
 
-def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "", cached_ai_content=None, return_ai_content: bool = False, skip_ai: bool = False):
+def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "", cached_ai_content=None, return_ai_content: bool = False, skip_ai: bool = False, log_header: bool = True):
     """
     Generate portfolio HTML report and return it as a string.
     This function is used by the Flask web application.
@@ -367,11 +360,16 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         cached_ai_content: Optional dict with pre-generated AI commentary text.
         return_ai_content: If True, return a tuple of (html, ai_content_dict).
         skip_ai: If True, generate HTML without AI content and without LLM calls.
+        log_header: If True, print the processing banner once at the start.
 
     Returns:
         HTML string of the portfolio report, or tuple if return_ai_content is True.
     """
     report_start = time.perf_counter()
+    if log_header:
+        print("=" * 60)
+        print(f"PROCESSING PORTFOLIO: {etoro_username}")
+        print("=" * 60)
     config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 
     analyzer = PortfolioAnalyzer(config, market_data_provider=get_market_data_provider())

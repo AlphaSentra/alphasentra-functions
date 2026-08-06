@@ -163,6 +163,20 @@ def _save_instrument_cache(metadata: Dict[str, Dict[str, str]]) -> None:
         logger.debug("Failed to save instrument metadata cache: %s", exc)
 
 
+def _remove_from_instrument_cache(iid: str) -> None:
+    try:
+        cache = _load_instrument_cache()
+        iid_str = str(iid)
+        if iid_str in cache:
+            del cache[iid_str]
+            _INSTRUMENT_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
+            with open(_INSTRUMENT_CACHE_PATH, "w", encoding="utf-8") as f:
+                json.dump(cache, f)
+            logger.debug("Removed instrument %s from cache due to numerical symbol.", iid)
+    except Exception as exc:
+        logger.debug("Failed to remove instrument %s from cache: %s", iid, exc)
+
+
 def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: str) -> Optional[Dict[str, str]]:
     try:
         resp = session.get(search_url, params={"instrumentId": iid}, timeout=30)
@@ -198,6 +212,11 @@ class EToroClientError(Exception):
     def __init__(self, message, status_code=None):
         super().__init__(message)
         self.status_code = status_code
+
+
+class InvalidSymbolError(Exception):
+    """Raised when an eToro instrument resolves to a numerical symbol."""
+    pass
 
 
 class ETPublicClient:
@@ -346,6 +365,43 @@ class ETPublicClient:
                 for iid, meta in metadata.items()
                 if meta.get("symbol")
             }
+
+            for attempt in range(5):
+                numerical_iids = [
+                    iid for iid, symbol in etoro_symbol_map.items()
+                    if isinstance(symbol, str) and symbol.isdigit()
+                ]
+                if not numerical_iids:
+                    break
+                logger.warning(
+                    "Numerical symbol(s) detected for instrument(s) %s (attempt %d/5). "
+                    "Clearing cache and retrying...",
+                    numerical_iids, attempt + 1,
+                )
+                for iid in numerical_iids:
+                    _remove_from_instrument_cache(iid)
+                try:
+                    retry_metadata = self.resolve_instrument_metadata(numerical_iids)
+                    for iid in numerical_iids:
+                        etoro_symbol_map.pop(iid, None)
+                    for iid, meta in retry_metadata.items():
+                        if meta.get("symbol"):
+                            etoro_symbol_map[iid] = meta["symbol"]
+                except Exception as exc:
+                    logger.warning("Retry failed to resolve symbols: %s", exc)
+                    for iid in numerical_iids:
+                        etoro_symbol_map.pop(iid, None)
+            else:
+                numerical_iids = [
+                    iid for iid, symbol in etoro_symbol_map.items()
+                    if isinstance(symbol, str) and symbol.isdigit()
+                ]
+                if numerical_iids:
+                    raise InvalidSymbolError(
+                        f"Instrument(s) {numerical_iids} returned numerical symbols after 5 retries"
+                    )
+        except InvalidSymbolError:
+            raise
         except Exception as exc:
             logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
 

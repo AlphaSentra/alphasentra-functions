@@ -2013,6 +2013,10 @@ def get_portfolio_selection_html(
                 const username = usernameCell ? usernameCell.textContent.trim() : '';
 
                 if (investorName) {{
+                    const overlay = document.getElementById('loading-overlay');
+                    if (overlay) {{
+                        overlay.classList.remove('hidden');
+                    }}
                     window.location.href = `/etopi?etoro_username=${{encodeURIComponent(username.replace('@', ''))}}`;
                 }}
             }}

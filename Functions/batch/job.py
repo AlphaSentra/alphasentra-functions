@@ -16,7 +16,6 @@ SCRIPT_ORDER = [
     "port_clear_cache.py",
     "index_function_cache.py",
     "port_selection_cache.py",
-    "port_user_report_cache.py",
 ]
 
 # Maximum allowed runtime per script (seconds). Set to 3 hours to stay well

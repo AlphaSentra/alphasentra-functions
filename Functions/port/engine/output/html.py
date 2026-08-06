@@ -13,6 +13,7 @@ from config import (
     ENABLED_MODULES,
     PORT_INTEL_REPORT_PROMPT,
     PORT_INTEL_SUMMARY_PROMPT,
+    PORTFOLIO_PARENT_URL,
     REPORT_LOGO_SRC,
     PRIMARY_TEXT,
     HEADING_TEXT,
@@ -557,6 +558,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     template = Template(base_template)
     rendered = template.render(
         report_title=title,
+        PORTFOLIO_PARENT_URL=PORTFOLIO_PARENT_URL,
         REPORT_LOGO_SRC=REPORT_LOGO_SRC,
         trades_table=trades_table,
         PRIMARY_TEXT=PRIMARY_TEXT,

@@ -14,6 +14,8 @@ PARENT_APP_ALLOWED_ORIGINS = [
 LOGIN_REDIRECT_URL = "https://app.alphasentra.com/auth"
 REPORT_LOGO_SRC = "https://pbs.twimg.com/profile_images/2074506241968046080/2vSmuz88_400x400.jpg"
 ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
+PORTFOLIO_PARENT_URL = "https://app.alphasentra.com/port"
+FUNCTION_INDEX_PAGE_URL = "https://app.alphasentra.com/index"
 
 # Optimisation default targets
 MAX_POSITION_SIZE = 30.0

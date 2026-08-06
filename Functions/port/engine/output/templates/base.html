@@ -264,7 +264,10 @@
                 transform: translateY(0);
             }
         }
-
+        @keyframes blink-caret {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0; }
+        }
         /* ============================================
         DESIGN TOKENS
         ============================================ */
@@ -2218,8 +2221,10 @@
 
 <body>
     <div style="display:flex;align-items:center;gap:10px;margin-bottom:22px;position:sticky;top:0;z-index:9999;background-color:var(--color-bg-main);">
-        <img src="{{ REPORT_LOGO_SRC }}" height="40" style="flex-shrink:0;" alt="Logo">
-        <h1 style="margin-bottom:0;flex-shrink:0;">{{ report_title }}</h1>
+        <a href="{{ PORTFOLIO_PARENT_URL }}" target="_top" style="display:flex;align-items:center;gap:10px;text-decoration:none;color:inherit;cursor:pointer;">
+            <img src="{{ REPORT_LOGO_SRC }}" height="40" style="flex-shrink:0;" alt="Logo">
+            <h1 style="margin-bottom:0;flex-shrink:0;display:flex;align-items:center;">{{ report_title }}<span style="display:inline-block;width:10px;height:1em;background-color:cyan;margin-left:6px;vertical-align:text-bottom;animation:blink-caret 1s step-end infinite;"></span></h1>
+        </a>
         <div class="tab-nav" style="margin-left:auto;margin-bottom:0;border-bottom:none;padding-bottom:0;background-color:transparent;">
             {% if ENABLED_MODULES.overview %}
             <button class="tab-button active" onclick="openTab(event, 'Overview')">Overview</button>

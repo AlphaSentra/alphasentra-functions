@@ -10,6 +10,7 @@ PARENT_APP_ALLOWED_ORIGINS = [
     "http://localhost:8888",
     "http://127.0.0.1:8888",
     "https://ago-functions.onrender.com",
+    "https://functions.alphasentra.com",
 ]
 LOGIN_REDIRECT_URL = "https://app.alphasentra.com/auth"
 REPORT_LOGO_SRC = "https://pbs.twimg.com/profile_images/2074506241968046080/2vSmuz88_400x400.jpg"

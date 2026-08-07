@@ -141,6 +141,175 @@
     }
 </script>
 
+<style>
+.pi-chart-layout {
+    display: flex;
+    align-items: stretch;
+    margin-bottom: 30px;
+}
+
+.pi-detail-panel {
+    width: 320px;
+    flex-shrink: 0;
+    background-color: var(--color-bg-card);
+    border-radius: 8px;
+    box-shadow: 0 2px 4px var(--shadow-subtle);
+    padding: 20px;
+    margin-right: 20px;
+}
+
+.pi-chart-main {
+    flex: 1;
+    min-width: 0;
+}
+
+.pi-investor-header {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.pi-investor-avatar {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    object-fit: cover;
+    border: 2px solid var(--color-border);
+}
+
+.pi-investor-name {
+    font-weight: bold;
+    color: var(--color-heading);
+    font-size: 1em;
+    margin: 0;
+}
+
+.pi-investor-username {
+    color: var(--color-text-muted);
+    font-size: 0.85em;
+}
+
+.pi-investor-meta {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.pi-meta-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    font-size: 0.9em;
+}
+
+.pi-meta-label {
+    color: var(--color-text-muted);
+}
+
+.pi-meta-value {
+    font-weight: 600;
+    color: var(--color-heading);
+}
+
+.pi-subtype-badge {
+    display: inline-block;
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 0.8em;
+    font-weight: bold;
+    background-color: var(--color-neutral-gray);
+    color: var(--color-text-on-dark);
+}
+
+.pi-about-me {
+    margin-top: 16px;
+    padding-top: 12px;
+    border-top: 1px solid var(--color-border);
+    color: var(--color-text-muted);
+    font-size: 0.85em;
+    line-height: 1.6;
+    white-space: pre-wrap;
+    text-align: justify;
+}
+
+.country-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+    font-size: 0.9em;
+    font-weight: 600;
+    color: var(--color-heading);
+}
+
+.country-flag {
+    font-size: 2.5em;
+    line-height: 1;
+}
+
+.risk-score-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    width: 32px;
+    height: 32px;
+    border-radius: 8px;
+    font-weight: bold;
+    font-size: 0.95em;
+    color: #fff;
+    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+}
+
+.risk-score-1 { background-color: #86efac; color: #14532d; text-shadow: none; }
+.risk-score-2 { background-color: #4ade80; color: #052e16; text-shadow: none; }
+.risk-score-3 { background-color: #22c55e; }
+.risk-score-4 { background-color: #84cc16; }
+.risk-score-5 { background-color: #eab308; }
+.risk-score-6 { background-color: #f97316; }
+.risk-score-7 { background-color: #f97316; }
+.risk-score-8 { background-color: #ef4444; }
+.risk-score-9 { background-color: #dc2626; }
+.risk-score-10 { background-color: #991b1b; }
+
+.copiers-change-positive {
+    background-color: var(--color-success-subtle);
+    color: var(--color-success-indicator);
+    font-weight: 600;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.copiers-change-negative {
+    background-color: var(--color-danger-subtle);
+    color: var(--color-danger-indicator);
+    font-weight: 600;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.copiers-change-neutral {
+    background-color: var(--color-neutral-gray);
+    color: var(--color-text-on-dark);
+    font-weight: 600;
+    font-size: 0.8em;
+    padding: 2px 6px;
+    border-radius: 4px;
+    white-space: nowrap;
+}
+
+.copiers-change-na {
+    color: var(--color-text-muted);
+    font-size: 0.9em;
+    white-space: nowrap;
+}
+
+
+</style>
+
 <div id="Overview" class="tab-content active">
 
 
@@ -159,9 +328,70 @@
           <button onclick="openTab(event, 'Intel'); return false;" style="background-color: var(--color-heading); color: var(--color-text-on-dark); border: none; padding: 6px 12px; cursor: pointer; border-radius: 4px; font-weight: bold; font-size: 0.85em; margin-top: 8px;">read more...</button>
       </div>
   </div>
+
+  {% if pro_investor %}
+  <div class="pi-chart-layout" id="pi-chart-layout">
+      <div class="pi-detail-panel" id="pi-detail-panel">
+          <div class="pi-investor-header">
+              {% if pro_investor.avatarUrl %}
+              <img src="{{ pro_investor.avatarUrl }}" alt="{{ pro_investor.fullName }}" class="pi-investor-avatar">
+              {% endif %}
+              <div>
+                  <p class="pi-investor-name">{{ pro_investor.fullName }}</p>
+                  <p class="pi-investor-username">@{{ pro_investor.userName }}</p>
+              </div>
+          </div>
+          <div class="pi-investor-meta">
+              {% if pro_investor.countryDisplay %}
+              <div class="pi-meta-row">
+                  <span class="pi-meta-label">Country</span>
+                  <span class="pi-meta-value">{{ pro_investor.countryDisplay | safe }}</span>
+              </div>
+              {% endif %}
+              {% if pro_investor.copiers is not none %}
+              <div class="pi-meta-row">
+                  <span class="pi-meta-label">Copiers</span>
+                  <span class="pi-meta-value">{{ pro_investor.copiersChangeHtml | safe }} {{ "{:,}".format(pro_investor.copiers) }}</span>
+              </div>
+              {% endif %}
+              {% if pro_investor.aumTierDesc %}
+              <div class="pi-meta-row">
+                  <span class="pi-meta-label">AUM</span>
+                  <span class="pi-meta-value">{{ pro_investor.aumTierDesc }}</span>
+              </div>
+              {% endif %}
+              {% if pro_investor.riskScore is not none %}
+              <div class="pi-meta-row">
+                  <span class="pi-meta-label">Risk Score</span>
+                  <span class="pi-meta-value">
+                      <span class="risk-score-badge risk-score-{{ pro_investor.riskScore }}">{{ pro_investor.riskScore }}</span>
+                  </span>
+              </div>
+              {% endif %}
+              {% if pro_investor.subType %}
+              <div class="pi-meta-row">
+                  <span class="pi-meta-label">Type</span>
+                  <span class="pi-meta-value"><span class="pi-subtype-badge">{{ pro_investor.subType }}</span></span>
+              </div>
+              {% endif %}
+          </div>
+          {% if pro_investor.aboutMe %}
+          <div class="pi-about-me">
+              {{ pro_investor.aboutMe }}
+          </div>
+          {% endif %}
+      </div>
+      <div class="pi-chart-main">
+          <div class="chart-container">
+              {{ charts.value | safe }}
+          </div>
+      </div>
+  </div>
+  {% else %}
   <div class="chart-container">
       {{ charts.value | safe }}
   </div>
+  {% endif %}
 
   <div class="side-by-side-container">
 <div class="metrics-column">

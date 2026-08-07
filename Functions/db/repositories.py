@@ -138,6 +138,63 @@ def search_etoro_pi_db(query: str, limit: int = 20) -> Dict[str, Any]:
         return {"results": [], "error": str(exc)}
 
 
+def get_pro_investor_by_username(username: str) -> Optional[Dict[str, Any]]:
+    if not username:
+        return None
+    try:
+        db = DatabaseManager().get_client()
+        db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+        coll = db[db_name]["etoro_pi"]
+        doc = coll.find_one(
+            {"userName": {"$regex": f"^{username}$", "$options": "i"}},
+            {
+                "userName": 1,
+                "fullName": 1,
+                "username": 1,
+                "country": 1,
+                "countryId": 1,
+                "copiers": 1,
+                "baseLineCopiers": 1,
+                "gain": 1,
+                "aumTierDesc": 1,
+                "avatars": 1,
+                "subType": 1,
+                "userBio": 1,
+                "riskScore": 1,
+            },
+        )
+        if not doc:
+            return None
+
+        uname = str(doc.get("userName") or doc.get("username") or "").strip()
+        full_name = str(doc.get("fullName") or "").strip() or None
+        avatar_url = None
+        avatars = doc.get("avatars") or []
+        if isinstance(avatars, list) and avatars:
+            avatar_url = avatars[0].get("url") if isinstance(avatars[0], dict) else None
+
+        return {
+            "userName": uname,
+            "username": uname,
+            "fullName": full_name,
+            "displayName": full_name,
+            "avatarUrl": avatar_url,
+            "country": doc.get("country"),
+            "countryId": doc.get("countryId"),
+            "copiers": doc.get("copiers"),
+            "baseLineCopiers": doc.get("baseLineCopiers"),
+            "gain": doc.get("gain"),
+            "aumTierDesc": doc.get("aumTierDesc"),
+            "aumValue": None,
+            "subType": doc.get("subType") or "",
+            "isPi": doc.get("isPi", True),
+            "aboutMe": (doc.get("userBio") or {}).get("aboutMe"),
+            "riskScore": doc.get("riskScore"),
+        }
+    except Exception:
+        return None
+
+
 def get_ai_settings() -> Optional[Dict[str, Any]]:
     try:
         db = DatabaseManager().get_client()

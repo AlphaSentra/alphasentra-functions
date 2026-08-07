@@ -290,6 +290,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
     returns_series = kwargs.get('returns_series')
     benchmark_ticker = kwargs.get('benchmark_ticker')
     config = kwargs.get('config', {})
+    pro_investor = kwargs.get('pro_investor')
 
     intel_commentary_text = ""
     overview_ai_interpretation = ""
@@ -344,6 +345,7 @@ def generate_html_report(metrics, charts, title, start, **kwargs):
             inception_date=start,
             include_yield=include_yield,
             overview_ai_interpretation=overview_ai_interpretation,
+            pro_investor=pro_investor,
         )
     else:
         tabs_content += '<div id="Overview" class="tab-content"></div>'

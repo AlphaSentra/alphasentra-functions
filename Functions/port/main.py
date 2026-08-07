@@ -15,6 +15,7 @@ from typing import Any, Dict, Optional, Tuple
 
 import pandas as pd
 import argparse
+import requests
 import time
 
 # Configure logging
@@ -29,7 +30,146 @@ from engine.analyzer import PortfolioAnalyzer, PortfolioFunctionsError, Unmapped
 from data.provider_factory import get_market_data_provider
 from engine.output.html import generate_html_report, generate_ai_content_fragment
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
+from Functions.db.repositories import get_pro_investor_by_username
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+
+_ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
+
+_COUNTRY_INFO_CACHE: Dict[str, Optional[Dict[str, str]]] = {}
+_COUNTRIES_API_BASE = "https://countries.dev"
+_REGIONAL_INDICATOR_BASE = 0x1F1E6
+
+
+def _load_etoro_country_map() -> None:
+    csv_path = Path(__file__).resolve().parent.parent / "etoro" / "countries.csv"
+    if not csv_path.is_file():
+        return
+    try:
+        with open(csv_path, newline="", encoding="utf-8") as fh:
+            import csv
+            reader = csv.DictReader(fh)
+            for row in reader:
+                etoro_id = (row.get("ETORO_COUNTRYID") or "").strip()
+                iso_code = (row.get("ISO_CODE") or "").strip()
+                if etoro_id and iso_code:
+                    _ETORO_COUNTRY_MAP[etoro_id] = {"isoCode": iso_code}
+    except Exception:
+        pass
+
+
+_load_etoro_country_map()
+
+
+def _flag_emoji_from_alpha2(code: str) -> str:
+    alpha2 = str(code).upper()
+    if len(alpha2) != 2 or not alpha2.isalpha():
+        return ""
+    try:
+        return "".join(chr(_REGIONAL_INDICATOR_BASE + ord(ch) - ord("A")) for ch in alpha2)
+    except Exception:
+        return ""
+
+
+def _get_country_info(code: str) -> Optional[Dict[str, str]]:
+    if not code:
+        return None
+    code = str(code)
+    if code in _COUNTRY_INFO_CACHE:
+        cached = _COUNTRY_INFO_CACHE[code]
+        if cached is not None:
+            return cached
+        return None
+
+    is_numeric = code.isdigit()
+    endpoint = "numericcode" if is_numeric else "alpha"
+    url = f"{_COUNTRIES_API_BASE}/{endpoint}/{code}"
+
+    try:
+        resp = requests.get(url, params={"fields": "name,alpha2Code,flag"}, timeout=10)
+        if resp.status_code == 200:
+            data = resp.json()
+            alpha2 = data.get("alpha2Code", "")
+            flag = data.get("flag", "")
+            if not flag and len(alpha2) == 2:
+                flag = _flag_emoji_from_alpha2(alpha2)
+            result = {
+                "flag": flag,
+                "alpha2": alpha2,
+            }
+            _COUNTRY_INFO_CACHE[code] = result
+            return result
+    except requests.RequestException:
+        pass
+
+    return None
+
+
+def _country_html(country: Optional[str]) -> str:
+    if not country:
+        return "<span class=\"country-badge\">N/A</span>"
+    country = str(country)
+
+    mapped = _ETORO_COUNTRY_MAP.get(country)
+    if mapped:
+        country = mapped["isoCode"]
+
+    info = _get_country_info(country)
+    alpha2 = country.upper() if not country.isdigit() else ""
+    flag = ""
+    if info:
+        flag = info.get("flag", "")
+        alpha2 = info.get("alpha2", alpha2) or alpha2
+
+    if not flag and len(alpha2) == 2:
+        flag = _flag_emoji_from_alpha2(alpha2)
+
+    display = alpha2 or country.upper()
+    return f"<span class=\"country-badge\"><span class=\"country-flag\">{flag}</span>{display}</span>"
+
+
+def _normalize_pro_investor_country(pi: Optional[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+    if not pi:
+        return pi
+    pi = dict(pi)
+
+    country_id = pi.get("countryId")
+
+    if country_id is not None:
+        mapped = _ETORO_COUNTRY_MAP.get(str(country_id))
+        if mapped:
+            pi["country"] = mapped["isoCode"]
+        else:
+            pi["country"] = str(country_id)
+
+    if pi.get("country"):
+        pi["countryDisplay"] = _country_html(pi["country"])
+
+    if pi.get("copiers") is not None and pi.get("baseLineCopiers") is not None:
+        pi["copiersChangeHtml"] = _copiers_change_html(pi["copiers"], pi["baseLineCopiers"])
+
+    return pi
+
+
+def _safe_int(val: Any) -> Optional[int]:
+    try:
+        return int(val)
+    except (ValueError, TypeError):
+        return None
+
+
+def _copiers_change_html(current: Optional[int], baseline: Optional[int]) -> str:
+    current_val = _safe_int(current)
+    baseline_val = _safe_int(baseline)
+    if current_val is None or baseline_val is None or baseline_val == 0:
+        return ""
+
+    change_pct = ((current_val - baseline_val) / baseline_val) * 100
+    sign = "+" if change_pct >= 0 else ""
+    arrow = "&#x25B2;" if change_pct >= 0 else "&#x25BC;"
+    text = f"{arrow} {sign}{change_pct:.1f}% 1M"
+
+    cls = "copiers-change-positive" if change_pct > 0 else "copiers-change-negative" if change_pct < 0 else "copiers-change-neutral"
+    return f"<span class=\"{cls}\">{text}</span>"
 
 
 def _analyzer_cache_key(etoro_username: str, benchmark_ticker: str, etoro_cid: str) -> str:
@@ -439,6 +579,8 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     positions = getattr(analyzer, 'positions', pd.DataFrame())
     prices = analyzer.prices
 
+    pro_investor = _normalize_pro_investor_country(get_pro_investor_by_username(etoro_username))
+
     logger.info("Generating HTML report...")
     effective_cached_ai = cached_ai_content
     ai_content = None
@@ -471,6 +613,7 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         returns_series=analyzer.returns.get('total'),
         benchmark_ticker=analyzer.benchmark_ticker,
         cached_ai_content=effective_cached_ai,
+        pro_investor=pro_investor,
     )
 
     _log_report_time("Portfolio HTML report", report_start)
@@ -579,6 +722,7 @@ def main() -> int:
         holdings_df = getattr(analyzer, 'holdings_df', pd.DataFrame())
         positions = getattr(analyzer, 'positions', pd.DataFrame())
         prices = analyzer.prices
+        pro_investor = _normalize_pro_investor_country(get_pro_investor_by_username(config.get('etoro_username', '')))
 
         # Generate HTML report
         logger.info("Generating HTML report...")
@@ -598,6 +742,7 @@ def main() -> int:
             config=config,
             returns_series=analyzer.returns.get('total'),
             benchmark_ticker=analyzer.benchmark_ticker,
+            pro_investor=pro_investor,
         )
 
         logger.info("Analysis complete.")

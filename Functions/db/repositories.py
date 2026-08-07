@@ -189,6 +189,7 @@ def get_pro_investor_by_username(username: str) -> Optional[Dict[str, Any]]:
             "subType": doc.get("subType") or "",
             "isPi": doc.get("isPi", True),
             "aboutMe": (doc.get("userBio") or {}).get("aboutMe"),
+            "aboutMeShort": (doc.get("userBio") or {}).get("aboutMeShort"),
             "riskScore": doc.get("riskScore"),
         }
     except Exception:

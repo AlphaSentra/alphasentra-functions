@@ -271,6 +271,13 @@
 .risk-score-9 { background-color: #dc2626; }
 .risk-score-10 { background-color: #991b1b; }
 
+.pi-about-me-short {
+    font-weight: bold;
+    color: var(--color-heading);
+    font-size: 1em;
+    margin: 0 0 8px 0;
+}
+
 .copiers-change-positive {
     background-color: var(--color-success-subtle);
     color: var(--color-success-indicator);
@@ -375,8 +382,11 @@
               </div>
               {% endif %}
           </div>
-          {% if pro_investor.aboutMe %}
+          {% if pro_investor.aboutMeShort or pro_investor.aboutMe %}
           <div class="pi-about-me">
+              {% if pro_investor.aboutMeShort %}
+              <p class="pi-about-me-short">{{ pro_investor.aboutMeShort }}</p>
+              {% endif %}
               {{ pro_investor.aboutMe }}
           </div>
           {% endif %}

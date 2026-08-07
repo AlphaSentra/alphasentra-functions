@@ -247,29 +247,48 @@
     line-height: 1;
 }
 
-.risk-score-badge {
-    display: inline-flex;
-    align-items: center;
-    justify-content: center;
-    width: 32px;
-    height: 32px;
-    border-radius: 8px;
-    font-weight: bold;
-    font-size: 0.95em;
-    color: #fff;
-    text-shadow: 0 1px 2px rgba(0, 0, 0, 0.25);
+.pi-risk-scale-wrap {
+    margin-top: 6px;
+    margin-bottom: 12px;
 }
 
-.risk-score-1 { background-color: #86efac; color: #14532d; text-shadow: none; }
-.risk-score-2 { background-color: #4ade80; color: #052e16; text-shadow: none; }
-.risk-score-3 { background-color: #22c55e; }
-.risk-score-4 { background-color: #84cc16; }
-.risk-score-5 { background-color: #eab308; }
-.risk-score-6 { background-color: #f97316; }
-.risk-score-7 { background-color: #f97316; }
-.risk-score-8 { background-color: #ef4444; }
-.risk-score-9 { background-color: #dc2626; }
-.risk-score-10 { background-color: #991b1b; }
+.pi-risk-scale {
+    position: relative;
+    height: 10px;
+    border-radius: 5px;
+    background: linear-gradient(to right, #86efac, #4ade80, #22c55e, #84cc16, #eab308, #f97316, #ef4444, #991b1b);
+    overflow: visible;
+}
+
+.pi-risk-scale-fill {
+    position: absolute;
+    top: 0;
+    bottom: 0;
+    width: 3px;
+    background-color: #fff;
+    transform: translateX(-50%);
+    pointer-events: none;
+}
+
+.pi-risk-scale-arrow {
+    position: absolute;
+    top: -6px;
+    width: 0;
+    height: 0;
+    transform: translateX(-50%);
+    border-left: 6px solid transparent;
+    border-right: 6px solid transparent;
+    border-top: 8px solid #fff;
+    filter: drop-shadow(0 1px 2px rgba(0, 0, 0, 0.35));
+}
+
+.pi-risk-labels {
+    display: flex;
+    justify-content: space-between;
+    font-size: 0.75em;
+    color: var(--color-text-muted);
+    margin-top: 4px;
+}
 
 .pi-about-me-short {
     font-weight: bold;
@@ -370,9 +389,18 @@
               {% if pro_investor.riskScore is not none %}
               <div class="pi-meta-row">
                   <span class="pi-meta-label">Risk Score</span>
-                  <span class="pi-meta-value">
-                      <span class="risk-score-badge risk-score-{{ pro_investor.riskScore }}">{{ pro_investor.riskScore }}</span>
-                  </span>
+                  <span class="pi-meta-value">{{ pro_investor.riskScore }}</span>
+              </div>
+              <div class="pi-risk-scale-wrap">
+                  <div class="pi-risk-scale">
+                      <div class="pi-risk-scale-fill" style="left: {{ ((pro_investor.riskScore - 1) / 9) * 100 }}%;"></div>
+                      <div class="pi-risk-scale-arrow" style="left: {{ ((pro_investor.riskScore - 1) / 9) * 100 }}%;"></div>
+                  </div>
+                  <div class="pi-risk-labels">
+                      <span>1</span>
+                      <span>5</span>
+                      <span>10</span>
+                  </div>
               </div>
               {% endif %}
               {% if pro_investor.subType %}

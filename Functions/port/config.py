@@ -8,6 +8,7 @@ PARENT_APP_DOMAIN = "alphasentra.com"
 PARENT_APP_ALLOWED_ORIGINS = [
     "https://app.alphasentra.com",
     "http://localhost:8888",
+    "http://localhost:5173",
     "http://127.0.0.1:8888",
     "https://ago-functions.onrender.com",
     "https://functions.alphasentra.com",

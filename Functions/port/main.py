@@ -169,7 +169,7 @@ def _copiers_change_html(current: Optional[int], baseline: Optional[int]) -> str
     arrow = "&#x25B2;" if change_pct >= 0 else "&#x25BC;"
     text = f"{arrow} {sign}{change_pct:.1f}% 1M"
 
-    cls = "copiers-change-positive" if change_pct > 0 else "copiers-change-negative" if change_pct < 0 else "copiers-change-neutral"
+    cls = "diff-pill positive" if change_pct > 0 else "diff-pill negative" if change_pct < 0 else "diff-pill neutral"
     return f"<span class=\"{cls}\">{text}</span>"
 
 

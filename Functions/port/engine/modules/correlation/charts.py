@@ -104,7 +104,7 @@ def generate_rolling_correlation_chart(ts_data):
         height=400
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
 
 

@@ -171,7 +171,7 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
         layout_args['yaxis']['range'] = y_range
 
     fig_ts.update_layout(**layout_args)
-    ts_chart_html = fig_ts.to_html(full_html=False, include_plotlyjs=False)
+    ts_chart_html = fig_ts.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
     def make_weight_pill(diff):
         if abs(diff) < 0.005:

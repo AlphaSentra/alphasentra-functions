@@ -5,7 +5,7 @@ pandas
 numpy
 yfinance
 scipy
-plotly
+plotly  # after install/upgrade: make sync-plotlyjs
 jinja2
 openpyxl
 statsmodels

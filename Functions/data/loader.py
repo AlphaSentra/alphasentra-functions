@@ -8,7 +8,7 @@ from typing import Any, Dict, Optional
 
 import pandas as pd
 
-from Functions.etoro.client import EToroClientError, ETPublicClient
+from Functions.etoro.client import EToroClientError, ETPublicClient, InvalidSymbolError
 from Functions.etoro.auth import get_random_private_key
 
 logger = logging.getLogger(__name__)
@@ -133,6 +133,42 @@ def load_transactions_from_etoro(
             unique_ids = sorted({str(i) for i in instrument_ids})
             metadata = resolved_client.resolve_instrument_metadata(unique_ids)
 
+            for attempt in range(5):
+                numerical_iids = [
+                    iid for iid, meta in metadata.items()
+                    if isinstance(meta.get("symbol"), str) and meta["symbol"].isdigit()
+                ]
+                if not numerical_iids:
+                    break
+                logger.warning(
+                    "Numerical symbol(s) detected in trade history for instrument(s) %s (attempt %d/5). "
+                    "Clearing cache and retrying...",
+                    numerical_iids, attempt + 1,
+                )
+                from Functions.etoro.client import _remove_from_instrument_cache
+                for iid in numerical_iids:
+                    _remove_from_instrument_cache(iid)
+                try:
+                    retry_metadata = resolved_client.resolve_instrument_metadata(numerical_iids)
+                    for iid in numerical_iids:
+                        metadata.pop(iid, None)
+                    for iid, meta in retry_metadata.items():
+                        if meta.get("symbol"):
+                            metadata[iid] = meta
+                except Exception as exc:
+                    logger.warning("Retry failed to resolve trade history symbols: %s", exc)
+                    for iid in numerical_iids:
+                        metadata.pop(iid, None)
+            else:
+                numerical_iids = [
+                    iid for iid, meta in metadata.items()
+                    if isinstance(meta.get("symbol"), str) and meta["symbol"].isdigit()
+                ]
+                if numerical_iids:
+                    raise InvalidSymbolError(
+                        f"Trade history instrument(s) {numerical_iids} returned numerical symbols after 5 retries"
+                    )
+
         if metadata:
             df["Ticker"] = df["_instrument_id"].map(lambda iid: metadata.get(str(iid), {}).get("symbol", str(iid)))
             df["Name"] = df["_instrument_id"].map(lambda iid: metadata.get(str(iid), {}).get("name", ""))
@@ -153,6 +189,8 @@ def load_transactions_from_etoro(
         logger.info("Loaded %d eToro trade history records for %s.", len(df), username)
         return df
 
+    except InvalidSymbolError:
+        raise
     except EToroClientError as exc:
         logger.warning("Failed to load eToro trade history for %s: %s", username, exc)
         return pd.DataFrame()

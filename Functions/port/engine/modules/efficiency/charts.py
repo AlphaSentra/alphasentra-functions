@@ -129,7 +129,7 @@ def generate_rolling_metrics_line_chart(returns_series, benchmark_returns, risk_
         )
     )
     
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
 def generate_3d_risk_trajectory(returns_series, benchmark_returns, risk_free_rate=0.02, calendar_days=365, analyzer_metrics=None):
     """

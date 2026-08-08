@@ -563,7 +563,7 @@ def generate_main_performance_chart(ts_data, benchmark_ticker, annual_yield):
         hovermode="x unified",
     )
     chart_div_id = "portfolio-performance-chart"
-    chart_html = fig.to_html(full_html=False, include_plotlyjs=False, div_id=chart_div_id)
+    chart_html = fig.to_html(full_html=False, include_plotlyjs=False, div_id=chart_div_id, config={'responsive': True, 'auto_margin': False})
 
     # JavaScript to switch series
     json_period_data = json.dumps(precalculated_data)

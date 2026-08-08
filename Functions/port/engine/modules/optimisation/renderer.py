@@ -88,7 +88,7 @@ def render_optimisation_tab(prices_df, portfolio_df, benchmark_series, sector_in
         )
     )
     
-    chart_html = fig.to_html(full_html=False, include_plotlyjs=False)
+    chart_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
     # 2b. Generate timeseries comparison chart
     dates = opt_results.get('dates', [])

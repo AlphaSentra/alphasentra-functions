@@ -453,7 +453,7 @@ def generate_timeframe_correlation_panel(ts_data):
     )
 
     # Generate Plotly HTML
-    plotly_html = fig.to_html(full_html=False, include_plotlyjs=False)
+    plotly_html = fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
     # Create Bloomberg-style metric cards
     cards_html = '<div class="term-cards-row">'
@@ -738,7 +738,7 @@ def generate_correlation_cluster_network(corr_matrix, n_clusters=None):
             paper_bgcolor=BG_CHART,
         )
 
-        return fig.to_html(full_html=False, include_plotlyjs=False)
+        return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
     except Exception as e:
         return f"<p class=\"corr-insufficient-pad-40\">Cluster analysis unavailable: {str(e)}</p>"

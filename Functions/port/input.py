@@ -595,12 +595,18 @@ def handle_portfolio_input():
                 etoro_cid=etoro_cid,
                 return_ai_content=True,
             )
+            if html is None:
+                return make_response("", 204)
+
             static_html = generate_portfolio_html(
                 etoro_username=etoro_username,
                 benchmark_ticker=benchmark_ticker,
                 etoro_cid=etoro_cid,
                 skip_ai=True,
             )
+            if static_html is None:
+                return make_response("", 204)
+
             set_portfolio_cache_to_mongo("portfolio_report_cache", static_key, static_html, ext=".html", ttl_seconds=_REPORT_TTL)
             set_portfolio_cache_to_mongo("portfolio_report_cache", ai_key, ai_content, ext=".json", ttl_seconds=_REPORT_TTL)
             set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, html, ext=".html", ttl_seconds=_REPORT_TTL)

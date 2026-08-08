@@ -270,11 +270,11 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
-                    log_error(
-                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                    log_warning(
+                        f"Skipping report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to invalid symbols: {exc}",
                     )
-                    return f"error:{username}"
+                    return f"skip:{username}"
             except Exception as exc:
                 if attempt < MAX_REPORT_RETRIES:
                     log_error(

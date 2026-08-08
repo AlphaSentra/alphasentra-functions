@@ -102,6 +102,7 @@ with app.app_context():
             return f"skip:{username}"
 
         from Functions.port.engine.analyzer import UnmappedInstrumentsError
+        from Functions.etoro.client import InvalidSymbolError
 
         for attempt in range(MAX_REPORT_RETRIES + 1):
             try:
@@ -192,6 +193,22 @@ with app.app_context():
                         "PORT_USER_REPORT_UNMAPPED_FAIL",
                     )
                     return f"error:{username}"
+            except InvalidSymbolError as exc:
+                if attempt < MAX_REPORT_RETRIES:
+                    log_warning(
+                        f"Attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1} for {username}: "
+                        f"Invalid symbol from eToro API: {exc}. "
+                        f"Retrying in {REPORT_RETRY_BASE_DELAY * (2 ** attempt)}s...",
+                        "PORT_USER_REPORT_INVALID_SYMBOL_RETRY",
+                    )
+                    time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
+                else:
+                    log_warning(
+                        f"Skipping report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                        f"due to invalid symbols: {exc}",
+                        "PORT_USER_REPORT_INVALID_SYMBOL_SKIP",
+                    )
+                    return f"skip:{username}"
             except Exception as exc:
                 if attempt < MAX_REPORT_RETRIES:
                     log_error(

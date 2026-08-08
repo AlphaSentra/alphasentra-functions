@@ -27,6 +27,7 @@ logger = logging.getLogger(__name__)
 
 # Import our modules
 from engine.analyzer import PortfolioAnalyzer, PortfolioFunctionsError, UnmappedInstrumentsError
+from Functions.etoro.client import InvalidSymbolError
 from data.provider_factory import get_market_data_provider
 from engine.output.html import generate_html_report, generate_ai_content_fragment
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
@@ -542,6 +543,11 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
             metrics, charts, start = analyzer.run_analysis()
         except UnmappedInstrumentsError:
             raise
+        except InvalidSymbolError as exc:
+            logger.warning("Skipping report generation for username=%s: %s", etoro_username, exc)
+            if return_ai_content:
+                return None, None
+            return None
         except PortfolioFunctionsError as exc:
             logger.error("PortfolioFunctionsError for username=%s: %s", etoro_username, exc)
             error_html = _ERROR_HTML.format(

@@ -92,7 +92,7 @@ def generate_monte_carlo_chart(mc_simulations):
         yaxis=dict(showgrid=True, gridcolor=MC_GRID, linecolor=MC_GRID)
     )
 
-    return fig.to_html(full_html=False, include_plotlyjs=False)
+    return fig.to_html(full_html=False, include_plotlyjs=False, config={'responsive': True, 'auto_margin': False})
 
 
 

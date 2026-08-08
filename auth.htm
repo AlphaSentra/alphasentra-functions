@@ -105,6 +105,7 @@
       </div>
     </div>
     <button id="authBtn">Authenticate & Load Iframe</button>
+    <button id="logoutBtn" class="secondary">Logout</button>
     <button id="clearBtn" class="secondary">Clear Iframe</button>
 
     <div class="status" id="status">
@@ -251,6 +252,29 @@
     }
 
     document.getElementById('authBtn').addEventListener('click', authenticateAndLoad);
+    document.getElementById('logoutBtn').addEventListener('click', async () => {
+      const baseUrl = document.getElementById('baseUrl').value.trim().replace(/\/$/, '');
+      const logoutUrl = `${baseUrl}/logout`;
+      setStatus(`POST ${logoutUrl}\nWaiting for response...`);
+      try {
+        const response = await fetch(logoutUrl, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          credentials: 'include',
+        });
+        const text = await response.text();
+        let body;
+        try { body = JSON.parse(text); } catch { body = text; }
+        const message = `POST ${logoutUrl}\nStatus: ${response.status} ${response.statusText}\nBody: ${JSON.stringify(body)}`;
+        if (response.ok && body && body.ok) {
+          setStatus(message + '\n\nCookie cleared. You will need to re-authenticate.', 'success');
+        } else {
+          setStatus(message, 'error');
+        }
+      } catch (err) {
+        setStatus(`Request failed: ${err.message}`, 'error');
+      }
+    });
     document.getElementById('clearBtn').addEventListener('click', () => {
       iframe.style.display = 'none';
       iframe.src = 'about:blank';

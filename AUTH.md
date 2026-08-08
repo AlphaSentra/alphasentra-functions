@@ -4,7 +4,7 @@ This document describes how the parent app authenticates with the Flask Function
 
 ## Overview
 
-The Flask Function app is embedded inside the parent app (`app.alphasentra.com`). Every route in the Flask app requires authentication. The parent app authenticates once by POSTing the `etoro_authuser` to `/auth`, which sets a 24-hour cookie. Subsequent iframe requests automatically include that cookie.
+The Flask Function app is embedded inside the parent app (`app.alphasentra.com`). Every route in the Flask app requires authentication. The parent app authenticates once by POSTing the `etoro_authuser` to `/auth`, which sets a 24-hour cookie. Subsequent iframe requests automatically include that cookie. To invalidate the session, the parent app POSTs to `/logout`, which clears the cookie.
 
 There is no login form in this app. Unauthenticated requests receive `403 Unauthorized`, **unless** the requested page is already cached — in that case, the cached content is served directly without requiring the auth cookie.
 
@@ -29,6 +29,10 @@ Flask app validates cookie → serves content
     │ 3a. No cookie, but page is cached → serves cached content
     ▼
 User sees cached page without re-authenticating
+    │
+    │ 4. POST /logout → clears etoro_authuser cookie
+    ▼
+Cookie removed → subsequent requests require re-authentication
 ```
 
 ```mermaid
@@ -49,11 +53,18 @@ flowchart TD
     N --> O[Break out of iframe<br/>Redirect parent to LOGIN_REDIRECT_URL]
     M --> P[Serve cached content]
     K --> Q[Serve fresh content]
+    Q --> R[User logs out]
+    R --> S{POST /logout}
+    S -->|Origin allowed| T[Flask clears cookie]
+    S -->|Origin blocked| U[403 Unauthorized origin]
+    T --> V[Cookie deleted]
+    V --> W[Subsequent requests require re-auth]
 ```
 
 ## Security
 
 - `/auth` accepts requests only from origins matching `PARENT_APP_ALLOWED_ORIGINS` or `*.alphasentra.com`
+- `/logout` accepts requests only from origins matching `PARENT_APP_ALLOWED_ORIGINS` or `*.alphasentra.com`
 - Cookie policy is chosen automatically per request:
   - Same-origin → `SameSite=Lax`
   - Cross-origin → `SameSite=None; Secure`
@@ -274,6 +285,36 @@ When deploying with HTTPS and cross-origin iframe:
 
 ## API Reference
 
+### POST /logout
+
+Clears the `etoro_authuser` cookie and ends the session.
+
+**Request**
+
+```
+POST /logout
+Origin: https://app.alphasentra.com
+```
+
+**Success response**
+
+```
+HTTP 200
+Set-Cookie: etoro_authuser=; Max-Age=0; Path=/; SameSite=None; Secure
+```
+
+```json
+{
+  "ok": true
+}
+```
+
+**Error responses**
+
+```
+HTTP 403 - origin not allowed
+```
+
 ### POST /auth
 
 Authenticates and sets the `etoro_authuser` cookie.
@@ -310,7 +351,7 @@ HTTP 403 - origin not allowed
 
 ### Protected routes
 
-All routes except `/auth`, `/etopi/check_cache`, and `/test_iframe_auth.html` require the `etoro_authuser` cookie.
+All routes except `/auth`, `/logout`, `/etopi/check_cache`, and `/test_iframe_auth.html` require the `etoro_authuser` cookie.
 
 ```
 GET /etopi
@@ -384,5 +425,5 @@ When loaded inside an iframe, this response breaks out of the iframe and redirec
 - Same-origin cookies work with `SameSite=Lax` on HTTP
 
 **CORS errors**
-- The Flask app adds CORS headers automatically for `/auth`, `/etopi/check_cache`, and `/static/*`
+- The Flask app adds CORS headers automatically for `/auth`, `/logout`, `/etopi/check_cache`, and `/static/*`
 - Ensure the parent app sends the correct `Origin` header

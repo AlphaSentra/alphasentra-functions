@@ -94,6 +94,8 @@ The app will start on `http://localhost:8888`.
 | Route | Method | Description |
 |-------|--------|-------------|
 | `/` | GET | Function Index — auto-generated list of all registered routes |
+| `/auth` | POST | Set `etoro_authuser` cookie (24h). Origin required. |
+| `/logout` | POST | Clear `etoro_authuser` cookie. Origin required. |
 | `/etopi` | GET/POST | Portfolio & Risk Analytics (rendered live). **Auth required**, but cached reports bypass auth (TTL 20h). |
 | `/port` | GET | Portfolio Investor Selection — Pro Investor ranking table with country resolution. **Auth required**, but cached page bypasses auth (TTL 24h). |
 | `/eqs` | GET | Stocks AI Screener (rendered live) |

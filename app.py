@@ -53,6 +53,7 @@ def _parse_auth_cookie(value):
 def _apply_cors_and_auth(response):
     public_paths = (
         '/auth',
+        '/logout',
         '/etopi/check_cache',
         '/port/search_investors',
     )
@@ -70,6 +71,7 @@ def _apply_cors_and_auth(response):
 def _require_etoro_auth():
     public_paths = (
         '/auth',
+        '/logout',
         '/etopi/check_cache',
         '/port/search_investors',
         '/auth.htm',
@@ -261,6 +263,27 @@ def _is_allowed_origin():
     if not hostname:
         return False
     return hostname == PARENT_APP_DOMAIN or hostname.endswith('.' + PARENT_APP_DOMAIN)
+
+@app.route('/logout', methods=['POST', 'OPTIONS'])
+def logout():
+    if request.method == 'OPTIONS':
+        return make_response('', 204)
+
+    if not _is_allowed_origin():
+        return jsonify({
+            'ok': False,
+            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/port/config.py"
+        }), 403
+
+    policy = _get_cookie_policy()
+    resp = jsonify({'ok': True})
+    resp.delete_cookie(
+        'etoro_authuser',
+        path='/',
+        samesite=policy['samesite'],
+        secure=policy['secure'],
+    )
+    return resp
 
 @app.route('/auth', methods=['POST', 'OPTIONS'])
 def auth():

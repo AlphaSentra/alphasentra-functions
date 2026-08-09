@@ -83,21 +83,6 @@ with app.app_context():
             except Exception as exc:
                 log_info(f"Failed to fetch rankings for combo {combo}: {exc}")
 
-        for item in merged or []:
-            username = None
-            if "userName" in item and str(item["userName"]).strip():
-                username = str(item["userName"]).strip()
-            elif "cid" in item:
-                username = str(item["cid"]).strip()
-            if username and username not in seen:
-                seen.add(username)
-                all_usernames.append(username)
-                if len(all_usernames) >= 20:
-                    break
-
-        if len(all_usernames) >= 20:
-            break
-
         # Cache full unauthenticated page HTML (shows sign-in prompt)
         try:
             g.etoro_authuser = None
@@ -114,6 +99,21 @@ with app.app_context():
                 log_info(f"Cached authenticated /port page for {USERNAME} combo {combo} ({len(html)} chars)")
             except Exception as exc:
                 log_info(f"Failed to cache authenticated page for {USERNAME} combo {combo}: {exc}")
+
+        for item in merged or []:
+            username = None
+            if "userName" in item and str(item["userName"]).strip():
+                username = str(item["userName"]).strip()
+            elif "cid" in item:
+                username = str(item["cid"]).strip()
+            if username and username not in seen:
+                seen.add(username)
+                all_usernames.append(username)
+                if len(all_usernames) >= 20:
+                    break
+
+        if len(all_usernames) >= 20:
+            break
 
     set_portfolio_cache_to_mongo("portfolio_selection_cache", "portfolio_selection_top_investors", all_usernames, ext=".json", ttl_seconds=_ETORO_PI_TTL)
     log_info(f"Cached {len(all_usernames)} top investor usernames to MongoDB.")

@@ -134,7 +134,7 @@ def _unauthorized_response():
         body {{
             margin: 0;
             padding: 0;
-            font-family: system-ui, -apple-system, sans-serif;
+            font-family: monospace;
             background-color: #000000;
             color: #e2e8f0;
             display: flex;

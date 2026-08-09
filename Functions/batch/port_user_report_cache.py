@@ -1,9 +1,13 @@
-"""Long-lived worker to pre-cache portfolio reports for active users.
+"""Long-lived worker to pre-cache portfolio reports and /port pages for active users.
 
 Queries the alphasentra-core ``users`` collection for accounts that have a
 valid ``etoro_username`` and a non-expired ``expiry_subscription``, then
-generates and caches the full portfolio HTML report for each user when it
-is not already present in the ``portfolio_report_cache`` collection.
+generates and caches:
+
+  * The full portfolio HTML report (and its static / AI variants) in the
+    ``portfolio_report_cache`` collection.
+  * The authenticated ``/port`` selection page in the
+    ``portfolio_selection_cache`` collection.
 
 This script runs indefinitely, polling every ``POLL_INTERVAL_SECONDS`` for
 newly created users or users whose cache is missing. It is intended to be
@@ -36,7 +40,7 @@ sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info, log_error, log_warning
-from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
 POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "30"))
 
@@ -52,14 +56,16 @@ def _handle_signal(signum, frame):
 signal.signal(signal.SIGINT, _handle_signal)
 signal.signal(signal.SIGTERM, _handle_signal)
 
-# ``generate_portfolio_html`` imports Flask-dependent modules under the hood,
-# so we must provide an application context before importing it.
-from flask import Flask
+# ``generate_portfolio_html`` and ``get_portfolio_selection_html`` both
+# import Flask-dependent modules under the hood, so we must provide an
+# application context before importing them.
+from flask import Flask, g
 
 app = Flask(__name__)
 
 with app.app_context():
     from Functions.port.main import generate_portfolio_html
+    from Functions.port.selection import _selection_cache_suffix, get_portfolio_selection_html
 
     # ------------------------------------------------------------------
     # 1. Initialize long-lived resources (created once, reused forever).
@@ -68,7 +74,7 @@ with app.app_context():
     db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
     coll = db[db_name]["users"]
 
-    log_info(f"Starting infinite polling for portfolio report caching (interval: {POLL_INTERVAL}s)")
+    log_info(f"Starting infinite polling for portfolio report and /port page caching (interval: {POLL_INTERVAL}s)")
 
     # ------------------------------------------------------------------
     # 2. Cache generation logic per user.
@@ -77,7 +83,11 @@ with app.app_context():
     REPORT_RETRY_BASE_DELAY = 15
 
     def _cache_report(username: str) -> str:
-        """Generate and cache portfolio artifacts for a single user.
+        """Generate and cache portfolio artifacts and the /port selection page for a single user.
+
+        Report artifacts include the AI-enhanced HTML report, a static HTML variant,
+        and the raw AI content payload. The /port selection page is also warmed
+        regardless of whether the report generation succeeds, fails, or is skipped.
 
         Args:
             username: eToro username to process.
@@ -99,6 +109,7 @@ with app.app_context():
             ext=".html",
         )
         if cached_html is not None:
+            _cache_selection_page(username)
             return f"skip:{username}"
 
         from Functions.port.engine.analyzer import UnmappedInstrumentsError
@@ -140,6 +151,7 @@ with app.app_context():
                         ext=".html",
                         ttl_seconds=_REPORT_TTL,
                     )
+                    _cache_selection_page(username)
                     return f"ok:{username}"
 
                 report_html, ai_content = generate_portfolio_html(
@@ -176,6 +188,7 @@ with app.app_context():
                     ext=".json",
                     ttl_seconds=_REPORT_TTL,
                 )
+                _cache_selection_page(username)
                 return f"ok:{username}"
             except UnmappedInstrumentsError as exc:
                 if attempt < MAX_REPORT_RETRIES:
@@ -192,6 +205,7 @@ with app.app_context():
                         f"due to unmapped instruments: {exc.unmapped_ids}",
                         "PORT_USER_REPORT_UNMAPPED_FAIL",
                     )
+                    _cache_selection_page(username)
                     return f"error:{username}"
             except InvalidSymbolError as exc:
                 if attempt < MAX_REPORT_RETRIES:
@@ -208,6 +222,7 @@ with app.app_context():
                         f"due to invalid symbols: {exc}",
                         "PORT_USER_REPORT_INVALID_SYMBOL_SKIP",
                     )
+                    _cache_selection_page(username)
                     return f"skip:{username}"
             except Exception as exc:
                 if attempt < MAX_REPORT_RETRIES:
@@ -222,9 +237,55 @@ with app.app_context():
                         f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
                         "PORT_USER_REPORT_FAIL",
                     )
+                    _cache_selection_page(username)
                     return f"error:{username}"
 
+        _cache_selection_page(username)
         return f"error:{username}"
+
+    _SELECTION_COMBOS = [
+        {"base_period": "OneMonthAgo", "sort": "-copiersGain", "page_size": 20, "page": 1},
+    ]
+
+    def _cache_selection_page(username: str) -> None:
+        """Warm the authenticated ``/port`` selection page cache for ``username``.
+
+        Checks whether the page HTML for each combo is already present in
+        ``portfolio_selection_cache``. On a cache miss, renders the full page
+        inside a temporary Flask app context (so ``flask.g.etoro_authuser`` is
+        set correctly) and writes the result back with the shared
+        ``_ETORO_PI_TTL`` TTL.
+
+        Failures are logged but do not propagate; report caching continues
+        independently.
+        """
+        for combo in _SELECTION_COMBOS:
+            cache_suffix = _selection_cache_suffix(**combo)
+            page_cache_key = f"portfolio_selection_page{cache_suffix}_{username}"
+            cached_page = get_portfolio_cache_from_mongo(
+                "portfolio_selection_cache",
+                page_cache_key,
+                ttl_seconds=_ETORO_PI_TTL,
+                ext=".html",
+            )
+            if cached_page is not None:
+                continue
+            try:
+                with app.app_context():
+                    g.etoro_authuser = username
+                    html = get_portfolio_selection_html(**combo)
+                set_portfolio_cache_to_mongo(
+                    "portfolio_selection_cache",
+                    page_cache_key,
+                    html,
+                    ext=".html",
+                    ttl_seconds=_ETORO_PI_TTL,
+                )
+            except Exception as exc:
+                log_error(
+                    f"Failed to cache /port selection page for {username} combo {combo}: {exc}",
+                    "PORT_USER_SELECTION_CACHE_FAIL",
+                )
 
     # ------------------------------------------------------------------
     # 3. Execute caching across all active users, then sleep and repeat.
@@ -263,9 +324,9 @@ with app.app_context():
                         skip += 1
                     else:
                         err += 1
-            log_info(f"Portfolio report caching complete: {ok} generated, {skip} skipped, {err} errors.")
+            log_info(f"Portfolio report and /port page caching complete: {ok} generated, {skip} skipped, {err} errors.")
         else:
-            log_info("No active users found to cache reports for.")
+            log_info("No active users found to cache reports or /port pages for.")
 
         if _shutdown_requested:
             break
@@ -277,4 +338,4 @@ with app.app_context():
             time.sleep(min(1, remaining))
             remaining -= 1
 
-    log_info("Portfolio report cache worker stopped.")
+    log_info("Portfolio report and /port page cache worker stopped.")

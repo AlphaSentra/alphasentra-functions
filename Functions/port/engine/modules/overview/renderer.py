@@ -13,6 +13,7 @@ from config import (
     ZERO_RETURN_CELL_TEXT,
     NONZERO_RETURN_CELL_TEXT,
     FONT_PRIMARY,
+    ETORO_USERPROFILE_URL,
 )
 
 
@@ -45,4 +46,5 @@ def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, 
         ZERO_RETURN_CELL_TEXT=ZERO_RETURN_CELL_TEXT,
         NONZERO_RETURN_CELL_TEXT=NONZERO_RETURN_CELL_TEXT,
         FONT_PRIMARY=FONT_PRIMARY,
+        ETORO_USERPROFILE_URL=ETORO_USERPROFILE_URL,
     )

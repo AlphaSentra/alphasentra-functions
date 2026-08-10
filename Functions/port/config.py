@@ -18,6 +18,7 @@ REPORT_LOGO_SRC = "https://pbs.twimg.com/profile_images/2074506241968046080/2vSm
 ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 PORTFOLIO_PARENT_URL = "https://app.alphasentra.com/port"
 FUNCTION_INDEX_PAGE_URL = "https://app.alphasentra.com/index"
+ETORO_USERPROFILE_URL = "https://www.etoro.com/people/[username]"
 
 # Optimisation default targets
 MAX_POSITION_SIZE = 30.0

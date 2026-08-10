@@ -139,6 +139,102 @@
             button.innerHTML = originalText;
         }, 1000);
     }
+
+    function openShareOverlay() {
+        var overlay = document.getElementById('pi-share-overlay');
+        if (overlay) overlay.classList.add('active');
+    }
+
+    function closeShareOverlay() {
+        var overlay = document.getElementById('pi-share-overlay');
+        if (overlay) overlay.classList.remove('active');
+    }
+
+    function getShareUrl() {
+        var shareUrlEl = document.getElementById('pi-share-url');
+        return shareUrlEl ? shareUrlEl.textContent : window.location.href;
+    }
+
+    function getShareBio() {
+        var bioEl = document.getElementById('pi-share-bio');
+        return bioEl ? bioEl.textContent : '';
+    }
+
+    function getShareUsername() {
+        var usernameEl = document.getElementById('pi-share-username');
+        return usernameEl ? usernameEl.textContent : '';
+    }
+
+    function shareOnFacebook() {
+        var url = encodeURIComponent(getShareUrl());
+        var bio = encodeURIComponent(getShareBio());
+        window.open('https://www.facebook.com/sharer/sharer.php?u=' + url + '&quote=' + bio, '_blank', 'width=600,height=400');
+        closeShareOverlay();
+    }
+
+    function shareOnX() {
+        var url = encodeURIComponent(getShareUrl());
+        var text = encodeURIComponent(getShareBio());
+        window.open('https://x.com/intent/tweet?url=' + url + '&text=' + text, '_blank', 'width=600,height=400');
+        closeShareOverlay();
+    }
+
+    function shareByEmail() {
+        var shareUrl = getShareUrl();
+        var bio = getShareBio();
+        var username = getShareUsername();
+        var subject = encodeURIComponent("Check out " + username + "'s portfolio on eToro x Alphasentra");
+        var body = encodeURIComponent(bio + '\n\n\n' + shareUrl);
+        window.location.href = 'mailto:?subject=' + subject + '&body=' + body;
+        closeShareOverlay();
+    }
+
+    function copyReportLink() {
+        var shareUrl = getShareUrl();
+        var copyBtn = document.getElementById('pi-share-copy');
+        if (navigator.clipboard && navigator.clipboard.writeText) {
+            navigator.clipboard.writeText(shareUrl).then(function() {
+                if (copyBtn) {
+                    var original = copyBtn.textContent;
+                    copyBtn.textContent = 'Link copied';
+                    copyBtn.disabled = true;
+                    setTimeout(function() {
+                        copyBtn.textContent = original;
+                        copyBtn.disabled = false;
+                    }, 1500);
+                }
+            }).catch(function() {
+                fallbackCopy(shareUrl, copyBtn);
+            });
+        } else {
+            fallbackCopy(shareUrl, copyBtn);
+        }
+    }
+
+    function fallbackCopy(text, copyBtn) {
+        var ta = document.createElement('textarea');
+        ta.value = text;
+        ta.style.position = 'fixed';
+        ta.style.opacity = '0';
+        document.body.appendChild(ta);
+        ta.focus();
+        ta.select();
+        try {
+            document.execCommand('copy');
+            if (copyBtn) {
+                var original = copyBtn.textContent;
+                copyBtn.textContent = 'Link copied';
+                copyBtn.disabled = true;
+                setTimeout(function() {
+                    copyBtn.textContent = original;
+                    copyBtn.disabled = false;
+                }, 1500);
+            }
+        } catch (e) {
+            alert('Unable to copy link.');
+        }
+        document.body.removeChild(ta);
+    }
 </script>
 
 <style>
@@ -297,6 +393,132 @@
     margin: 0 0 8px 0;
 }
 
+.pi-action-row {
+    display: flex;
+    gap: 10px;
+    margin-top: 16px;
+}
+
+.pi-share-btn,
+.pi-etoro-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    padding: 8px 14px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.85em;
+    cursor: pointer;
+    text-decoration: none;
+    border: none;
+    color: var(--color-text-on-dark);
+    transition: transform 0.15s ease, opacity 0.15s ease;
+}
+
+.pi-share-btn {
+    background-color: var(--color-heading);
+}
+
+.pi-share-btn:hover {
+    opacity: 0.95;
+}
+
+.pi-etoro-btn {
+    background-color: #34d399;
+}
+
+.pi-etoro-btn:hover {
+    opacity: 0.95;
+}
+
+.pi-share-overlay {
+    position: fixed;
+    inset: 0;
+    background: rgba(0, 0, 0, 0.65);
+    backdrop-filter: blur(6px);
+    -webkit-backdrop-filter: blur(6px);
+    display: none;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000;
+}
+
+.pi-share-overlay.active {
+    display: flex;
+}
+
+.pi-share-modal {
+    background: var(--color-bg-card);
+    border-radius: 10px;
+    padding: 20px;
+    width: 320px;
+    max-width: 90vw;
+    box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+    position: relative;
+}
+
+.pi-share-modal h3 {
+    margin: 0 0 14px 0;
+    font-size: 1.1em;
+    color: var(--color-heading);
+    padding-right: 24px;
+}
+
+.pi-share-options {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 10px;
+}
+
+.pi-share-option {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+    padding: 10px;
+    border-radius: 6px;
+    font-weight: bold;
+    font-size: 0.9em;
+    cursor: pointer;
+    border: none;
+    color: #fff;
+    text-decoration: none;
+}
+
+.pi-share-facebook { background-color: #1877F2; }
+.pi-share-x { background-color: #000; border: 1px solid #fff; }
+.pi-share-email { background-color: var(--color-neutral-gray); }
+.pi-share-copy { background-color: var(--color-text-primary); color: var(--color-text-on-dark); }
+
+.pi-share-option:hover {
+    opacity: 0.9;
+    transform: translateY(-1px);
+}
+
+.pi-share-close {
+    position: absolute;
+    top: 12px;
+    right: 12px;
+    width: 24px;
+    height: 24px;
+    padding: 0;
+    border: none;
+    border-radius: 50%;
+    background: transparent;
+    color: var(--color-text-muted);
+    font-size: 18px;
+    line-height: 1;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+.pi-share-close:hover {
+    background: var(--color-bg-button-neutral);
+    color: var(--color-text-primary);
+}
+
 
 </style>
 
@@ -374,15 +596,19 @@
               </div>
               {% endif %}
           </div>
-          {% if pro_investor.aboutMeShort or pro_investor.aboutMe %}
-          <div class="pi-about-me">
-              {% if pro_investor.aboutMeShort %}
-              <p class="pi-about-me-short">{{ pro_investor.aboutMeShort }}</p>
-              {% endif %}
-              {{ pro_investor.aboutMe }}
-          </div>
-          {% endif %}
-      </div>
+           {% if pro_investor.aboutMeShort or pro_investor.aboutMe %}
+           <div class="pi-about-me">
+               {% if pro_investor.aboutMeShort %}
+               <p class="pi-about-me-short">{{ pro_investor.aboutMeShort }}</p>
+               {% endif %}
+               {{ pro_investor.aboutMe }}
+           </div>
+           {% endif %}
+           <div class="pi-action-row">
+               <button class="pi-share-btn" onclick="openShareOverlay()">Share</button>
+               <a class="pi-etoro-btn" href="{{ ETORO_USERPROFILE_URL.replace('[username]', pro_investor.userName) }}" target="_blank" rel="noopener noreferrer">Copy &amp; Invest on &lt;etoro&gt;</a>
+           </div>
+       </div>
       <div class="pi-chart-main">
           <div class="chart-container">
               {{ charts.value | safe }}
@@ -532,6 +758,22 @@
             <h2>Performance Breakdown</h2>
             <p>Click on any sector or segment in the sunburst chart to drill down through industries to individual securities. Use the table on the left to explore the hierarchy — click a sector to expand its industries, then click an industry to reveal its securities. Switch between time horizons using the buttons above to see performance across different periods.</p>
             {{ charts.sector_sunburst | safe }}
+        </div>
+    </div>
+
+    <div id="pi-share-overlay" class="pi-share-overlay" onclick="if(event.target===this){closeShareOverlay();}">
+        <span id="pi-share-url" style="display:none;">https://app.alphasentra.com/?share=https://functions.alphasentra.com/etopi?etoro_username={{ pro_investor.userName }}&title={{ (pro_investor.userName ~ ' on eToro x Alphasentra') | urlencode }}&desc={{ (pro_investor.userName ~ "'s portfolio report x Alphasentra") | urlencode }}</span>
+        <span id="pi-share-bio" style="display:none;">{{ (pro_investor.aboutMeShort or pro_investor.fullName or pro_investor.userName) }}</span>
+        <span id="pi-share-username" style="display:none;">{{ pro_investor.userName }}</span>
+        <div class="pi-share-modal">
+            <button class="pi-share-close" onclick="closeShareOverlay()" aria-label="Close">&times;</button>
+            <h3>Share this report</h3>
+            <div class="pi-share-options">
+                <button class="pi-share-option pi-share-facebook" onclick="shareOnFacebook()">Facebook</button>
+                <button class="pi-share-option pi-share-x" onclick="shareOnX()">X</button>
+                <button class="pi-share-option pi-share-email" onclick="shareByEmail()">Email</button>
+                <button id="pi-share-copy" class="pi-share-option pi-share-copy" onclick="copyReportLink()">Copy link</button>
+            </div>
         </div>
     </div>
 </div>

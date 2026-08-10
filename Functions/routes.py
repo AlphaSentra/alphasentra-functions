@@ -37,7 +37,6 @@ def _redirect_html(title: str, message: str, url: str) -> str:
                 margin: 0;
                 padding: 0;
                 font-family: system-ui, -apple-system, sans-serif;
-                background-color: #0f172a;
                 color: #e2e8f0;
                 display: flex;
                 align-items: center;

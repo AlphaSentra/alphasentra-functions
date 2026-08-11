@@ -111,6 +111,16 @@ def load_transactions_from_etoro(
         resolved_cid = cid or resolved_client.resolve_cid(username)
         history = resolved_client.get_trade_history(username=username, explicit_cid=resolved_cid)
 
+        for record in history.records:
+            raw = record.raw if isinstance(record.raw, dict) else {}
+            ticker = raw.get("Ticker", "")
+            name = raw.get("Name", "")
+            if isinstance(ticker, str) and isinstance(name, str) and ticker.isdigit() and name.isdigit():
+                raise InvalidSymbolError(
+                    f"Trade history for {username} contains numeric-only Ticker and Name "
+                    f"(Ticker={ticker!r}, Name={name!r}). Skipping portfolio."
+                )
+
         if not history.records:
             logger.warning("eToro trade history returned no records for %s.", username)
             return pd.DataFrame()

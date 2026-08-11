@@ -470,6 +470,15 @@ class ETPublicClient:
                 )
             )
 
+        numerical_symbols = [
+            pos.symbol for pos in positions
+            if isinstance(pos.symbol, str) and pos.symbol.isdigit()
+        ]
+        if numerical_symbols:
+            raise InvalidSymbolError(
+                f"Portfolio for {username} contains numeric-only symbol(s): {numerical_symbols}. Skipping portfolio."
+            )
+
         aggregated: Dict[str, Dict[str, Any]] = {}
         for pos in positions:
             if not pos.symbol:

@@ -4,6 +4,9 @@ Global configuration constants for the portfolio function.
 """
 from Functions.themes import *
 
+DEPLOYMENT_ID = "ago-20260811-2112"
+
+
 PARENT_APP_DOMAIN = "alphasentra.com"
 PARENT_APP_ALLOWED_ORIGINS = [
     "https://app.alphasentra.com",

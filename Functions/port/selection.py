@@ -57,6 +57,54 @@ _SEARCH_INDEX_CACHE: Optional[List[Dict[str, Any]]] = None
 _SEARCH_QUERY_CACHE: Dict[str, tuple] = {}
 _SEARCH_CACHE_TTL = 30
 
+_PERIOD_TO_ETORO_MAP = {
+    "1m": "OneMonthAgo",
+    "3m": "ThreeMonthsAgo",
+    "1y": "OneYearAgo",
+}
+
+
+def _safe_gain_from_entry(entry: Dict[str, Any]) -> Optional[float]:
+    if not isinstance(entry, dict):
+        return None
+    return entry.get("gain") or entry.get("gainPercent")
+
+
+def _monthly_gain_for_period(data: Dict[str, Any], period: str) -> Optional[float]:
+    monthly = data.get("monthly", [])
+    if not isinstance(monthly, list) or not monthly:
+        return None
+    monthly = sorted(
+        [m for m in monthly if isinstance(m, dict)],
+        key=lambda m: str(m.get("timestamp") or m.get("date") or ""),
+    )
+    if period == "1m":
+        return _safe_gain_from_entry(monthly[-1])
+    if period == "3m":
+        total = 0.0
+        for entry in monthly[-3:]:
+            gain = _safe_gain_from_entry(entry)
+            if gain is not None:
+                total += float(gain)
+        return total if total != 0 else None
+    return None
+
+
+def _trailing_12m_gain(data: Dict[str, Any]) -> Optional[float]:
+    monthly = data.get("monthly", [])
+    if not isinstance(monthly, list) or len(monthly) < 12:
+        return None
+    monthly = sorted(
+        [m for m in monthly if isinstance(m, dict)],
+        key=lambda m: str(m.get("timestamp") or m.get("date") or ""),
+    )
+    trailing = 1.0
+    for m in monthly[-12:]:
+        gain = m.get("gain")
+        if gain is not None:
+            trailing *= 1 + float(gain) / 100
+    return (trailing - 1) * 100
+
 
 def _load_etoro_country_map() -> None:
     csv_path = os.path.join(_BASE_DIR, "..", "etoro", "countries.csv")
@@ -168,6 +216,11 @@ def _get_trend_data(username: str) -> List[float]:
 
 
 def _get_period_gain(username: str, period: str) -> Optional[float]:
+    """Return the gain for ``username`` over ``period`` (``1m``, ``3m``, ``1y``).
+
+    1M keeps the original ``/daily-gain`` path. 3M and 1Y use ``/gain``
+    instead. Falls back to ``_get_period_gain_from_daily`` if needed.
+    """
     if not username:
         return None
     cache_key = f"{username}:{period}"
@@ -179,21 +232,33 @@ def _get_period_gain(username: str, period: str) -> Optional[float]:
         _PERIOD_GAIN_CACHE[cache_key] = None
         return None
 
-    try:
-        data = client.get_daily_gain(username, {"type": "Period", "period": period})
-    except EToroClientError as exc:
-        if exc.status_code == 404:
-            result = _get_period_gain_from_daily(username, period)
-            _PERIOD_GAIN_CACHE[cache_key] = result
-            return result
-        _PERIOD_GAIN_CACHE[cache_key] = None
-        return None
+    data = None
+
+    if period in ("3m", "1y"):
+        try:
+            data = client.get_gain(username)
+        except EToroClientError:
+            data = None
+
+    if data is None:
+        try:
+            data = client.get_daily_gain(username, {"type": "Period", "period": period})
+        except EToroClientError as exc:
+            if exc.status_code == 404:
+                result = _get_period_gain_from_daily(username, period)
+                _PERIOD_GAIN_CACHE[cache_key] = result
+                return result
+            _PERIOD_GAIN_CACHE[cache_key] = None
+            return None
+
     result: Optional[float] = None
     if isinstance(data, dict):
-        result = data.get("gain") or data.get("gainPercent")
-    elif isinstance(data, list) and data:
-        entry = data[0]
-        result = entry.get("gain") or entry.get("gainPercent")
+        if period == "1y":
+            result = _trailing_12m_gain(data)
+        elif period == "3m":
+            result = _monthly_gain_for_period(data, period)
+        else:
+            result = data.get("gain") or data.get("gainPercent")
     _PERIOD_GAIN_CACHE[cache_key] = result
     return result
 
@@ -212,7 +277,10 @@ def _get_period_gain_from_daily(username: str, period: str) -> Optional[float]:
     except EToroClientError:
         return None
     if not isinstance(data, list):
-        return None
+        if isinstance(data, dict):
+            data = data.get("dailyExample", data.get("daily", []))
+        else:
+            data = []
     total = 0.0
     for entry in data:
         if not isinstance(entry, dict):

@@ -59,6 +59,8 @@ _ETORO_ENDPOINT_PEOPLE_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/peop
 _ETORO_ENDPOINT_MARKET_DATA_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/market-data/search"
 _ETORO_ENDPOINT_PORTFOLIO_RANKINGS = f"{_ETORO_PUBLIC_API_BASE}/api/v2/portfolios/{{username}}/rankings"
 _ETORO_ENDPOINT_TRADE_HISTORY = f"{_ETORO_SAPI_BASE}/trade-data-real/history/public/credit/flat"
+_ETORO_ENDPOINT_PERFORMANCE_HISTORY = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/performance-history"
+_ETORO_ENDPOINT_GAIN = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/gain"
 
 
 def _maybe_pause_after_api_call() -> None:
@@ -831,6 +833,52 @@ class ETPublicClient:
             raise
         except requests.RequestException as exc:
             raise EToroClientError(f"GET portfolio rankings failed: {exc}") from exc
+
+    def get_performance_history(self, username: str, period: str) -> Dict[str, Any]:
+        cache_key = str(("performance_history", username, period))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
+
+        url = _ETORO_ENDPOINT_PERFORMANCE_HISTORY.format(username=username)
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, params={"period": period}, timeout=self._timeout)
+            resp.raise_for_status()
+            data = resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET performance history failed: {exc}") from exc
+
+        set_portfolio_cache_to_mongo("etoro_cache", str(cache_key), data, ext=".pkl", ttl_seconds=_ETORO_TTL)
+        return data
+
+    def get_gain(self, username: str) -> Dict[str, Any]:
+        cache_key = str(("gain", username))
+        cached = get_portfolio_cache_from_mongo("etoro_cache", cache_key, ttl_seconds=_ETORO_TTL, ext=".pkl")
+        if cached is not None:
+            return cached
+
+        url = _ETORO_ENDPOINT_GAIN.format(username=username)
+
+        def _session_factory():
+            return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
+
+        try:
+            resp = _session_get_with_retry(_session_factory, url, timeout=self._timeout)
+            resp.raise_for_status()
+            data = resp.json()
+        except EToroClientError:
+            raise
+        except requests.RequestException as exc:
+            raise EToroClientError(f"GET gain failed: {exc}") from exc
+
+        set_portfolio_cache_to_mongo("etoro_cache", str(cache_key), data, ext=".pkl", ttl_seconds=_ETORO_TTL)
+        return data
 
 
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:

@@ -95,10 +95,8 @@ def _fetch_rankings(session: requests.Session) -> dict:
             resp = session.get(_RANKINGS_ENDPOINT, params=_RANKINGS_PARAMS, timeout=30)
         except requests.RequestException as exc:
             log_warning(
-                "eToro rankings API error on attempt %d/%d: %s",
-                attempt + 1,
-                _MAX_RETRIES,
-                exc,
+                "eToro rankings API error on attempt %d/%d: %s"
+                % (attempt + 1, _MAX_RETRIES, exc)
             )
             if attempt == _MAX_RETRIES - 1:
                 raise
@@ -113,11 +111,13 @@ def _fetch_rankings(session: requests.Session) -> dict:
 
         if resp.status_code == 429 or resp.status_code >= 500:
             log_warning(
-                "eToro rankings API HTTP %d on attempt %d/%d body=%s",
-                resp.status_code,
-                attempt + 1,
-                _MAX_RETRIES,
-                last_body_preview,
+                "eToro rankings API HTTP %d on attempt %d/%d body=%s"
+                % (
+                    resp.status_code,
+                    attempt + 1,
+                    _MAX_RETRIES,
+                    last_body_preview,
+                )
             )
             if attempt == _MAX_RETRIES - 1:
                 resp.raise_for_status()
@@ -191,10 +191,8 @@ def _write_to_feed(items: list) -> int:
             except PyMongoError as exc:
                 last_exception = exc
                 log_warning(
-                    "MongoDB bulk_write failed on attempt %d/%d: %s",
-                    attempt + 1,
-                    _MAX_RETRIES,
-                    exc,
+                    "MongoDB bulk_write failed on attempt %d/%d: %s"
+                    % (attempt + 1, _MAX_RETRIES, exc)
                 )
                 if attempt == _MAX_RETRIES - 1:
                     raise

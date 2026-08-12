@@ -22,6 +22,7 @@ ANALYSIS_PAGE_URL = "https://app.alphasentra.com/ticker/[ticker]"
 PORTFOLIO_PARENT_URL = "https://app.alphasentra.com/port"
 FUNCTION_INDEX_PAGE_URL = "https://app.alphasentra.com/index"
 ETORO_USERPROFILE_URL = "https://www.etoro.com/people/[username]"
+ETORO_POST_URL = "https://www.etoro.com/posts/[post_id]"
 
 # Optimisation default targets
 MAX_POSITION_SIZE = 30.0

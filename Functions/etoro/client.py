@@ -62,6 +62,7 @@ _ETORO_ENDPOINT_PORTFOLIO_RANKINGS_GLOBAL = f"{_ETORO_PUBLIC_API_BASE}/api/v2/po
 _ETORO_ENDPOINT_TRADE_HISTORY = f"{_ETORO_SAPI_BASE}/trade-data-real/history/public/credit/flat"
 _ETORO_ENDPOINT_PERFORMANCE_HISTORY = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/performance-history"
 _ETORO_ENDPOINT_GAIN = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/gain"
+_ETORO_ENDPOINT_USER_FEED = f"{_ETORO_PUBLIC_API_BASE}/api/v1/feeds/users/{{user_id}}"
 
 
 def _maybe_pause_after_api_call() -> None:

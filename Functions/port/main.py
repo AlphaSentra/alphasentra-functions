@@ -33,6 +33,7 @@ from engine.output.html import generate_html_report, generate_ai_content_fragmen
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.db.repositories import get_pro_investor_by_username
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+from Functions.themes import font as _font_module
 
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}
 
@@ -359,7 +360,7 @@ _ERROR_HTML = """<!DOCTYPE html>
           background-image: radial-gradient(ellipse 80% 50% at 50% 120%, rgba(255, 100, 50, 0.3), transparent);
           animation: fade-in 10s infinite;
         }}
-        body {{ margin: 0; padding: 0; font-family: 'Inter', system-ui, -apple-system, sans-serif; background-color: #000; color: #e0e0e0; }}
+        body {{ margin: 0; padding: 0; font-family: {_font_module.FONT_PRIMARY}; background-color: #000; color: #e0e0e0; }}
         .form-background-wrapper {{ position: relative; min-height: 100vh; overflow: hidden; background-color: #000; }}
         .form-foreground {{ position: relative; z-index: 1; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 2rem; box-sizing: border-box; }}
         .error-card {{

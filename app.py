@@ -9,6 +9,8 @@ from Functions.port.selection import search_investors_api, get_portfolio_selecti
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
+from Functions.themes import font as _font_module
+from Functions.themes import theme as _theme_module
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -134,9 +136,9 @@ def _unauthorized_response():
         body {{
             margin: 0;
             padding: 0;
-            font-family: monospace;
-            background-color: #000000;
-            color: #e2e8f0;
+            font-family: {_font_module.FONT_PRIMARY};
+            background-color: {_theme_module._BG_DEFAULT};
+            color: {_theme_module._TEXT_PRIMARY};
             display: flex;
             align-items: center;
             justify-content: center;
@@ -149,18 +151,18 @@ def _unauthorized_response():
             width: 40px;
             height: 40px;
             border: 3px solid rgba(255, 255, 255, 0.2);
-            border-top-color: #38bdf8;
+            border-top-color: {_theme_module._BRAND_PRIMARY};
             border-radius: 50%;
             animation: spin 0.8s linear infinite;
             margin: 0 auto 16px;
         }}
         .message {{
             font-size: 14px;
-            color: #94a3b8;
+            color: {_theme_module._TEXT_MUTED};
             margin-bottom: 16px;
         }}
         .fallback-link {{
-            color: #38bdf8;
+            color: {_theme_module._BRAND_PRIMARY};
             text-decoration: none;
             font-size: 13px;
         }}

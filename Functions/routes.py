@@ -36,8 +36,9 @@ def _redirect_html(title: str, message: str, url: str) -> str:
             body {{
                 margin: 0;
                 padding: 0;
-                font-family: system-ui, -apple-system, sans-serif;
-                color: #e2e8f0;
+                font-family: {font.FONT_PRIMARY};
+                background-color: {theme._BG_DEFAULT};
+                color: {theme._TEXT_PRIMARY};
                 display: flex;
                 align-items: center;
                 justify-content: center;
@@ -50,18 +51,18 @@ def _redirect_html(title: str, message: str, url: str) -> str:
                 width: 40px;
                 height: 40px;
                 border: 3px solid rgba(255, 255, 255, 0.2);
-                border-top-color: #38bdf8;
+                border-top-color: {theme._BRAND_PRIMARY};
                 border-radius: 50%;
                 animation: spin 0.8s linear infinite;
                 margin: 0 auto 16px;
             }}
             .message {{
                 font-size: 14px;
-                color: #94a3b8;
+                color: {theme._TEXT_MUTED};
                 margin-bottom: 16px;
             }}
             .fallback-link {{
-                color: #38bdf8;
+                color: {theme._BRAND_PRIMARY};
                 text-decoration: none;
                 font-size: 13px;
             }}

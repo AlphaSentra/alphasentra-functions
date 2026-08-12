@@ -19,7 +19,7 @@ Required environment variables:
     ETORO_PUBLIC_KEY  - eToro API public key.
     ETORO_PRIVATE_KEY - eToro API private key.
     GEMINI_API_KEY    - Required for AI-enhanced report generation.
-    POLL_INTERVAL_SECONDS - Optional. Seconds to wait between polling cycles (default: 30).
+    POLL_INTERVAL_SECONDS - Optional. Seconds to wait between polling cycles (default: 10).
 """
 
 import os
@@ -42,7 +42,7 @@ from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info, log_error, log_warning
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
-POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "30"))
+POLL_INTERVAL = int(os.getenv("POLL_INTERVAL_SECONDS", "10"))
 
 _shutdown_requested = False
 

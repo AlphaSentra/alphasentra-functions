@@ -108,15 +108,32 @@ class PortfolioAnalyzer:
 
         try:
             from Functions.etoro.client import get_public_client_from_env, InvalidSymbolError
+            from Functions.etoro.models import EToroAggregatedPosition
             client = client or get_public_client_from_env()
             portfolio = client.get_investor_portfolio(self.etoro_username)
 
-            agg_positions = [
+            raw_positions = [
                 pos for pos in portfolio.aggregated_positions
-                if pos.symbol and pos.weight > 0.0001
+                if pos.symbol
             ]
-            if not agg_positions:
-                return False, "eToro portfolio returned no positions."
+
+            if not raw_positions:
+                agg_positions = [
+                    EToroAggregatedPosition(
+                        symbol="USD=X",
+                        weight=100.0,
+                        trade_direction="BUY",
+                        average_entry_price=1.0,
+                        position_count=0,
+                    )
+                ]
+            else:
+                agg_positions = [
+                    pos for pos in raw_positions
+                    if pos.weight > 0.0001
+                ]
+                if not agg_positions:
+                    return False, "eToro portfolio returned no positions."
 
             self._etoro_portfolio_mode = True
 

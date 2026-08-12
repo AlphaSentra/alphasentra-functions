@@ -601,7 +601,7 @@
                {% if pro_investor.aboutMeShort %}
                <p class="pi-about-me-short">{{ pro_investor.aboutMeShort }}</p>
                {% endif %}
-               {{ pro_investor.aboutMe }}
+                {{ aboutMeHtml | safe }}
            </div>
            {% endif %}
            <div class="pi-action-row">

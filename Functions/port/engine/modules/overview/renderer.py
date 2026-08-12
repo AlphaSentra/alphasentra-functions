@@ -5,6 +5,7 @@ Overview tab renderer: generates the Overview tab HTML block.
 from jinja2 import Template
 import os
 from datetime import datetime, timezone
+import html as html_module
 from config import (
     POSITIVE_RETURN_CARD,
     NEGATIVE_RETURN_CARD,
@@ -16,6 +17,11 @@ from config import (
     ETORO_USERPROFILE_URL,
 )
 
+
+def _prepare_about_me(about_me: str) -> str:
+    if not about_me:
+        return ""
+    return html_module.escape(about_me).replace("\n", "<br>")
 
 
 def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, include_yield=True, overview_ai_interpretation="", pro_investor=None) -> str:
@@ -31,6 +37,7 @@ def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, 
 
     template = Template(template_src)
     now_gmt = datetime.now(timezone.utc).strftime("%B %d, %Y %H:%M GMT")
+    about_me_html = _prepare_about_me(pro_investor.get("aboutMe", "")) if pro_investor else ""
     return template.render(
         charts=charts,
         metrics=metrics,
@@ -38,6 +45,7 @@ def render_overview_tab(metrics, charts, holdings_df=None, inception_date=None, 
         include_yield=include_yield,
         overview_ai_interpretation=overview_ai_interpretation,
         pro_investor=pro_investor,
+        aboutMeHtml=about_me_html,
         now_gmt=now_gmt,
         POSITIVE_RETURN_CARD=POSITIVE_RETURN_CARD,
         NEGATIVE_RETURN_CARD=NEGATIVE_RETURN_CARD,

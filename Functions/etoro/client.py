@@ -58,6 +58,7 @@ _ETORO_ENDPOINT_PORTFOLIO_LIVE = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/peo
 _ETORO_ENDPOINT_PEOPLE_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/search"
 _ETORO_ENDPOINT_MARKET_DATA_SEARCH = f"{_ETORO_PUBLIC_API_BASE}/api/v1/market-data/search"
 _ETORO_ENDPOINT_PORTFOLIO_RANKINGS = f"{_ETORO_PUBLIC_API_BASE}/api/v2/portfolios/{{username}}/rankings"
+_ETORO_ENDPOINT_PORTFOLIO_RANKINGS_GLOBAL = f"{_ETORO_PUBLIC_API_BASE}/api/v2/portfolios/rankings"
 _ETORO_ENDPOINT_TRADE_HISTORY = f"{_ETORO_SAPI_BASE}/trade-data-real/history/public/credit/flat"
 _ETORO_ENDPOINT_PERFORMANCE_HISTORY = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/performance-history"
 _ETORO_ENDPOINT_GAIN = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/gain"

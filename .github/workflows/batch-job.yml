@@ -33,4 +33,4 @@ jobs:
         with:
           python-version: '3.14'
       - run: pip install -r requirements.txt
-      - run: python Functions/batch/job.py
+      - run: python Functions/batch/cache_job.py

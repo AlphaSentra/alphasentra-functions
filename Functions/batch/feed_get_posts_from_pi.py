@@ -200,10 +200,21 @@ def _prepare_documents(posts: list) -> list:
             if "[post_id]" in ETORO_POST_URL
             else f"{ETORO_POST_URL.rstrip('/')}/{post['post_id']}"
         )
+        raw = post.get("raw") or {}
+        post_data = raw.get("post") or {}
+        tags = post_data.get("tags") or []
+        badges = [
+            tag.get("market", {}).get("symbolName")
+            for tag in tags
+            if isinstance(tag, dict)
+            and isinstance(tag.get("market"), dict)
+            and tag["market"].get("symbolName")
+        ]
         documents.append(
             {
                 "post_id": post["post_id"],
                 "post_url": post_url,
+                "badges": badges,
                 "created": post.get("created_at"),
                 "owner_username": post.get("owner_username"),
                 "message_text": post.get("message_text"),
@@ -285,6 +296,8 @@ def _fetch_user_feed(session: requests.Session, user_id: str) -> list:
                     continue
                 if metrics["created_at"] < cutoff:
                     return posts
+                if metrics["comments"] == 0:
+                    continue
                 if metrics["post_id"] in seen_post_ids:
                     continue
                 seen_post_ids.add(metrics["post_id"])

@@ -225,7 +225,7 @@ services:
     plan: starter
     schedule: "0 0 * * *"
     buildCommand: pip install -r requirements.txt
-    startCommand: python Functions/batch/job.py
+    startCommand: python Functions/batch/cache_job.py
     autoDeploy: true
 ```
 

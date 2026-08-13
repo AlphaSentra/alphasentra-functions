@@ -2,7 +2,7 @@
 
 ## Overview
 
-The batch job (`Functions/batch/job.py`) is a scheduled cache-warming pipeline that runs a sequence of Python scripts to pre-generate and store HTML and data artifacts. It is designed to be deployed as a **Render Cron Job**.
+The batch job (`Functions/batch/cache_job.py`) is a scheduled cache-warming pipeline that runs a sequence of Python scripts to pre-generate and store HTML and data artifacts. It is designed to be deployed as a **Render Cron Job**.
 
 ## Scripts
 
@@ -23,7 +23,7 @@ A non-zero exit code is emitted if any script fails or times out.
 ## Local Execution
 
 ```bash
-python Functions/batch/job.py
+python Functions/batch/cache_job.py
 ```
 
 ## Required Environment Variables
@@ -79,7 +79,7 @@ services:
     plan: starter
     schedule: "0 0 * * *"
     buildCommand: pip install -r requirements.txt
-    startCommand: python Functions/batch/job.py
+    startCommand: python Functions/batch/cache_job.py
     autoDeploy: true
 ```
 
@@ -126,6 +126,6 @@ render logs -s ago-batch-cache
 
 ## Failure Handling
 
-- If any script fails or times out, `job.py` exits with code `1`.
+- If any script fails or times out, `cache_job.py` exits with code `1`.
 - Failed scripts are marked explicitly in the summary report.
 - Render will retry failed cron runs on the next scheduled execution.

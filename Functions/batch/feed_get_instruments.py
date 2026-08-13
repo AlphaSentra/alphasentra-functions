@@ -121,7 +121,19 @@ def _fetch_instruments(session: requests.Session, params: dict) -> dict:
         except Exception:
             last_body_preview = ""
 
-        if resp.status_code == 429 or resp.status_code >= 500:
+        if resp.status_code == 401:
+            log_warning(
+                "eToro instruments API HTTP 401 on attempt %d/%d body=%s"
+                % (
+                    attempt + 1,
+                    _MAX_RETRIES,
+                    last_body_preview,
+                )
+            )
+            session.headers["x-user-key"] = get_random_private_key()
+            log_info("Rotated private key after 401 for instruments query.")
+
+        if resp.status_code == 429 or resp.status_code == 401 or resp.status_code >= 500:
             log_warning(
                 "eToro instruments API HTTP %d on attempt %d/%d body=%s"
                 % (

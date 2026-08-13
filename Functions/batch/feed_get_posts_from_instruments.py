@@ -194,10 +194,21 @@ def _prepare_documents(posts: list) -> list:
             if "[post_id]" in ETORO_POST_URL
             else f"{ETORO_POST_URL.rstrip('/')}/{post['post_id']}"
         )
+        raw = post.get("raw") or {}
+        post_data = raw.get("post") or {}
+        tags = post_data.get("tags") or []
+        badges = [
+            tag.get("market", {}).get("symbolName")
+            for tag in tags
+            if isinstance(tag, dict)
+            and isinstance(tag.get("market"), dict)
+            and tag["market"].get("symbolName")
+        ]
         documents.append(
             {
                 "post_id": post["post_id"],
                 "post_url": post_url,
+                "badges": badges,
                 "created": post.get("created_at"),
                 "owner_username": post.get("owner_username"),
                 "message_text": post.get("message_text"),
@@ -253,7 +264,7 @@ def _fetch_instrument_feed(session: requests.Session, market_id: str) -> list:
             except Exception:
                 last_body_preview = ""
 
-            if resp.status_code == 429 or resp.status_code == 417 or resp.status_code >= 500:
+            if resp.status_code == 429 or resp.status_code == 417 or resp.status_code == 401 or resp.status_code >= 500:
                 log_warning(
                     "Feed API HTTP %d for instrument %s on attempt %d/%d body=%s"
                     % (
@@ -264,6 +275,9 @@ def _fetch_instrument_feed(session: requests.Session, market_id: str) -> list:
                         last_body_preview,
                     )
                 )
+                if resp.status_code == 401:
+                    session.headers["x-user-key"] = get_random_private_key()
+                    log_info("Rotated private key after 401 for instrument %s." % market_id)
                 if attempt == _MAX_RETRIES - 1:
                     resp.raise_for_status()
                 should_retry = True
@@ -279,6 +293,8 @@ def _fetch_instrument_feed(session: requests.Session, market_id: str) -> list:
                     continue
                 if metrics["created_at"] < cutoff:
                     return posts
+                if metrics["comments"] == 0:
+                    continue
                 if metrics["post_id"] in seen_post_ids:
                     continue
                 seen_post_ids.add(metrics["post_id"])
@@ -386,6 +402,7 @@ def main() -> None:
 
     all_posts = []
     for idx, instrument_id in enumerate(instrument_ids, start=1):
+        session.headers["x-user-key"] = get_random_private_key()
         log_info(f"Fetching feed for instrument {instrument_id} ({idx}/{len(instrument_ids)})...")
         try:
             posts = _fetch_instrument_feed(session, instrument_id)

@@ -1,7 +1,7 @@
-"""Batch job runner for executing a sequence of cache-related scripts.
+"""Batch feed job runner for executing a sequence of feed-related scripts.
 
-This module defines the execution order for batch scripts that handle cache
-operations, and provides a simple runner to execute them sequentially.
+This module defines the execution order for batch scripts that handle eToro
+feed data collection, and provides a simple runner to execute them sequentially.
 """
 
 import subprocess
@@ -10,16 +10,14 @@ import time
 from datetime import datetime, timezone
 from pathlib import Path
 
-# Ordered list of batch scripts to be executed. Order matters as each script
-# may depend on the output or state left by the previous one.
 SCRIPT_ORDER = [
-    "clear_cache.py",
-    "index_function_cache.py",
-    "port_selection_cache.py",
+    "clear_feed.py",
+    "feed_get_pi.py",
+    "feed_get_instruments.py",
+    "feed_get_posts_from_pi.py",
+    "feed_get_posts_from_instruments.py",
 ]
 
-# Maximum allowed runtime per script (seconds). Set to 3 hours to stay well
-# within Render cron limits and control cost.
 SCRIPT_TIMEOUT_SECONDS = 3 * 60 * 60
 
 
@@ -46,10 +44,6 @@ def run_script(script_path: Path) -> dict:
             status: "ok" | "failed" | "timeout"
             duration_seconds: elapsed wall-clock time
             returncode: process exit code, or None if timed out
-
-    Raises:
-        subprocess.CalledProcessError: If the script returns a non-zero exit code.
-        subprocess.TimeoutExpired: If the script exceeds SCRIPT_TIMEOUT_SECONDS.
     """
     script_name = script_path.name
     start = time.perf_counter()

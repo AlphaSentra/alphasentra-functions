@@ -45,7 +45,6 @@ _RANKINGS_PARAMS = {
     "period": "CurrYear",
     "sort": "-copiers",
     "pageSize": "100",
-    "popularInvestor": "true",
 }
 
 # ---------------------------------------------------------------------------
@@ -53,6 +52,7 @@ _RANKINGS_PARAMS = {
 # ---------------------------------------------------------------------------
 _MAX_RETRIES = 5
 _BASE_DELAY_SECONDS = 2.0
+_TARGET_PI_COUNT = 1000
 
 
 def _get_feed_client() -> MongoClient:
@@ -72,65 +72,130 @@ def _get_feed_client() -> MongoClient:
     return client
 
 
-def _fetch_rankings(session: requests.Session) -> dict:
-    """Fetch Popular Investor rankings from eToro with retry/backoff.
+def _fetch_rankings(session: requests.Session, target_count: int = _TARGET_PI_COUNT) -> list:
+    """Fetch Popular Investor rankings from eToro with retry/backoff and pagination.
 
+    Requests up to ``target_count`` items across multiple pages using the
+    ``page`` query parameter and stops when ``pagination.hasNext`` is false.
     Retries up to ``_MAX_RETRIES`` times on network errors or HTTP 429/5xx
-    responses, using exponential backoff with jitter.
+    responses, using exponential backoff with jitter between pages and between
+    retries. On HTTP 401, rotates to a fresh session/private key and retries
+    the current page.
 
     Args:
         session: Authenticated ``requests.Session`` for eToro public API.
+        target_count: Maximum number of ranking items to collect.
 
     Returns:
-        Parsed JSON response from the rankings endpoint.
+        Aggregated list of ranking items from all fetched pages.
 
     Raises:
-        requests.HTTPError: If the final attempt returns a non-success status.
-        RuntimeError: If all retry attempts are exhausted.
+        requests.HTTPError: If the final attempt on any page returns a
+            non-success status.
+        RuntimeError: If all retry attempts are exhausted on any page.
     """
-    last_status = None
-    last_body_preview = ""
-    for attempt in range(_MAX_RETRIES):
-        try:
-            resp = session.get(_RANKINGS_ENDPOINT, params=_RANKINGS_PARAMS, timeout=30)
-        except requests.RequestException as exc:
-            log_warning(
-                "eToro rankings API error on attempt %d/%d: %s"
-                % (attempt + 1, _MAX_RETRIES, exc)
-            )
-            if attempt == _MAX_RETRIES - 1:
-                raise
-            time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
-            continue
+    api_key = os.getenv("ETORO_PUBLIC_KEY", "")
+    page_size = int(_RANKINGS_PARAMS.get("pageSize", "100"))
+    collected: list = []
+    page_number = 1
 
-        last_status = resp.status_code
-        try:
-            last_body_preview = resp.text[:200]
-        except Exception:
-            last_body_preview = ""
+    while len(collected) < target_count:
+        params = {**_RANKINGS_PARAMS, "page": str(page_number)}
+        last_status = None
+        last_body_preview = ""
+        page_items = None
 
-        if resp.status_code == 429 or resp.status_code >= 500:
-            log_warning(
-                "eToro rankings API HTTP %d on attempt %d/%d body=%s"
-                % (
-                    resp.status_code,
-                    attempt + 1,
-                    _MAX_RETRIES,
-                    last_body_preview,
+        for attempt in range(_MAX_RETRIES):
+            try:
+                resp = session.get(_RANKINGS_ENDPOINT, params=params, timeout=30)
+            except requests.RequestException as exc:
+                log_warning(
+                    "eToro rankings API error on attempt %d/%d for page %d: %s"
+                    % (attempt + 1, _MAX_RETRIES, page_number, exc)
                 )
+                if attempt == _MAX_RETRIES - 1:
+                    raise
+                time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+                continue
+
+            last_status = resp.status_code
+            try:
+                last_body_preview = resp.text[:200]
+            except Exception:
+                last_body_preview = ""
+
+            if resp.status_code == 401:
+                log_warning(
+                    "eToro rankings API HTTP 401 on attempt %d/%d for page %d; "
+                    "rotating private key and retrying..."
+                    % (attempt + 1, _MAX_RETRIES, page_number)
+                )
+                session = public_api_session(api_key, get_random_private_key(), timeout=30)
+                time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+                continue
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                log_warning(
+                    "eToro rankings API HTTP %d on attempt %d/%d for page %d body=%s"
+                    % (
+                        resp.status_code,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        page_number,
+                        last_body_preview,
+                    )
+                )
+                if attempt == _MAX_RETRIES - 1:
+                    resp.raise_for_status()
+                time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+                continue
+
+            resp.raise_for_status()
+            data = resp.json()
+
+            if not isinstance(data, dict):
+                log_warning("Unexpected rankings response type on page %d; expected dict.", page_number)
+                return collected
+
+            pagination = data.get("pagination") or {}
+            has_next = bool(pagination.get("hasNext"))
+
+            items = data.get("results")
+            if items is None:
+                items = data.get("items")
+            if items is None:
+                items = data.get("rankings")
+            if items is None:
+                items = data.get("data")
+            if items is None:
+                for key in sorted(data.keys()):
+                    candidate = data[key]
+                    if isinstance(candidate, list):
+                        items = candidate
+                        break
+
+            if not isinstance(items, list):
+                log_warning("Rankings response contained no usable list on page %d.", page_number)
+                return collected
+
+            page_items = items
+            break
+
+        if page_items is None:
+            raise RuntimeError(
+                f"GET {_RANKINGS_ENDPOINT} failed after {_MAX_RETRIES} attempts on page {page_number}: "
+                f"last_status={last_status}, body={last_body_preview!r}"
             )
-            if attempt == _MAX_RETRIES - 1:
-                resp.raise_for_status()
-            time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
-            continue
 
-        resp.raise_for_status()
-        return resp.json()
+        collected.extend(page_items)
+        log_info(f"Fetched page {page_number} with {len(page_items)} items (total collected: {len(collected)}).")
 
-    raise RuntimeError(
-        f"GET {_RANKINGS_ENDPOINT} failed after {_MAX_RETRIES} attempts: "
-        f"last_status={last_status}, body={last_body_preview!r}"
-    )
+        if not has_next or len(page_items) < page_size or len(collected) >= target_count:
+            break
+
+        page_number += 1
+
+    return collected[:target_count]
 
 
 def _write_to_feed(items: list) -> int:
@@ -214,34 +279,10 @@ def main() -> None:
     log_info("Fetching trending Popular Investors from eToro rankings API...")
 
     session = public_api_session(api_key, get_random_private_key(), timeout=30)
-    data = _fetch_rankings(session)
-
-    if not isinstance(data, dict):
-        log_warning("Unexpected rankings response type; expected dict.")
-        return
-
-    keys = sorted(data.keys())
-    log_info(f"Rankings response keys: {keys}")
-
-    items = data.get("items")
-    if items is None:
-        items = data.get("rankings")
-    if items is None:
-        items = data.get("data")
-    if items is None and isinstance(data, dict):
-        for key in keys:
-            candidate = data[key]
-            if isinstance(candidate, list):
-                items = candidate
-                log_info(f"Using list response key: {key}")
-                break
+    items = _fetch_rankings(session)
 
     if not isinstance(items, list) or not items:
-        log_warning(
-            "Rankings response contained no usable list. "
-            "Raw preview: %s",
-            str(data)[:500],
-        )
+        log_warning("Rankings response contained no usable items.")
         return
 
     log_info(f"Received {len(items)} ranking items from eToro.")

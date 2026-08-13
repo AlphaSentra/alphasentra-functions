@@ -56,6 +56,7 @@ _LOOKBACK_DAYS = 30
 _RATE_LIMIT_DELAY_SECONDS = 1.0
 _MAX_RETRIES = 5
 _BASE_DELAY_SECONDS = 2.0
+_BATCH_WRITE_USERS = 50
 
 
 def _get_feed_client() -> MongoClient:
@@ -403,39 +404,60 @@ def main() -> None:
 
     session = public_api_session(api_key, get_random_private_key(), timeout=30)
 
-    all_posts = []
+    seen_ids = set()
+    pending_posts = []
+    total_upserted = 0
+
     for idx, user_id in enumerate(user_ids, start=1):
         log_info(f"Fetching feed for user {user_id} ({idx}/{len(user_ids)})...")
         try:
             posts = _fetch_user_feed(session, user_id)
-            all_posts.extend(posts)
+            pending_posts.extend(posts)
             log_info(f"Collected {len(posts)} posts for user {user_id}.")
         except Exception as exc:
             log_warning(f"Failed to fetch feed for user {user_id}: {exc}")
             continue
 
+        if idx % _BATCH_WRITE_USERS == 0 and pending_posts:
+            unique_posts = []
+            for post in pending_posts:
+                post_id = post.get("post_id")
+                if post_id and post_id not in seen_ids:
+                    seen_ids.add(post_id)
+                    unique_posts.append(post)
+
+            documents = _prepare_documents(unique_posts)
+            if documents:
+                upserted = _write_to_feed(documents)
+                total_upserted += upserted
+                log_info(
+                    f"Upserted {upserted} documents into feed.etoro_posts "
+                    f"(batch at user {idx})."
+                )
+
+            pending_posts.clear()
+
         if idx < len(user_ids):
             time.sleep(_RATE_LIMIT_DELAY_SECONDS)
 
-    if not all_posts:
-        log_warning("No posts collected from any PI feed.")
-        return
+    if pending_posts:
+        unique_posts = []
+        for post in pending_posts:
+            post_id = post.get("post_id")
+            if post_id and post_id not in seen_ids:
+                seen_ids.add(post_id)
+                unique_posts.append(post)
 
-    seen_ids = set()
-    unique_posts = []
-    for post in all_posts:
-        post_id = post.get("post_id")
-        if post_id and post_id not in seen_ids:
-            seen_ids.add(post_id)
-            unique_posts.append(post)
+        documents = _prepare_documents(unique_posts)
+        if documents:
+            upserted = _write_to_feed(documents)
+            total_upserted += upserted
+            log_info("Upserted %d documents into feed.etoro_posts (final batch)." % upserted)
 
-    log_info(f"Collected {len(unique_posts)} unique posts across all PIs.")
-
-    documents = _prepare_documents(unique_posts)
-    log_info(f"Prepared {len(documents)} post documents.")
-
-    upserted = _write_to_feed(documents)
-    log_info(f"Upserted {upserted} documents into feed.etoro_posts.")
+    if total_upserted > 0:
+        log_info(f"Total upserted {total_upserted} documents across all batches.")
+    else:
+        log_warning("No posts collected or all posts were duplicates.")
 
 
 if __name__ == "__main__":

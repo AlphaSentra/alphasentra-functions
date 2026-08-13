@@ -257,7 +257,6 @@ def delete_portfolio_cache_from_mongo(collection_name: str, doc_id: str) -> None
                 else:
                     collection.delete_one({"_id": doc_id})
             log_warning(f"Successfully deleted portfolio cache from URI {idx}/{len(uris)}: {uri} collection={collection_name}", "FALLBACK")
-            return
         except PyMongoError as e:
             last_exception = e
             log_error(f"Failed to delete portfolio cache from MongoDB uri={uri} collection={collection_name}", "MONGO_CACHE", e)

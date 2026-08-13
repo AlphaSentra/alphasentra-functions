@@ -13,7 +13,7 @@ from pathlib import Path
 # Ordered list of batch scripts to be executed. Order matters as each script
 # may depend on the output or state left by the previous one.
 SCRIPT_ORDER = [
-    "port_clear_cache.py",
+    "clear_cache.py",
     "index_function_cache.py",
     "port_selection_cache.py",
 ]

@@ -29,7 +29,7 @@ class AssetMetadata:
     def failed(cls, ticker: str) -> "AssetMetadata":
         return cls(
             ticker=ticker,
-            name=ticker,
+            name="",
             sector="Others",
             industry="Others",
             market_cap=None,

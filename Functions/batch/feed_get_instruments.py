@@ -83,14 +83,16 @@ def _get_feed_client() -> MongoClient:
     return client
 
 
-def _fetch_instruments(session: requests.Session, params: dict) -> dict:
+def _fetch_instruments(session_factory, params: dict) -> dict:
     """Fetch trending instruments from eToro with retry/backoff.
 
     Retries up to ``_MAX_RETRIES`` times on network errors or HTTP 429/5xx
-    responses, using exponential backoff with jitter.
+    responses, using exponential backoff with jitter. Rotates to a fresh
+    private key on HTTP 401 by creating a new session via the factory.
 
     Args:
-        session: Authenticated ``requests.Session`` for eToro public API.
+        session_factory: Callable that returns a fresh authenticated
+            ``requests.Session`` for eToro public API.
         params: Query parameters for the market-data search endpoint.
 
     Returns:
@@ -103,6 +105,7 @@ def _fetch_instruments(session: requests.Session, params: dict) -> dict:
     last_status = None
     last_body_preview = ""
     for attempt in range(_MAX_RETRIES):
+        session = session_factory()
         try:
             resp = session.get(_INSTRUMENTS_ENDPOINT, params=params, timeout=30)
         except requests.RequestException as exc:
@@ -130,10 +133,10 @@ def _fetch_instruments(session: requests.Session, params: dict) -> dict:
                     last_body_preview,
                 )
             )
-            session.headers["x-user-key"] = get_random_private_key()
-            log_info("Rotated private key after 401 for instruments query.")
+            time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+            continue
 
-        if resp.status_code == 429 or resp.status_code == 401 or resp.status_code >= 500:
+        if resp.status_code == 429 or resp.status_code >= 500:
             log_warning(
                 "eToro instruments API HTTP %d on attempt %d/%d body=%s"
                 % (
@@ -278,7 +281,7 @@ def main() -> None:
 
     log_info("Fetching trending instruments from eToro market-data search API...")
 
-    session = public_api_session(api_key, get_random_private_key(), timeout=30)
+    session_factory = lambda: public_api_session(api_key, get_random_private_key(), timeout=30)
 
     merged_items = []
     seen_ids = set()
@@ -287,7 +290,7 @@ def main() -> None:
         params = query["params"]
         log_info(f"Running {label} instruments query...")
 
-        data = _fetch_instruments(session, params)
+        data = _fetch_instruments(session_factory, params)
         items = _extract_items(data, label)
 
         for item in items:

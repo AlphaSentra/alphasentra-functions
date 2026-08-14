@@ -64,6 +64,7 @@ _ETORO_ENDPOINT_PERFORMANCE_HISTORY = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-inf
 _ETORO_ENDPOINT_GAIN = f"{_ETORO_PUBLIC_API_BASE}/api/v1/user-info/people/{{username}}/gain"
 _ETORO_ENDPOINT_USER_FEED = f"{_ETORO_PUBLIC_API_BASE}/api/v1/feeds/users/{{user_id}}"
 _ETORO_ENDPOINT_INSTRUMENT_FEED = f"{_ETORO_PUBLIC_API_BASE}/api/v1/feeds/markets/{{market_id}}"
+_ETORO_ENDPOINT_POST_COMMENTS = f"{_ETORO_PUBLIC_API_BASE}/api/v1/posts/{{post_id}}/comments"
 
 
 def _maybe_pause_after_api_call() -> None:

@@ -72,7 +72,7 @@ def _get_feed_client() -> MongoClient:
     return client
 
 
-def _fetch_rankings(session: requests.Session, target_count: int = _TARGET_PI_COUNT) -> list:
+def _fetch_rankings(session_factory, target_count: int = _TARGET_PI_COUNT) -> list:
     """Fetch Popular Investor rankings from eToro with retry/backoff and pagination.
 
     Requests up to ``target_count`` items across multiple pages using the
@@ -83,7 +83,8 @@ def _fetch_rankings(session: requests.Session, target_count: int = _TARGET_PI_CO
     the current page.
 
     Args:
-        session: Authenticated ``requests.Session`` for eToro public API.
+        session_factory: Callable that returns a fresh authenticated
+            ``requests.Session`` for eToro public API.
         target_count: Maximum number of ranking items to collect.
 
     Returns:
@@ -106,6 +107,7 @@ def _fetch_rankings(session: requests.Session, target_count: int = _TARGET_PI_CO
         page_items = None
 
         for attempt in range(_MAX_RETRIES):
+            session = session_factory()
             try:
                 resp = session.get(_RANKINGS_ENDPOINT, params=params, timeout=30)
             except requests.RequestException as exc:
@@ -130,7 +132,6 @@ def _fetch_rankings(session: requests.Session, target_count: int = _TARGET_PI_CO
                     "rotating private key and retrying..."
                     % (attempt + 1, _MAX_RETRIES, page_number)
                 )
-                session = public_api_session(api_key, get_random_private_key(), timeout=30)
                 time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
                 continue
 
@@ -278,8 +279,8 @@ def main() -> None:
 
     log_info("Fetching trending Popular Investors from eToro rankings API...")
 
-    session = public_api_session(api_key, get_random_private_key(), timeout=30)
-    items = _fetch_rankings(session)
+    session_factory = lambda: public_api_session(api_key, get_random_private_key(), timeout=30)
+    items = _fetch_rankings(session_factory)
 
     if not isinstance(items, list) or not items:
         log_warning("Rankings response contained no usable items.")

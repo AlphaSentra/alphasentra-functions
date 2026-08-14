@@ -150,6 +150,12 @@
         if (overlay) overlay.classList.remove('active');
     }
 
+    function goToEtoro() {
+        var urlEl = document.getElementById('pi-etoro-url');
+        var url = urlEl ? urlEl.textContent : '';
+        window.open(url, '_blank', 'width=900,height=700');
+    }
+
     function getShareUrl() {
         var shareUrlEl = document.getElementById('pi-share-url');
         return shareUrlEl ? shareUrlEl.textContent : window.location.href;
@@ -605,9 +611,9 @@
            </div>
            {% endif %}
            <div class="pi-action-row">
-               <button class="pi-share-btn" onclick="openShareOverlay()">Share</button>
-               <a class="pi-etoro-btn" href="{{ ETORO_USERPROFILE_URL.replace('[username]', pro_investor.userName) }}" target="_blank" rel="noopener noreferrer">Copy &amp; Invest on &lt;etoro&gt;</a>
-           </div>
+                <button class="pi-share-btn" onclick="openShareOverlay()">Share</button>
+                <button class="pi-etoro-btn" onclick="goToEtoro()">Copy &amp; Invest on &lt;etoro&gt;</button>
+            </div>
        </div>
       <div class="pi-chart-main">
           <div class="chart-container">
@@ -761,6 +767,7 @@
         </div>
     </div>
 
+    <span id="pi-etoro-url" style="display:none;">{{ ETORO_USERPROFILE_URL.replace('[username]', pro_investor.userName) }}</span>
     <div id="pi-share-overlay" class="pi-share-overlay" onclick="if(event.target===this){closeShareOverlay();}">
         <span id="pi-share-url" style="display:none;">https://app.alphasentra.com/?share=https://functions.alphasentra.com/etopi?etoro_username={{ pro_investor.userName }}&title={{ (pro_investor.userName ~ ' on eToro x Alphasentra') | urlencode }}&desc={{ (pro_investor.userName ~ "'s portfolio report x Alphasentra") | urlencode }}</span>
         <span id="pi-share-bio" style="display:none;">{{ (pro_investor.aboutMeShort or pro_investor.fullName or pro_investor.userName) }}</span>

@@ -382,6 +382,9 @@ def _prepare_documents(posts: list) -> list:
             and isinstance(tag.get("market"), dict)
             and tag["market"].get("symbolName")
         ]
+        owner = post_data.get("owner") or raw.get("owner") or {}
+        avatar = owner.get("avatar") or {}
+        avatar_medium = avatar.get("medium")
         created_at = _get_created_at(post)
         documents.append(
             {
@@ -393,6 +396,7 @@ def _prepare_documents(posts: list) -> list:
                 "message_text": post.get("message_text"),
                 "likes": post.get("likes", 0),
                 "comments": post.get("comments", 0),
+                "avatar_medium": avatar_medium,
                 "raw": post.get("raw"),
             }
         )
@@ -414,6 +418,8 @@ def _prepare_comment_documents(comments: list) -> list:
         entity = raw.get("entity") or {}
         message = entity.get("message") or {}
         owner = entity.get("owner") or {}
+        avatar = owner.get("avatar") or {}
+        avatar_medium = avatar.get("medium")
         emotions_data = raw.get("emotionsData") or {}
         like_data = emotions_data.get("like") or {}
         like_paging = like_data.get("paging") or {}
@@ -443,6 +449,7 @@ def _prepare_comment_documents(comments: list) -> list:
                 "language_code": message.get("languageCode"),
                 "username": owner.get("username"),
                 "owner_id": owner.get("id"),
+                "avatar_medium": avatar_medium,
                 "is_spam": entity.get("isSpam"),
                 "edit_status": entity.get("editStatus"),
                 "replies_count": replies_count,

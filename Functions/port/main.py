@@ -490,7 +490,7 @@ _ERROR_HTML = """<!DOCTYPE html>
 </html>"""
 
 
-def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "", cached_ai_content=None, return_ai_content: bool = False, skip_ai: bool = False, log_header: bool = True):
+def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = "", etoro_cid: str = "", cached_ai_content=None, return_ai_content: bool = False, skip_ai: bool = False, log_header: bool = True, retry_info: str = ""):
     """
     Generate portfolio HTML report and return it as a string.
     This function is used by the Flask web application.
@@ -503,6 +503,7 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
         return_ai_content: If True, return a tuple of (html, ai_content_dict).
         skip_ai: If True, generate HTML without AI content and without LLM calls.
         log_header: If True, print the processing banner once at the start.
+        retry_info: Optional string to append to the processing banner, e.g. "attempt 1/3".
 
     Returns:
         HTML string of the portfolio report, or tuple if return_ai_content is True.
@@ -510,7 +511,8 @@ def generate_portfolio_html(etoro_username: str = "", benchmark_ticker: str = ""
     report_start = time.perf_counter()
     if log_header:
         print("=" * 60)
-        print(f"PROCESSING PORTFOLIO: {etoro_username}")
+        suffix = f" ({retry_info})" if retry_info else ""
+        print(f"PROCESSING PORTFOLIO: {etoro_username}{suffix}")
         print("=" * 60)
     config = get_interactive_input(no_browser=True, etoro_username=etoro_username, benchmark_ticker=benchmark_ticker, etoro_cid=etoro_cid)
 

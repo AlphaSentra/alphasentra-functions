@@ -188,10 +188,11 @@ with app.app_context():
     MAX_REPORT_RETRIES = 5
     REPORT_RETRY_BASE_DELAY = 15
 
-    def _cache_report(username: str) -> str:
+    def _cache_report(username: str, index: int = 0, total: int = 0) -> str:
         cache_key = f"portfolio_report_{username.strip().lower()}"
         static_key = f"{cache_key}_static"
         ai_cache_key = f"portfolio_report_ai_{username.strip().lower()}"
+        base_retry_info = f"[{index + 1}/{total}]" if total > 0 else ""
         cached_html = get_portfolio_cache_from_mongo("portfolio_report_cache", cache_key, ttl_seconds=_REPORT_TTL, ext=".html")
         if cached_html is not None:
             return f"skip:{username}"
@@ -207,6 +208,7 @@ with app.app_context():
                         benchmark_ticker="",
                         etoro_cid="",
                         skip_ai=True,
+                        retry_info=base_retry_info,
                     )
                     set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
                     return f"ok:{username}"
@@ -218,6 +220,7 @@ with app.app_context():
                         benchmark_ticker="",
                         etoro_cid="",
                         cached_ai_content=cached_ai,
+                        retry_info=base_retry_info,
                     )
                     set_portfolio_cache_to_mongo("portfolio_report_cache", cache_key, report_html, ext=".html", ttl_seconds=_REPORT_TTL)
                     static_html = generate_portfolio_html(
@@ -235,6 +238,7 @@ with app.app_context():
                     benchmark_ticker="",
                     etoro_cid="",
                     return_ai_content=True,
+                    retry_info=base_retry_info,
                 )
                 static_html = generate_portfolio_html(
                     etoro_username=username,
@@ -257,7 +261,7 @@ with app.app_context():
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
                     log_error(
-                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                        f"Failed to cache report for {username} {base_retry_info} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to unmapped instruments: {exc.unmapped_ids}",
                     )
                     return f"error:{username}"
@@ -271,20 +275,20 @@ with app.app_context():
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
                     log_warning(
-                        f"Skipping report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
+                        f"Skipping report for {username} {base_retry_info} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to invalid symbols: {exc}",
                     )
                     return f"skip:{username}"
             except Exception as exc:
                 if attempt < MAX_REPORT_RETRIES:
                     log_error(
-                        f"Failed to cache report for {username} (attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1}). "
+                        f"Failed to cache report for {username} {base_retry_info} (attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1}). "
                         f"Retrying in {REPORT_RETRY_BASE_DELAY * (2 ** attempt)}s. Error: {exc}",
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
                     log_error(
-                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
+                        f"Failed to cache report for {username} {base_retry_info} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
                     )
                     return f"error:{username}"
 
@@ -296,7 +300,8 @@ with app.app_context():
         # ``max_workers=1`` is intentional: eToro's public API is rate-limited
         # and parallel requests cause 429 / IP bans.
         with ThreadPoolExecutor(max_workers=1) as executor:
-            futures = {executor.submit(_cache_report, u): u for u in all_usernames}
+            total_reports = len(all_usernames)
+            futures = {executor.submit(_cache_report, u, i, total_reports): u for i, u in enumerate(all_usernames)}
             for future in as_completed(futures):
                 res = future.result()
                 if res.startswith("ok:"):

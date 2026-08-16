@@ -349,25 +349,30 @@ def get_report_retry_count(collection_name: str, doc_id: str) -> int:
     return max_count
 
 
-def increment_report_retry_count(collection_name: str, doc_id: str) -> None:
+def increment_report_retry_count(collection_name: str, doc_id: str) -> int:
     mongodb_uri_cache = os.getenv("MONGODB_URI_CACHE", "")
     if not mongodb_uri_cache:
-        return
+        return 0
 
     uris = [uri.strip() for uri in mongodb_uri_cache.split(",") if uri.strip()]
     if not uris:
-        return
+        return 0
 
+    new_count = 0
     for uri in uris:
         client = None
         try:
             client, db = _get_cache_db(uri)
             collection = db[collection_name]
-            collection.update_one(
+            result = collection.update_one(
                 {"_id": doc_id},
                 {"$inc": {"retry_count": 1}},
                 upsert=True,
             )
+            if result.upserted_id is not None:
+                new_count = max(new_count, 1)
+            else:
+                new_count = max(new_count, (result.modified_count or 0) + 1)
         except PyMongoError as e:
             log_error(f"Failed to increment report retry count for uri={uri} collection={collection_name} doc_id={doc_id}", "MONGO_CACHE", e)
         finally:
@@ -376,6 +381,8 @@ def increment_report_retry_count(collection_name: str, doc_id: str) -> None:
                     client.close()
                 except Exception:
                     pass
+
+    return new_count
 
 
 def reset_report_retry_count(collection_name: str, doc_id: str) -> None:

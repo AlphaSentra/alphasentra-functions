@@ -79,9 +79,9 @@ with app.app_context():
     # ------------------------------------------------------------------
     # 2. Cache generation logic per user.
     # ------------------------------------------------------------------
-    MAX_REPORT_RETRIES = 5
+    MAX_REPORT_RETRIES = 1
     REPORT_RETRY_BASE_DELAY = 15
-    MAX_RETRY_COUNT = 5
+    MAX_RETRY_COUNT = 3
 
     def _cache_report(username: str) -> str:
         """Generate and cache portfolio artifacts and the /port selection page for a single user.
@@ -114,6 +114,7 @@ with app.app_context():
             return f"skip:{username}"
 
         retry_count = get_report_retry_count("portfolio_report_cache", ai_cache_key)
+        log_info(f"Current cumulative retry count for {username}: {retry_count}/{MAX_RETRY_COUNT}.")
         if retry_count >= MAX_RETRY_COUNT:
             log_warning(
                 f"Skipping report generation for {username} after {retry_count} cumulative failures (max {MAX_RETRY_COUNT}).",
@@ -171,6 +172,7 @@ with app.app_context():
                         benchmark_ticker="",
                         etoro_cid="",
                         cached_ai_content=cached_ai,
+                        retry_info=f"cached AI, cumulative retries: {retry_count}/{MAX_RETRY_COUNT}",
                     )
                     static_html = generate_portfolio_html(
                         etoro_username=username,
@@ -194,6 +196,7 @@ with app.app_context():
                         ttl_seconds=_REPORT_TTL,
                     )
                     reset_report_retry_count("portfolio_report_cache", ai_cache_key)
+                    log_info(f"Successfully cached report for {username} from cached AI. Retry count reset.")
                     _cache_selection_page(username)
                     return f"ok:{username}"
 
@@ -202,6 +205,7 @@ with app.app_context():
                     benchmark_ticker="",
                     etoro_cid="",
                     return_ai_content=True,
+                    retry_info=f"attempt {attempt + 1}/{MAX_REPORT_RETRIES + 1}, cumulative retries: {retry_count}/{MAX_RETRY_COUNT}",
                 )
                 static_html = generate_portfolio_html(
                     etoro_username=username,
@@ -232,6 +236,7 @@ with app.app_context():
                     ttl_seconds=_REPORT_TTL,
                 )
                 reset_report_retry_count("portfolio_report_cache", ai_cache_key)
+                log_info(f"Successfully cached report for {username}. Retry count reset.")
                 _cache_selection_page(username)
                 return f"ok:{username}"
             except UnmappedInstrumentsError as exc:
@@ -244,10 +249,10 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
-                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
+                    new_retry_count = increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_error(
                         f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
-                        f"due to unmapped instruments: {exc.unmapped_ids}",
+                        f"due to unmapped instruments: {exc.unmapped_ids}. Cumulative retry count is now {new_retry_count}.",
                         "PORT_USER_REPORT_UNMAPPED_FAIL",
                     )
                     _cache_selection_page(username)
@@ -262,10 +267,10 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
-                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
+                    new_retry_count = increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_warning(
                         f"Skipping report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
-                        f"due to invalid symbols: {exc}",
+                        f"due to invalid symbols: {exc}. Cumulative retry count is now {new_retry_count}.",
                         "PORT_USER_REPORT_INVALID_SYMBOL_SKIP",
                     )
                     _cache_selection_page(username)
@@ -279,9 +284,10 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
-                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
+                    new_retry_count = increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_error(
-                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
+                        f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}. "
+                        f"Cumulative retry count is now {new_retry_count}.",
                         "PORT_USER_REPORT_FAIL",
                     )
                     _cache_selection_page(username)

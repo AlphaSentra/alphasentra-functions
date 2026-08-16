@@ -767,7 +767,7 @@
         </div>
     </div>
 
-    <span id="pi-etoro-url" style="display:none;">{{ ETORO_USERPROFILE_URL.replace('[username]', pro_investor.userName) }}</span>
+    <span id="pi-etoro-url" style="display:none;">{{ ETORO_USERPROFILE_URL.replace('[username]', pro_investor.userName | default('')) }}</span>
     <div id="pi-share-overlay" class="pi-share-overlay" onclick="if(event.target===this){closeShareOverlay();}">
         <span id="pi-share-url" style="display:none;">https://app.alphasentra.com/?share=https://functions.alphasentra.com/etopi?etoro_username={{ pro_investor.userName }}&title={{ (pro_investor.userName ~ ' on eToro x Alphasentra') | urlencode }}&desc={{ (pro_investor.userName ~ "'s portfolio report x Alphasentra") | urlencode }}</span>
         <span id="pi-share-bio" style="display:none;">{{ (pro_investor.aboutMeShort or pro_investor.fullName or pro_investor.userName) }}</span>

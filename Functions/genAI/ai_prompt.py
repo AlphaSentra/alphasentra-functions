@@ -111,7 +111,7 @@ def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
         
         progress_thread.start()
 
-
+        """
         response = client.models.generate_content(
             model=gemini_model,
             contents=prompt if prompt else "",
@@ -128,6 +128,8 @@ def get_gen_ai_response(prompt=None, gemini_model=None, batch_mode=False):
                 ]
             },
         )
+        """
+        response = ""
 
         stop_flag.set()
         progress_thread.join()

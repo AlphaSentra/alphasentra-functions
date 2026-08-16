@@ -37,6 +37,7 @@ from Functions.etoro.client import (
     _ETORO_PUBLIC_API_BASE,
     _ETORO_ENDPOINT_USER_FEED as _FEED_ENDPOINT,
     _ETORO_ENDPOINT_POST_COMMENTS as _POST_COMMENTS_ENDPOINT,
+    _ETORO_ENDPOINT_COMMENT_REPLIES as _COMMENT_REPLIES_ENDPOINT,
 )
 from Functions.logging_utils import log_info, log_warning, log_error
 
@@ -403,6 +404,127 @@ def _prepare_documents(posts: list) -> list:
     return documents
 
 
+def _build_replies_url(
+    post_id: str,
+    comment_id: str,
+    take: int = 20,
+    order: str = "Desc",
+    offset_entity_id: str | None = None,
+) -> str:
+    base = _COMMENT_REPLIES_ENDPOINT.format(post_id=post_id, comment_id=comment_id)
+    params = [
+        f"take={min(max(take, 1), 100)}",
+        f"order={'Asc' if order == 'Asc' else 'Desc'}",
+    ]
+    if offset_entity_id:
+        params.append(f"offsetEntityId={offset_entity_id}")
+    return f"{base}?{'&'.join(params)}"
+
+
+def _fetch_comment_replies(
+    session_factory,
+    post_id: str,
+    comment_id: str,
+    take: int = 20,
+    order: str = "Desc",
+) -> list:
+    replies = []
+    offset_entity_id = None
+    last_status = None
+    last_body_preview = ""
+
+    for attempt in range(_MAX_RETRIES):
+        session = session_factory()
+        current_url = _build_replies_url(post_id, comment_id, take=take, order=order, offset_entity_id=offset_entity_id)
+        should_retry = False
+
+        while current_url:
+            try:
+                resp = session.get(current_url, timeout=30)
+            except requests.RequestException as exc:
+                log_warning(
+                    "Replies API error for post %s comment %s on attempt %d/%d: %s"
+                    % (post_id, comment_id, attempt + 1, _MAX_RETRIES, exc)
+                )
+                should_retry = True
+                break
+
+            last_status = resp.status_code
+            try:
+                last_body_preview = resp.text[:200]
+            except Exception:
+                last_body_preview = ""
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                log_warning(
+                    "Replies API HTTP %d for post %s comment %s on attempt %d/%d body=%s"
+                    % (
+                        resp.status_code,
+                        post_id,
+                        comment_id,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        last_body_preview,
+                    )
+                )
+                if attempt == _MAX_RETRIES - 1:
+                    resp.raise_for_status()
+                should_retry = True
+                break
+
+            if resp.status_code == 401:
+                log_warning(
+                    "Replies API HTTP 401 for post %s comment %s on attempt %d/%d; rotating session"
+                    % (post_id, comment_id, attempt + 1, _MAX_RETRIES)
+                )
+                should_retry = True
+                break
+
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = data.get("items") or data.get("comments") or []
+            for item in items:
+                entity = item.get("entity") or item if isinstance(item, dict) else item
+                reply_id = None
+                if isinstance(entity, dict):
+                    reply_id = (
+                        entity.get("id")
+                        or entity.get("replyId")
+                        or item.get("id")
+                        or item.get("replyId")
+                    )
+                if reply_id:
+                    replies.append(
+                        {
+                            "reply_id": str(reply_id),
+                            "comment_id": comment_id,
+                            "post_id": post_id,
+                            "raw": item,
+                        }
+                    )
+
+            paging = data.get("paging") or {}
+            offset_entity_id = paging.get("offsetEntityId") or paging.get("next")
+            if offset_entity_id:
+                current_url = _build_replies_url(post_id, comment_id, take=take, order=order, offset_entity_id=offset_entity_id)
+                time.sleep(_RATE_LIMIT_DELAY_SECONDS)
+            else:
+                current_url = None
+
+        if not should_retry:
+            return replies
+
+        if attempt == _MAX_RETRIES - 1:
+            break
+        time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+
+    raise RuntimeError(
+        f"GET {_COMMENT_REPLIES_ENDPOINT.format(post_id=post_id, comment_id=comment_id)} failed after {_MAX_RETRIES} attempts for post {post_id} comment {comment_id}: "
+        f"last_status={last_status}, body={last_body_preview!r}"
+    )
+
+
 def _prepare_comment_documents(comments: list) -> list:
     """Build normalized comment documents with key extracted fields.
 
@@ -444,6 +566,64 @@ def _prepare_comment_documents(comments: list) -> list:
             {
                 "comment_id": comment.get("comment_id"),
                 "post_id": comment.get("post_id"),
+                "created": created_at,
+                "text": message.get("text"),
+                "language_code": message.get("languageCode"),
+                "username": owner.get("username"),
+                "owner_id": owner.get("id"),
+                "avatar_medium": avatar_medium,
+                "is_spam": entity.get("isSpam"),
+                "edit_status": entity.get("editStatus"),
+                "replies_count": replies_count,
+                "likes": likes,
+                "raw": raw,
+            }
+        )
+    return documents
+
+
+def _prepare_reply_documents(replies: list) -> list:
+    """Build normalized reply documents with key extracted fields.
+
+    Args:
+        replies: List of reply dicts with reply_id, comment_id, post_id, and raw item.
+
+    Returns:
+        List of reply documents ready for MongoDB upsert.
+    """
+    documents = []
+    for reply in replies:
+        raw = reply.get("raw") or {}
+        entity = raw.get("entity") or {}
+        message = entity.get("message") or {}
+        owner = entity.get("owner") or {}
+        avatar = owner.get("avatar") or {}
+        avatar_medium = avatar.get("medium")
+        emotions_data = raw.get("emotionsData") or {}
+        like_data = emotions_data.get("like") or {}
+        like_paging = like_data.get("paging") or {}
+        likes = int((like_paging.get("totalCount") or 0))
+        replies_count = int(raw.get("repliesCount") or 0)
+        created_raw = entity.get("created")
+        created_at = None
+        if created_raw:
+            for fmt in (
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+                "%Y-%m-%dT%H:%M:%SZ",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S",
+            ):
+                try:
+                    created_at = datetime.strptime(str(created_raw), fmt).replace(tzinfo=timezone.utc)
+                    break
+                except ValueError:
+                    continue
+
+        documents.append(
+            {
+                "reply_id": reply.get("reply_id"),
+                "comment_id": reply.get("comment_id"),
+                "post_id": reply.get("post_id"),
                 "created": created_at,
                 "text": message.get("text"),
                 "language_code": message.get("languageCode"),
@@ -561,15 +741,17 @@ def _fetch_user_feed(session_factory, user_id: str) -> list:
     )
 
 
-def _write_to_feed(posts: list, comments: list) -> int:
-    """Upsert post documents and their comments into MongoDB.
+def _write_to_feed(posts: list, comments: list, replies: list) -> int:
+    """Upsert post documents and their comments/replies into MongoDB.
 
     Posts are keyed by ``post_id`` in ``etoro_posts``.
     Comments are keyed by ``comment_id`` in ``etoro_comments``.
+    Replies are keyed by ``reply_id`` in ``etoro_replies``.
 
     Args:
         posts: Post documents to store.
         comments: Comment documents to store.
+        replies: Reply documents to store.
 
     Returns:
         Total number of documents successfully upserted.
@@ -584,9 +766,11 @@ def _write_to_feed(posts: list, comments: list) -> int:
         db = client[db_name]
         posts_collection = db["etoro_posts"]
         comments_collection = db["etoro_comments"]
+        replies_collection = db["etoro_replies"]
 
         post_documents = _prepare_documents(posts)
         comment_documents = _prepare_comment_documents(comments)
+        reply_documents = _prepare_reply_documents(replies)
 
         post_ops = [
             UpdateOne({"post_id": doc["post_id"]}, {"$set": doc}, upsert=True)
@@ -596,9 +780,13 @@ def _write_to_feed(posts: list, comments: list) -> int:
             UpdateOne({"comment_id": doc["comment_id"]}, {"$set": doc}, upsert=True)
             for doc in comment_documents
         ]
+        reply_ops = [
+            UpdateOne({"reply_id": doc["reply_id"]}, {"$set": doc}, upsert=True)
+            for doc in reply_documents
+        ]
 
-        if not post_ops and not comment_ops:
-            log_warning("No post or comment documents to store.")
+        if not post_ops and not comment_ops and not reply_ops:
+            log_warning("No post, comment, or reply documents to store.")
             return 0
 
         last_exception = None
@@ -608,7 +796,9 @@ def _write_to_feed(posts: list, comments: list) -> int:
                     posts_collection.bulk_write(post_ops, ordered=False)
                 if comment_ops:
                     comments_collection.bulk_write(comment_ops, ordered=False)
-                return len(post_ops) + len(comment_ops)
+                if reply_ops:
+                    replies_collection.bulk_write(reply_ops, ordered=False)
+                return len(post_ops) + len(comment_ops) + len(reply_ops)
             except PyMongoError as exc:
                 last_exception = exc
                 log_warning(
@@ -653,6 +843,7 @@ def main() -> None:
     seen_ids = set()
     pending_posts = []
     pending_comments = []
+    pending_replies = []
     total_upserted = 0
 
     for idx, user_id in enumerate(user_ids, start=1):
@@ -675,6 +866,17 @@ def main() -> None:
                     pending_comments.extend(comments)
                     if comments:
                         log_info(f"Collected {len(comments)} comments for post {post_id}.")
+                    for comment in comments:
+                        comment_id = comment.get("comment_id")
+                        if not comment_id:
+                            continue
+                        try:
+                            replies = _fetch_comment_replies(session_factory, post_id, comment_id)
+                            pending_replies.extend(replies)
+                            if replies:
+                                log_info(f"Collected {len(replies)} replies for comment {comment_id}.")
+                        except Exception as exc:
+                            log_warning(f"Failed to fetch replies for comment {comment_id}: {exc}")
                 except Exception as exc:
                     log_warning(f"Failed to fetch comments for post {post_id}: {exc}")
             log_info(f"Collected {len(posts)} posts for user {user_id}.")
@@ -685,15 +887,16 @@ def main() -> None:
         if idx % _BATCH_WRITE_USERS == 0 and pending_posts:
             documents = _prepare_documents(pending_posts)
             if documents:
-                upserted = _write_to_feed(documents, pending_comments)
+                upserted = _write_to_feed(documents, pending_comments, pending_replies)
                 total_upserted += upserted
                 log_info(
-                    f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments "
+                    f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments/etoro_replies "
                     f"(batch at user {idx})."
                 )
 
             pending_posts.clear()
             pending_comments.clear()
+            pending_replies.clear()
 
         if idx < len(user_ids):
             time.sleep(_RATE_LIMIT_DELAY_SECONDS)
@@ -701,9 +904,9 @@ def main() -> None:
     if pending_posts:
         documents = _prepare_documents(pending_posts)
         if documents:
-            upserted = _write_to_feed(documents, pending_comments)
+            upserted = _write_to_feed(documents, pending_comments, pending_replies)
             total_upserted += upserted
-            log_info("Upserted %d documents into feed.etoro_posts/etoro_comments (final batch)." % upserted)
+            log_info("Upserted %d documents into feed.etoro_posts/etoro_comments/etoro_replies (final batch)." % upserted)
 
     if total_upserted > 0:
         log_info(f"Total upserted {total_upserted} documents across all batches.")

@@ -37,7 +37,7 @@ sys.path.insert(0, str(_ROOT))
 sys.path.insert(0, str(_ROOT / "Functions"))
 sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 
-from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
+from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo, get_report_retry_count, increment_report_retry_count, reset_report_retry_count
 from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info, log_error, log_warning
 from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
@@ -81,6 +81,7 @@ with app.app_context():
     # ------------------------------------------------------------------
     MAX_REPORT_RETRIES = 5
     REPORT_RETRY_BASE_DELAY = 15
+    MAX_RETRY_COUNT = 5
 
     def _cache_report(username: str) -> str:
         """Generate and cache portfolio artifacts and the /port selection page for a single user.
@@ -109,6 +110,47 @@ with app.app_context():
             ext=".html",
         )
         if cached_html is not None:
+            _cache_selection_page(username)
+            return f"skip:{username}"
+
+        retry_count = get_report_retry_count("portfolio_report_cache", ai_cache_key)
+        if retry_count >= MAX_RETRY_COUNT:
+            log_warning(
+                f"Skipping report generation for {username} after {retry_count} cumulative failures (max {MAX_RETRY_COUNT}).",
+                "PORT_USER_REPORT_RETRY_LIMIT",
+            )
+            static_html = generate_portfolio_html(
+                etoro_username=username,
+                benchmark_ticker="",
+                etoro_cid="",
+                skip_ai=True,
+                log_header=False,
+            )
+            placeholder_ai_content = {
+                "intel_commentary_text": "The AI has not detected any significant information to process at this time.",
+                "overview_ai_interpretation": "",
+            }
+            set_portfolio_cache_to_mongo(
+                "portfolio_report_cache",
+                cache_key,
+                static_html,
+                ext=".html",
+                ttl_seconds=_REPORT_TTL,
+            )
+            set_portfolio_cache_to_mongo(
+                "portfolio_report_cache",
+                static_key,
+                static_html,
+                ext=".html",
+                ttl_seconds=_REPORT_TTL,
+            )
+            set_portfolio_cache_to_mongo(
+                "portfolio_report_cache",
+                ai_cache_key,
+                placeholder_ai_content,
+                ext=".json",
+                ttl_seconds=_REPORT_TTL,
+            )
             _cache_selection_page(username)
             return f"skip:{username}"
 
@@ -151,6 +193,7 @@ with app.app_context():
                         ext=".html",
                         ttl_seconds=_REPORT_TTL,
                     )
+                    reset_report_retry_count("portfolio_report_cache", ai_cache_key)
                     _cache_selection_page(username)
                     return f"ok:{username}"
 
@@ -188,6 +231,7 @@ with app.app_context():
                     ext=".json",
                     ttl_seconds=_REPORT_TTL,
                 )
+                reset_report_retry_count("portfolio_report_cache", ai_cache_key)
                 _cache_selection_page(username)
                 return f"ok:{username}"
             except UnmappedInstrumentsError as exc:
@@ -200,6 +244,7 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
+                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_error(
                         f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to unmapped instruments: {exc.unmapped_ids}",
@@ -217,6 +262,7 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
+                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_warning(
                         f"Skipping report for {username} after {MAX_REPORT_RETRIES + 1} attempts "
                         f"due to invalid symbols: {exc}",
@@ -233,6 +279,7 @@ with app.app_context():
                     )
                     time.sleep(REPORT_RETRY_BASE_DELAY * (2 ** attempt))
                 else:
+                    increment_report_retry_count("portfolio_report_cache", ai_cache_key)
                     log_error(
                         f"Failed to cache report for {username} after {MAX_REPORT_RETRIES + 1} attempts: {exc}",
                         "PORT_USER_REPORT_FAIL",

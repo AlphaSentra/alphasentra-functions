@@ -317,3 +317,90 @@ def get_portfolio_cache_from_mongo(collection_name: str, doc_id: str, ttl_second
                     pass
 
     return None
+
+
+def get_report_retry_count(collection_name: str, doc_id: str) -> int:
+    mongodb_uri_cache = os.getenv("MONGODB_URI_CACHE", "")
+    if not mongodb_uri_cache:
+        return 0
+
+    uris = [uri.strip() for uri in mongodb_uri_cache.split(",") if uri.strip()]
+    if not uris:
+        return 0
+
+    max_count = 0
+    for uri in uris:
+        client = None
+        try:
+            client, db = _get_cache_db(uri)
+            collection = db[collection_name]
+            doc = collection.find_one({"_id": doc_id}, {"retry_count": 1})
+            if doc and doc.get("retry_count"):
+                max_count = max(max_count, int(doc["retry_count"]))
+        except PyMongoError:
+            continue
+        finally:
+            if client:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+
+    return max_count
+
+
+def increment_report_retry_count(collection_name: str, doc_id: str) -> None:
+    mongodb_uri_cache = os.getenv("MONGODB_URI_CACHE", "")
+    if not mongodb_uri_cache:
+        return
+
+    uris = [uri.strip() for uri in mongodb_uri_cache.split(",") if uri.strip()]
+    if not uris:
+        return
+
+    for uri in uris:
+        client = None
+        try:
+            client, db = _get_cache_db(uri)
+            collection = db[collection_name]
+            collection.update_one(
+                {"_id": doc_id},
+                {"$inc": {"retry_count": 1}},
+                upsert=True,
+            )
+        except PyMongoError as e:
+            log_error(f"Failed to increment report retry count for uri={uri} collection={collection_name} doc_id={doc_id}", "MONGO_CACHE", e)
+        finally:
+            if client:
+                try:
+                    client.close()
+                except Exception:
+                    pass
+
+
+def reset_report_retry_count(collection_name: str, doc_id: str) -> None:
+    mongodb_uri_cache = os.getenv("MONGODB_URI_CACHE", "")
+    if not mongodb_uri_cache:
+        return
+
+    uris = [uri.strip() for uri in mongodb_uri_cache.split(",") if uri.strip()]
+    if not uris:
+        return
+
+    for uri in uris:
+        client = None
+        try:
+            client, db = _get_cache_db(uri)
+            collection = db[collection_name]
+            collection.update_one(
+                {"_id": doc_id},
+                {"$unset": {"retry_count": ""}},
+            )
+        except PyMongoError as e:
+            log_error(f"Failed to reset report retry count for uri={uri} collection={collection_name} doc_id={doc_id}", "MONGO_CACHE", e)
+        finally:
+            if client:
+                try:
+                    client.close()
+                except Exception:
+                    pass

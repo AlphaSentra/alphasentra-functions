@@ -345,13 +345,25 @@ class ETPublicClient:
             data = resp.json()
         except EToroClientError:
             if stale is not None:
-                logger.warning("Live portfolio API failed for %s; using stale cache", username)
-                return stale
+                if getattr(stale, 'unmapped_instrument_ids', []):
+                    logger.warning(
+                        "Stale cache for %s has %d unmapped instruments; refusing to serve incomplete portfolio",
+                        username, len(stale.unmapped_instrument_ids),
+                    )
+                else:
+                    logger.warning("Live portfolio API failed for %s; using stale cache", username)
+                    return stale
             raise
         except requests.RequestException as exc:
             if stale is not None:
-                logger.warning("Live portfolio API error for %s (%s); using stale cache", username, exc)
-                return stale
+                if getattr(stale, 'unmapped_instrument_ids', []):
+                    logger.warning(
+                        "Stale cache for %s has %d unmapped instruments; refusing to serve incomplete portfolio",
+                        username, len(stale.unmapped_instrument_ids),
+                    )
+                else:
+                    logger.warning("Live portfolio API error for %s (%s); using stale cache", username, exc)
+                    return stale
             raise EToroClientError(f"GET investor portfolio failed: {exc}") from exc
 
         raw_positions = data.get("positions", [])
@@ -411,6 +423,28 @@ class ETPublicClient:
             raise
         except Exception as exc:
             logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
+
+        for retry_round in range(3):
+            failed_iids = [
+                iid for iid in instrument_ids
+                if iid not in etoro_symbol_map or not etoro_symbol_map.get(iid)
+            ]
+            if not failed_iids:
+                break
+            logger.warning(
+                "Symbol resolution failed for %d instrument(s) %s (retry %d/3). Retrying...",
+                len(failed_iids), failed_iids, retry_round + 1,
+            )
+            for iid in failed_iids:
+                _remove_from_instrument_cache(iid)
+            time.sleep(2 ** retry_round)
+            try:
+                retry_metadata = self.resolve_instrument_metadata(failed_iids)
+                for iid, meta in retry_metadata.items():
+                    if meta.get("symbol"):
+                        etoro_symbol_map[iid] = meta["symbol"]
+            except Exception as exc:
+                logger.warning("Symbol resolution retry %d failed: %s", retry_round + 1, exc)
 
         # --- 3. Pull from MongoDB and compare fields ---
         instrument_ids = list({str(item["instrumentId"]) for item in raw_positions if item.get("instrumentId")})
@@ -559,7 +593,14 @@ class ETPublicClient:
             aggregated_positions=aggregated_positions,
             unmapped_instrument_ids=unmapped_instrument_ids,
         )
-        set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
+        if unmapped_instrument_ids:
+            logger.warning(
+                "Portfolio for %s has %d unmapped instrument(s) out of %d raw positions; "
+                "skipping cache to avoid serving incomplete snapshot.",
+                username, len(unmapped_instrument_ids), len(raw_positions),
+            )
+        else:
+            set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result
     
     def get_trade_history(
@@ -728,7 +769,7 @@ class ETPublicClient:
                     if meta:
                         result[str(iid)] = meta
                 except Exception as exc:
-                    logger.debug("Instrument resolution future failed for %s: %s", iid, exc)
+                    logger.warning("Instrument resolution future failed for %s: %s", iid, exc)
 
         if result:
             _save_instrument_cache(result)

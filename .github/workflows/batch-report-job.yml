@@ -22,6 +22,10 @@ jobs:
       MONGODB_AUTH_SOURCE: ${{ secrets.MONGODB_AUTH_SOURCE }}
       MONGODB_URI_CACHE: ${{ secrets.MONGODB_URI_CACHE }}
       MONGODB_DATABASE_CACHE: ${{ secrets.MONGODB_DATABASE_CACHE }}
+      MONGODB_URI_FEED: ${{ secrets.MONGODB_URI_FEED }}
+      MONGODB_DATABASE_FEED: ${{ secrets.MONGODB_DATABASE_FEED }}
+      MONGODB_URI_LOGS: ${{ secrets.MONGODB_URI_LOGS }}
+      MONGODB_DATABASE_LOGS: ${{ secrets.MONGODB_DATABASE_LOGS }}
       ETORO_PRIVATE_KEY: ${{ secrets.ETORO_PRIVATE_KEY }}
       ETORO_PUBLIC_KEY: ${{ secrets.ETORO_PUBLIC_KEY }}
       GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -30,6 +34,8 @@ jobs:
       GEMINI_FLASH_LITE_MODEL: ${{ secrets.GEMINI_FLASH_LITE_MODEL }}
       GEMINI_PRO_MODEL: ${{ secrets.GEMINI_PRO_MODEL }}
       ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5

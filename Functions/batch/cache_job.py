@@ -18,9 +18,9 @@ SCRIPT_ORDER = [
     "port_selection_cache.py",
 ]
 
-# Maximum allowed runtime per script (seconds). Set to 3 hours to stay well
+# Maximum allowed runtime per script (seconds). Set to 5 hours to stay well
 # within Render cron limits and control cost.
-SCRIPT_TIMEOUT_SECONDS = 3 * 60 * 60
+SCRIPT_TIMEOUT_SECONDS = 5 * 60 * 60
 
 
 def _format_duration(seconds: float) -> str:

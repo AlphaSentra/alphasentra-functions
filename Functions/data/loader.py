@@ -111,16 +111,6 @@ def load_transactions_from_etoro(
         resolved_cid = cid or resolved_client.resolve_cid(username)
         history = resolved_client.get_trade_history(username=username, explicit_cid=resolved_cid)
 
-        for record in history.records:
-            raw = record.raw if isinstance(record.raw, dict) else {}
-            ticker = raw.get("Ticker", "")
-            name = raw.get("Name", "")
-            if isinstance(ticker, str) and isinstance(name, str) and (ticker.isdigit() or name.isdigit()):
-                raise InvalidSymbolError(
-                    f"Trade history for {username} contains numeric-only field(s) "
-                    f"(Ticker={ticker!r}, Name={name!r}). Skipping portfolio."
-                )
-
         if not history.records:
             logger.warning("eToro trade history returned no records for %s.", username)
             return pd.DataFrame()
@@ -219,6 +209,15 @@ def load_transactions_from_etoro(
             missing = required_cols - set(df.columns)
             if missing:
                 logger.warning("eToro trade history missing expected columns: %s", sorted(missing))
+
+            bad_mask = df["Ticker"].apply(lambda v: isinstance(v, str) and v.isdigit()) | df["Name"].apply(lambda v: isinstance(v, str) and v.isdigit())
+            bad_count = bad_mask.sum()
+            if bad_count:
+                bad_tickers = df.loc[bad_mask, "Ticker"].tolist()[:10]
+                raise InvalidSymbolError(
+                    f"Trade history for {username} contains {bad_count} row(s) with numeric ticker or name "
+                    f"(e.g. Ticker={bad_tickers!r}). Skipping portfolio."
+                )
 
             df["Exit Date"] = pd.to_datetime(df["Exit Date"], utc=True).dt.tz_localize(None)
             df = df.sort_values("Exit Date").reset_index(drop=True)

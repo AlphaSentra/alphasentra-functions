@@ -1,15 +1,12 @@
-name: Batch Portfolio Report Cache Job
+name: Feed Collection Batch Job
 
 on:
-  push:
-    branches:
-      - main
   schedule:
-    - cron: '0 */4 * * *'
+    - cron: '0 3 * * *'
   workflow_dispatch:
 
 jobs:
-  batch-report:
+  feed:
     runs-on: ubuntu-latest
     env:
       USE_MONGODB_SRV: ${{ secrets.USE_MONGODB_SRV }}
@@ -36,4 +33,4 @@ jobs:
         with:
           python-version: '3.14'
       - run: pip install -r requirements.txt
-      - run: python Functions/batch/port_user_report_cache.py
+      - run: python Functions/batch/feed_job.py

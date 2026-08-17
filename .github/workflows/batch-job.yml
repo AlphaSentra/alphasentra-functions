@@ -1,4 +1,4 @@
-name: Batch Cache Job
+name: Batch Functions Cache Job
 
 on:
   schedule:

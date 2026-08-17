@@ -1,4 +1,4 @@
-name: Feed Collection Batch Job
+name: Batch Feed Collection Job
 
 on:
   schedule:

@@ -774,8 +774,14 @@ def _fetch_rankings(
         if cid:
             week_map[cid] = item.get("gain")
 
-    month_map = _build_gain_map(month_data.get("results", []), "gain")
-    year_map = _build_gain_map(year_data.get("results", []), "gain")
+    month_map = _build_gain_map(
+        [item for item in month_data.get("results", []) if item.get("copiers", 0) > 10],
+        "gain",
+    )
+    year_map = _build_gain_map(
+        [item for item in year_data.get("results", []) if item.get("copiers", 0) > 10],
+        "gain",
+    )
 
     if merged:
         for item in merged:

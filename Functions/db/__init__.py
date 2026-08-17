@@ -8,6 +8,7 @@ from Functions.db.repositories import (
     get_ai_settings,
     increment_ai_prompt_count,
     lookup_etoro_instrument_symbols,
+    lookup_etoro_instruments_from_db,
 )
 from Functions.db.cache import get_index_cache_from_mongo, set_index_cache_to_mongo
 

@@ -279,3 +279,44 @@ def lookup_etoro_instrument_symbols(instrument_ids: List[str], symbol_fulls: Lis
                 return db_symbol_map
 
     return db_symbol_map
+
+
+def lookup_etoro_instruments_from_db(instrument_ids: List[str]) -> Dict[str, Dict[str, str]]:
+    db_meta_map: Dict[str, Dict[str, str]] = {}
+    if not instrument_ids:
+        return db_meta_map
+
+    max_retries = 3
+    base_delay = 1
+
+    for attempt in range(max_retries + 1):
+        try:
+            db = DatabaseManager().get_client()
+            db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+            coll = db[db_name]["etoro_instruments"]
+
+            cursor = coll.find(
+                {"instrument_id": {"$in": [str(i) for i in instrument_ids]}},
+                {"instrument_id": 1, "symbol": 1, "name": 1, "displayName": 1},
+            )
+            for doc in cursor:
+                key = str(doc.get("instrument_id", ""))
+                symbol = doc.get("symbol")
+                name = doc.get("name") or doc.get("displayName") or ""
+                if key and symbol is not None:
+                    db_meta_map[key] = {"symbol": str(symbol), "name": str(name)}
+            return db_meta_map
+        except Exception as exc:
+            if attempt < max_retries:
+                from Functions.logging_utils import log_warning
+                log_warning(
+                    f"DB lookup failed for etoro_instruments (attempt {attempt + 1}/{max_retries + 1}). Retrying in {base_delay * (2 ** attempt)}s. Error: {exc}",
+                    "MONGODB_ETORO_INSTRUMENTS_LOOKUP_RETRY",
+                )
+                time.sleep(base_delay * (2 ** attempt))
+            else:
+                from Functions.logging_utils import log_error
+                log_error("Failed to lookup eToro instruments from DB after multiple retries", "MONGODB_ETORO_INSTRUMENTS_LOOKUP", exc)
+                return db_meta_map
+
+    return db_meta_map

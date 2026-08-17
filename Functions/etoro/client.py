@@ -25,7 +25,7 @@ except ImportError:
     DatabaseManager = None
     get_logs_client = None
 
-from Functions.db.repositories import lookup_etoro_instrument_symbols
+from Functions.db.repositories import lookup_etoro_instrument_symbols, lookup_etoro_instruments_from_db
 
 from .auth import public_api_session, get_random_private_key
 from .models import (
@@ -771,7 +771,8 @@ class ETPublicClient:
     def resolve_instrument_metadata(self, instrument_ids: list) -> Dict[str, Dict[str, str]]:
         """
         Resolve eToro InstrumentIDs to full symbol and display name via the search API.
-        Results are cached on disk for 24 hours.
+        Falls back to the ``etoro_instruments`` MongoDB collection when the live API
+        returns no data. Results are cached on disk for 24 hours.
 
         Returns a dict keyed by InstrumentID with values like:
             {"symbol": "AAPL", "name": "Apple Inc."}
@@ -806,6 +807,17 @@ class ETPublicClient:
                         result[str(iid)] = meta
                 except Exception as exc:
                     logger.warning("Instrument resolution future failed for %s: %s", iid, exc)
+
+        unresolved = [iid for iid in remaining if str(iid) not in result]
+        if unresolved:
+            try:
+                db_meta = lookup_etoro_instruments_from_db(unresolved)
+                for iid, meta in db_meta.items():
+                    if meta.get("symbol"):
+                        result[iid] = meta
+                        logger.info("Resolved instrumentId=%s from etoro_instruments DB fallback", iid)
+            except Exception as exc:
+                logger.warning("etoro_instruments DB fallback failed: %s", exc)
 
         if result:
             _save_instrument_cache(result)

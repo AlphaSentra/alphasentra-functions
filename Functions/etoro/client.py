@@ -20,9 +20,10 @@ if str(_parent_dir) not in sys.path:
     sys.path.append(str(_parent_dir))
 
 try:
-    from Functions.db.client import DatabaseManager
+    from Functions.db.client import DatabaseManager, get_logs_client
 except ImportError:
     DatabaseManager = None
+    get_logs_client = None
 
 from Functions.db.repositories import lookup_etoro_instrument_symbols
 
@@ -182,6 +183,40 @@ def _remove_from_instrument_cache(iid: str) -> None:
             logger.debug("Removed instrument %s from cache due to numerical symbol.", iid)
     except Exception as exc:
         logger.debug("Failed to remove instrument %s from cache: %s", iid, exc)
+
+
+def _record_unmapped_instruments(username: str, raw_positions: List[Dict[str, Any]], unmapped_ids: List[str], etoro_symbol_map: Dict[str, str]) -> None:
+    if not get_logs_client:
+        return
+    if not unmapped_ids:
+        return
+    try:
+        logs_client, logs_db_name = get_logs_client()
+        if not logs_client or not logs_db_name:
+            return
+        coll = logs_client[logs_db_name]["etoro_unmapped_instruments"]
+        docs = []
+        raw_by_iid = {str(item.get("instrumentId", "")): item for item in raw_positions if item.get("instrumentId")}
+        for iid in unmapped_ids:
+            raw = raw_by_iid.get(str(iid), {})
+            docs.append({
+                "username": username,
+                "instrument_id": str(iid),
+                "symbol_full": etoro_symbol_map.get(str(iid)),
+                "raw_symbol": raw.get("symbol"),
+                "display_name": raw.get("displayName") or raw.get("displayname"),
+                "open_rate": raw.get("openRate"),
+                "investment_pct": raw.get("investmentPct"),
+                "position_id": raw.get("positionId"),
+                "is_buy": raw.get("isBuy"),
+                "leverage": raw.get("leverage"),
+                "detected_at": datetime.now(timezone.utc),
+            })
+        if docs:
+            coll.insert_many(docs)
+            logger.info("Recorded %d unmapped instrument(s) for %s in etoro_unmapped_instruments", len(docs), username)
+    except Exception as exc:
+        logger.warning("Failed to record unmapped instruments for %s: %s", username, exc)
 
 
 def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: str) -> Optional[Dict[str, str]]:
@@ -599,6 +634,7 @@ class ETPublicClient:
                 "skipping cache to avoid serving incomplete snapshot.",
                 username, len(unmapped_instrument_ids), len(raw_positions),
             )
+            _record_unmapped_instruments(username, raw_positions, unmapped_instrument_ids, etoro_symbol_map)
         else:
             set_portfolio_cache_to_mongo("etoro_cache", cache_key, result, ext=".pkl", ttl_seconds=_ETORO_TTL)
         return result

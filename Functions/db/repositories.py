@@ -295,14 +295,21 @@ def lookup_etoro_instruments_from_db(instrument_ids: List[str]) -> Dict[str, Dic
             db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
             coll = db[db_name]["etoro_instruments"]
 
+            numeric_ids = []
+            for iid in instrument_ids:
+                try:
+                    numeric_ids.append(int(str(iid)))
+                except (TypeError, ValueError):
+                    pass
+
             cursor = coll.find(
-                {"instrument_id": {"$in": [str(i) for i in instrument_ids]}},
-                {"instrument_id": 1, "symbol": 1, "name": 1, "displayName": 1},
+                {"InstrumentID": {"$in": numeric_ids}},
+                {"InstrumentID": 1, "SymbolFull": 1, "InstrumentDisplayName": 1},
             )
             for doc in cursor:
-                key = str(doc.get("instrument_id", ""))
-                symbol = doc.get("symbol")
-                name = doc.get("name") or doc.get("displayName") or ""
+                key = str(doc.get("InstrumentID", ""))
+                symbol = doc.get("SymbolFull")
+                name = doc.get("InstrumentDisplayName") or ""
                 if key and symbol is not None:
                     db_meta_map[key] = {"symbol": str(symbol), "name": str(name)}
             return db_meta_map

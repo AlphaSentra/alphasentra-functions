@@ -1,53 +1,135 @@
-# Batch Job Documentation
+# Batch Jobs Documentation
 
 ## Overview
 
-The batch job (`Functions/batch/cache_job.py`) is a scheduled cache-warming pipeline that runs a sequence of Python scripts to pre-generate and store HTML and data artifacts. It is designed to be deployed as a **Render Cron Job**.
+The project uses three batch job runners executed via **GitHub Actions** workflows:
 
-## Scripts
+| Runner | Script | Purpose |
+|--------|--------|---------|
+| `cache_job.py` | Clears and warms portfolio cache | Clears stale cache, generates index HTML, pre-caches portfolio selection and reports |
+| `feed_job.py` | Collects eToro feed data | Fetches trending PIs, instruments, and their posts from the eToro public API |
+| `logs_rm_duplicated.py` | Deduplicates logs database | Removes duplicate documents from `etoro_unmapped_instruments` collection |
 
-The runner executes three scripts in order. Each script depends on the state left by the previous one.
+Additionally, `port_user_report_cache.py` is a long-lived worker that continuously pre-caches portfolio reports for active users.
+
+## Runners
+
+### 1. `Functions/batch/cache_job.py`
+
+Clears the cache and warms the function index and portfolio selection pages.
+
+**Scripts executed in order:**
 
 | Order | Script | Purpose |
 |-------|--------|---------|
-| 1 | `port_clear_cache.py` | Deletes the `/.cache/` directory to ensure a clean state before warming. |
+| 1 | `clear_cache.py` | Drops all known cache collections (`portfolio_selection_cache`, `portfolio_report_cache`, `yfinance_cache`, `etoro_cache`, `function_index_cache`) to ensure a clean state. |
 | 2 | `index_function_cache.py` | Generates the landing-page index HTML and stores it in cache. |
 | 3 | `port_selection_cache.py` | Generates portfolio selection HTML, caches the top-investor usernames list, and pre-generates per-investor portfolio reports. |
 
+**Timeout:** 5 hours per script (`SCRIPT_TIMEOUT_SECONDS = 18000`).
+
+### 2. `Functions/batch/feed_job.py`
+
+Collects eToro feed data (trending PIs, instruments, and posts) and stores it in the feed MongoDB database.
+
+**Scripts executed in order:**
+
+| Order | Script | Purpose |
+|-------|--------|---------|
+| 1 | `clear_feed.py` | Drops `etoro_trending_instruments` and `etoro_trending_pi` collections; removes `etoro_posts` older than 60 days. |
+| 2 | `feed_get_pi.py` | Fetches current-year top-copier Popular Investor rankings and upserts into `etoro_trending_pi`. |
+| 3 | `feed_get_instruments.py` | Fetches top 100 instruments by 7-day viewer popularity and trader change, upserts into `etoro_trending_instruments`. |
+| 4 | `feed_get_posts_from_pi.py` | Reads `etoro_trending_pi`, fetches each PI's public feed posts (last 30 days), stores in `etoro_posts`. |
+| 5 | `feed_get_posts_from_instruments.py` | Reads `etoro_trending_instruments`, fetches each instrument's public market feed posts (last 30 days), stores in `etoro_posts`. |
+
+**Timeout:** 3 hours per script (`SCRIPT_TIMEOUT_SECONDS = 10800`).
+
+### 3. `Functions/batch/logs_rm_duplicated.py`
+
+Removes duplicate documents from the `etoro_unmapped_instruments` collection in the logs database.
+
+**Logic:**
+- Groups documents by `(username, instrument_id)`.
+- Retains the document with the most recent `detected_at` timestamp.
+- When timestamps are equal, retains the document with the highest `_id` (insertion order tie-break).
+- Deletes all other documents in the same group in batches of 1000.
+
+**Output:** Logs the number of scanned groups and deleted documents.
+
+### 4. `Functions/batch/port_user_report_cache.py` (Long-lived Worker)
+
+Continuously polls the `users` collection for accounts with a valid `etoro_username` and non-expired `expiry_subscription`, then pre-generates and caches:
+- Full portfolio HTML reports (and AI/static variants) in `portfolio_report_cache`.
+- Authenticated `/port` selection pages in `portfolio_selection_cache`.
+
+**Polling interval:** 10 seconds by default (`POLL_INTERVAL_SECONDS` env var).
+
+Gracefully handles `SIGINT` and `SIGTERM` for clean shutdown.
+
 ## How It Works
 
-`job.py` resolves the project root (`_ROOT`) and invokes each script sequentially using `sys.executable` (the same Python interpreter). Each script is given a wall-clock timeout of **3 hours** (`SCRIPT_TIMEOUT_SECONDS = 10800`). After all scripts finish, a summary report is printed showing pass/fail status and duration.
-
-A non-zero exit code is emitted if any script fails or times out.
+Each runner executes its scripts sequentially using `subprocess.run()` with the current Python interpreter. After all scripts finish, a summary report is printed showing pass/fail status and duration. A non-zero exit code is emitted if any script fails or times out.
 
 ## Local Execution
 
 ```bash
+# Cache job
 python Functions/batch/cache_job.py
+
+# Feed collection job
+python Functions/batch/feed_job.py
+
+# Logs deduplication
+python Functions/batch/logs_rm_duplicated.py
+
+# Portfolio report cache worker (long-lived)
+python Functions/batch/port_user_report_cache.py
 ```
 
 ## Required Environment Variables
 
-The batch scripts touch MongoDB, eToro auth, and optional AI services. The following variables must be set in the execution environment.
+The batch scripts touch multiple MongoDB databases, eToro auth, AI services, and email. The following variables must be set in the execution environment.
 
-### MongoDB (required for `index_function_cache.py` and `port_selection_cache.py`)
+### MongoDB Core (required for `cache_job.py` and `port_user_report_cache.py`)
 
 | Variable | Default | Description |
 |----------|---------|-------------|
 | `USE_MONGODB_SRV` | `false` | Set to `true` when using a MongoDB SRV connection string. |
-| `MONGODB_SRV` | — | Required if `USE_MONGODB_SRV=true`. The full SRV URI (e.g., `mongodb+srv://cluster.mongodb.net`). |
+| `MONGODB_SRV` | — | Required if `USE_MONGODB_SRV=true`. The full SRV URI. |
 | `MONGODB_HOST` | `localhost` | Hostname when not using SRV. |
 | `MONGODB_PORT` | `27017` | Port when not using SRV. |
-| `MONGODB_DATABASE` | `alphasentra-core` | Target database name. |
+| `MONGODB_DATABASE` | `alphasentra-core` | Core database name. |
 | `MONGODB_USERNAME` | — | Auth username (omit for unauthenticated local clusters). |
 | `MONGODB_PASSWORD` | — | Auth password. |
 | `MONGODB_AUTH_SOURCE` | `admin` | Authentication database. |
 
-### eToro (required for `port_selection_cache.py`)
+### MongoDB Cache (optional for `cache_job.py`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGODB_URI_CACHE` | Main MongoDB URI | Separate connection URI for cache database. |
+| `MONGODB_DATABASE_CACHE` | `MONGODB_DATABASE` | Cache database name. |
+
+### MongoDB Feed (required for `feed_job.py`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGODB_URI_FEED` | Main MongoDB URI | Separate connection URI for feed database. |
+| `MONGODB_DATABASE_FEED` | `alphasentra-feed` | Feed database name. |
+
+### MongoDB Logs (required for `logs_rm_duplicated.py`)
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGODB_URI_LOGS` | — | **Required.** MongoDB connection URI for logs database. |
+| `MONGODB_DATABASE_LOGS` | `alphasentra-logs` | Logs database name. |
+
+### eToro (required for `feed_job.py`, `port_selection_cache.py`, `port_user_report_cache.py`)
 
 | Variable | Description |
 |----------|-------------|
 | `ETORO_PRIVATE_KEY` | One or more private keys, comma-separated. One key is selected at random per run. |
+| `ETORO_PUBLIC_KEY` | eToro public API key. |
 
 ### AI / Optional
 
@@ -57,75 +139,83 @@ The batch scripts touch MongoDB, eToro auth, and optional AI services. The follo
 | `GEMINI_DEFAULT` | `gemini-2.5-flash-lite` | Default model override. |
 | `ENCRYPTION_SECRET` | — | Required by `Functions/crypt.py` if encryption utilities are touched during imports. |
 
-## Deploying on Render
+### Email (optional)
 
-### 1. Update `render.yaml`
+| Variable | Description |
+|----------|-------------|
+| `BREVO_API_KEY` | Brevo API key for sending email notifications. |
+| `BREVO_SENDER_EMAIL` | Sender email address for Brevo notifications. |
 
-Add a `cron` service alongside the existing `web` service.
+## Deploying on GitHub Actions
 
-```yaml
-services:
-  - type: web
-    name: ago-functions
-    env: python
-    plan: starter
-    buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
-    healthCheckPath: /
+### Batch Functions Cache Job
 
-  - type: cron
-    name: ago-batch-cache
-    env: python
-    plan: starter
-    schedule: "0 0 * * *"
-    buildCommand: pip install -r requirements.txt
-    startCommand: python Functions/batch/cache_job.py
-    autoDeploy: true
-```
+Runs daily at 22:00 UTC and on manual dispatch. Clears cache and warms index + portfolio selection pages.
 
-### 2. Share Environment Variables with Environment Groups (Recommended)
+**Workflow file:** `.github/workflows/batch-job.yml`
 
-To avoid duplicating environment variables across the `web` and `cron` services, use **Render Environment Groups**:
+**Triggers:**
+- Schedule: `0 22 * * *` (daily at 22:00 UTC)
+- `workflow_dispatch` (manual)
 
-1. In the Render dashboard, go to **Environment** → **Environment Groups**.
-2. Create a new group (e.g., `ago-functions-env`) and add all shared variables there:
-   - `USE_MONGODB_SRV`
-   - `MONGODB_SRV` (if applicable)
-   - `MONGODB_DATABASE`
-   - `MONGODB_USERNAME`
-   - `MONGODB_PASSWORD`
-   - `MONGODB_AUTH_SOURCE`
-   - `ETORO_PRIVATE_KEY`
-   - Any other shared secrets
-3. Attach the environment group to **both** the `ago-functions` web service and the `ago-batch-cache` cron service.
+### Batch Portfolio Report Cache Job
 
-This ensures both services always use the same values, and you only need to update them in one place.
+Runs every 4 hours, on push to `main`, and on manual dispatch. Pre-generates portfolio reports for active users.
 
-### 3. Verify Working Directory
+**Workflow file:** `.github/workflows/batch-report-job.yml`
 
-Render sets the working directory to the repo root by default. The batch scripts compute the project root dynamically from `__file__`, so no extra configuration is needed.
+**Triggers:**
+- Push to `main`
+- Schedule: `0 */4 * * *` (every 4 hours)
+- `workflow_dispatch` (manual)
 
-### 4. Schedule
+### Batch Feed Collection Job
 
-The default schedule `"0 0 * * *"` runs daily at **00:00 UTC**. Adjust the cron expression in `render.yaml` to change frequency:
+Runs daily at 03:00 UTC and on manual dispatch. Collects eToro feed data.
 
-- Every 6 hours: `"0 */6 * * *"`
-- Twice daily (00:00 and 12:00): `"0 0,12 * * *"`
+**Workflow file:** `.github/workflows/feed-job.yml`
 
-### 5. Timeout Considerations
+**Triggers:**
+- Schedule: `0 3 * * *` (daily at 03:00 UTC)
+- `workflow_dispatch` (manual)
 
-Each script has an internal timeout of 3 hours. Render Cron Jobs on the **Starter** plan allow up to **15 minutes** of runtime by default. If the batch job regularly exceeds 15 minutes, upgrade the cron job plan or optimize the underlying scripts.
+### Required GitHub Secrets
+
+All workflows share a common set of secrets configured in the repository settings:
+
+| Secret | Required For |
+|--------|-------------|
+| `USE_MONGODB_SRV` | All jobs |
+| `MONGODB_SRV` | All jobs (when `USE_MONGODB_SRV=true`) |
+| `MONGODB_HOST` | All jobs (when `USE_MONGODB_SRV=false`) |
+| `MONGODB_PORT` | All jobs (when `USE_MONGODB_SRV=false`) |
+| `MONGODB_DATABASE` | All jobs |
+| `MONGODB_USERNAME` | All jobs |
+| `MONGODB_PASSWORD` | All jobs |
+| `MONGODB_AUTH_SOURCE` | All jobs |
+| `MONGODB_URI_CACHE` | `batch-job.yml`, `batch-report-job.yml` |
+| `MONGODB_DATABASE_CACHE` | `batch-job.yml`, `batch-report-job.yml` |
+| `MONGODB_URI_FEED` | `feed-job.yml`, `batch-job.yml`, `batch-report-job.yml` |
+| `MONGODB_DATABASE_FEED` | `feed-job.yml`, `batch-job.yml`, `batch-report-job.yml` |
+| `MONGODB_URI_LOGS` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
+| `MONGODB_DATABASE_LOGS` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
+| `ETORO_PRIVATE_KEY` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
+| `ETORO_PUBLIC_KEY` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
+| `GEMINI_API_KEY` | All jobs (optional) |
+| `GEMINI_DEFAULT` | All jobs (optional) |
+| `GEMINI_FLASH_MODEL` | All jobs (optional) |
+| `GEMINI_FLASH_LITE_MODEL` | All jobs (optional) |
+| `GEMINI_PRO_MODEL` | All jobs (optional) |
+| `ENCRYPTION_SECRET` | All jobs |
+| `BREVO_API_KEY` | All jobs (optional) |
+| `BREVO_SENDER_EMAIL` | All jobs (optional) |
 
 ## Logs
 
-Logs are written to `Functions/log/` with daily rotating filenames (`YYYY-MM-DD.log`). On Render, inspect cron job logs from the dashboard or via the Render CLI:
-
-```bash
-render logs -s ago-batch-cache
-```
+Logs are written to `Functions/log/` with daily rotating filenames (`YYYY-MM-DD.log`). For GitHub Actions workflows, inspect logs from the Actions tab in the GitHub repository.
 
 ## Failure Handling
 
-- If any script fails or times out, `cache_job.py` exits with code `1`.
+- If any script fails or times out, the runner exits with code `1`.
 - Failed scripts are marked explicitly in the summary report.
-- Render will retry failed cron runs on the next scheduled execution.
+- GitHub Actions will retry failed runs according to the workflow schedule.

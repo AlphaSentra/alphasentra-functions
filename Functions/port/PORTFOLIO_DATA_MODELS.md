@@ -135,7 +135,7 @@ Represents a complete investor portfolio fetched from the eToro API.
 | `username` | `str` | eToro username |
 | `positions` | `List[EToroPortfolioPosition]` | List of open portfolio positions |
 | `aggregated_positions` | `List[EToroAggregatedPosition]` | Positions aggregated by symbol and direction |
-| `unmapped_instrument_ids` | `List[str]` | Instrument IDs that could not be resolved to tickers |
+| `unmapped_instrument_ids` | `List[str]` | Instrument IDs that could not be resolved to tickers. When non-empty, the portfolio is considered incomplete and will not be cached. Unresolved instruments are also recorded in the `etoro_unmapped_instruments` logs collection.
 
 **Source:** `Functions/etoro/client.py:get_investor_portfolio()`
 

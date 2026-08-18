@@ -417,7 +417,7 @@ When loaded inside an iframe, this response breaks out of the iframe and redirec
 
 **Cached page loads without authentication**
 - This is expected behavior: if a page is already in the file cache, it can be accessed without the `etoro_authuser` cookie
-- Cached pages: `/etopi` portfolio reports (keyed by username + benchmark + CID, TTL 20h), `/port` portfolio selection (TTL 24h)
+- Cached pages: `/etopi` portfolio reports (keyed by username + benchmark + CID, TTL 24h), `/port` portfolio selection (TTL 24h)
 - On a cache hit, the response sets a fresh `etoro_authuser` cookie to re-establish the session
 
 **Cookie not stored**

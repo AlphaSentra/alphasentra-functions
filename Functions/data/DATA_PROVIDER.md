@@ -21,8 +21,8 @@ flowchart TD
     G --> I["PortfolioAnalyzer<br/>prices_full"]
     H --> J["PortfolioAnalyzer<br/>sector_industry_df"]
 
-    G -->|"cached .pkl (6h)"| K["Functions/port/cache.py"]
-    H -->|"cached .pkl (20h)"| K
+    G -->|"cached .pkl (24h)"| K["Functions/port/cache.py"]
+    H -->|"cached .pkl (24h)"| K
 ```
 
 ## Components
@@ -41,7 +41,7 @@ flowchart TD
 1. **Initialization** — `Functions/port/main.py` calls `get_market_data_provider()` to obtain the configured `MarketDataProvider` instance and passes it to `PortfolioAnalyzer`.
 2. **Price download** — `analyzer.py` calls `provider.download_price_data(tickers, start, end)`. The provider returns a `pd.DataFrame` with a `DatetimeIndex` and tickers as columns.
 3. **Sector/industry fetch** — `analyzer.py` calls `provider.get_sector_industry_data(tickers)`. The provider returns a `pd.DataFrame` indexed by ticker with metadata columns.
-4. **Caching** — Both calls are optionally cached by `Functions/port/cache.py` using pickle files. Price data TTL is 6 hours; sector data TTL is 20 hours.
+4. **Caching** — Both calls are optionally cached by `Functions/port/cache.py` using pickle files. Price data TTL is 24 hours; sector data TTL is 24 hours.
 
 ## Class Diagram
 
@@ -149,8 +149,8 @@ The `DATA_PROVIDER` constant in `config.py` documents the default but the actual
 
 `YFinanceProvider` implements both interface methods:
 
-- **`download_price_data`** — Calls `yf.download()` with `auto_adjust=False`. Results are cached via `Functions/port/cache.py` with `_PRICE_TTL` (6 hours).
-- **`get_sector_industry_data`** — Fetches `yf.Ticker(ticker).info` concurrently with up to 10 workers. Retries failed tickers up to 3 times. Returns an `AssetMetadata` DataFrame cached with `_SECTOR_TTL` (20 hours).
+- **`download_price_data`** — Calls `yf.download()` with `auto_adjust=False`. Results are cached via `Functions/port/cache.py` with `_PRICE_TTL` (24 hours).
+- **`get_sector_industry_data`** — Fetches `yf.Ticker(ticker).info` concurrently with up to 10 workers. Retries failed tickers up to 3 times. Returns an `AssetMetadata` DataFrame cached with `_SECTOR_TTL` (24 hours).
 
 ## Facade Layer
 

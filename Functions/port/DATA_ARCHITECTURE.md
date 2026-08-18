@@ -1108,3 +1108,79 @@ All downstream calculations adapt accordingly
 ---
 
 *Document version: 1.0 | Generated from codebase analysis (May 2026)*
+
+---
+
+## Logs & Feed Data Architecture
+
+### Logs Database
+
+The logs database (`MONGODB_URI_LOGS` / `MONGODB_DATABASE_LOGS`, default `alphasentra-logs`) stores operational telemetry separate from the core application data.
+
+#### `etoro_unmapped_instruments` Collection
+
+Records instruments that the portfolio pipeline could not resolve to canonical tickers.
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `username` | `str` | eToro username |
+| `instrument_id` | `str` | Unresolved eToro instrument ID |
+| `symbol_full` | `Optional[str]` | Symbol from eToro symbol map, if available |
+| `raw_symbol` | `Optional[str]` | Raw symbol from the API response |
+| `display_name` | `Optional[str]` | Display name from the API response |
+| `open_rate` | `Optional[float]` | Open rate from the API response |
+| `investment_pct` | `Optional[float]` | Investment percentage from the API response |
+| `position_id` | `Optional[str]` | Position ID from the API response |
+| `is_buy` | `Optional[bool]` | Trade direction from the API response |
+| `leverage` | `Optional[float]` | Leverage from the API response |
+| `detected_at` | `datetime` | UTC timestamp of detection |
+
+**Written by:** `Functions/etoro/client.py:_record_unmapped_instruments()`
+
+**Deduplicated by:** `Functions/batch/logs_rm_duplicated.py` — retains most recent document per `(username, instrument_id)` group.
+
+**Impact on caching:** When `EToroInvestorPortfolio.unmapped_instrument_ids` is non-empty, the portfolio is not cached (`set_portfolio_cache_to_mongo` is skipped). Stale caches containing unmapped instruments are also refused.
+
+### Feed Database
+
+The feed database (`MONGODB_URI_FEED` / `MONGODB_DATABASE_FEED`, default `alphasentra-feed`) stores eToro social feed data collected by the `feed_job.py` batch runner.
+
+#### Collections
+
+| Collection | Description | Populated By |
+|------------|-------------|--------------|
+| `etoro_trending_pi` | Current-year top-copier Popular Investor rankings | `feed_get_pi.py` |
+| `etoro_trending_instruments` | Top 100 instruments by 7-day viewer popularity and trader change | `feed_get_instruments.py` |
+| `etoro_posts` | Raw eToro public feed posts from PIs and instruments (last 30 days) | `feed_get_posts_from_pi.py`, `feed_get_posts_from_instruments.py` |
+
+#### Feed Job Pipeline
+
+```mermaid
+flowchart LR
+    A[clear_feed.py] --> B[feed_get_pi.py]
+    B --> C[feed_get_instruments.py]
+    C --> D[feed_get_posts_from_pi.py]
+    D --> E[feed_get_posts_from_instruments.py]
+
+    A -->|drops| F[etoro_trending_pi]
+    A -->|drops| G[etoro_trending_instruments]
+    A -->|prunes >60d| H[etoro_posts]
+
+    B -->|upserts| F
+    C -->|upserts| G
+    D -->|reads F, writes| H
+    E -->|reads G, writes| H
+```
+
+**Schedule:** Daily at 03:00 UTC via `.github/workflows/feed-job.yml`
+
+**Timeout:** 3 hours per script.
+
+## Database Connections Summary
+
+| Database | Env Vars | Used By | Purpose |
+|----------|----------|---------|---------|
+| Core | `MONGODB_*` | Portfolio reports, cache, selection | Primary application data |
+| Cache | `MONGODB_URI_CACHE`, `MONGODB_DATABASE_CACHE` | `port/cache.py` | Separate cache storage (optional) |
+| Feed | `MONGODB_URI_FEED`, `MONGODB_DATABASE_FEED` | `batch/feed_*.py` | eToro social feed data |
+| Logs | `MONGODB_URI_LOGS`, `MONGODB_DATABASE_LOGS` | `db/client.py`, `etoro/client.py` | Unmapped instruments, operational logs |

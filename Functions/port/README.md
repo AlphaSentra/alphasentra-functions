@@ -85,6 +85,9 @@ Functions/port/
 - **Dynamic Charting:** Interactive Plotly charts with centralized theme colours.
 - **Automated Commentary:** AI-generated insights embedded in each report tab.
 - **Pro Investor Selection (`/port`):** Renders a searchable Top Pro Investor table with flag + ISO alpha-2 country badges. Country data is resolved at runtime using the [countries.dev](https://countries.dev) API, with eToro internal `countryId` values translated to ISO codes via `Functions/etoro/countries.csv`.
+- **Unmapped Instruments Tracking:** Instruments that cannot be resolved to canonical tickers are recorded in the `etoro_unmapped_instruments` collection in the logs MongoDB database (`MONGODB_URI_LOGS` / `MONGODB_DATABASE_LOGS`). This enables monitoring and deduplication of resolution failures.
+- **Stale Cache Refusal:** If a stale cached portfolio contains unmapped instruments, the system refuses to serve it and forces a fresh API fetch instead. This prevents serving incomplete portfolio snapshots.
+- **DB Fallback for Instrument Resolution:** When the eToro search API fails to resolve an instrument, the system falls back to the `etoro_instruments` MongoDB collection (`Functions/db/repositories.py:lookup_etoro_instruments_from_db`).
 
 ## Pro Investor Selection — Country Resolution
 
@@ -145,6 +148,56 @@ The mapping file is located at `Functions/etoro/countries.csv`. It contains 105 
 
 The module reads only `ETORO_COUNTRYID` and `ISO_CODE` for the lookup; `ISO_COUNTRYID` is retained in the CSV for reference but is not used by `selection.py`.
 
+## Unmapped Instruments & Logs
+
+When the eToro portfolio API returns positions with instrument IDs that cannot be resolved to canonical tickers, the system records these in the `etoro_unmapped_instruments` collection in the logs MongoDB database.
+
+### Recording Unmapped Instruments
+
+`Functions/etoro/client.py:_record_unmapped_instruments()` writes a document for each unresolved instrument containing:
+
+| Field | Description |
+|-------|-------------|
+| `username` | eToro username |
+| `instrument_id` | Unresolved eToro instrument ID |
+| `symbol_full` | Any symbol available from the eToro symbol map |
+| `raw_symbol` | Raw symbol from the API response |
+| `display_name` | Display name from the API response |
+| `open_rate` | Open rate from the API response |
+| `investment_pct` | Investment percentage from the API response |
+| `position_id` | Position ID from the API response |
+| `is_buy` | Trade direction from the API response |
+| `leverage` | Leverage from the API response |
+| `detected_at` | UTC timestamp when the instrument was detected as unmapped |
+
+### Stale Cache Refusal
+
+If a cached portfolio report contains unmapped instruments, the system refuses to serve the stale cache and forces a fresh API fetch. This prevents serving incomplete portfolio snapshots to users.
+
+```python
+# Functions/etoro/client.py:get_investor_portfolio()
+if stale is not None:
+    if getattr(stale, 'unmapped_instrument_ids', []):
+        logger.warning(
+            "Stale cache for %s has %d unmapped instruments; refusing to serve incomplete portfolio",
+            username, len(stale.unmapped_instrument_ids),
+        )
+    else:
+        logger.warning("Live portfolio API failed for %s; using stale cache", username)
+        return stale
+```
+
+### Deduplication
+
+Run `Functions/batch/logs_rm_duplicated.py` to deduplicate the `etoro_unmapped_instruments` collection. The script retains the most recent document per `(username, instrument_id)` group and deletes all others.
+
+### Required Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGODB_URI_LOGS` | — | **Required.** MongoDB connection URI for the logs database. |
+| `MONGODB_DATABASE_LOGS` | `alphasentra-logs` | Logs database name. |
+
 ## Advanced Methodology: Rebalance & Gap Neutralization
 
 A two-phase calculation isolates true market performance from transaction state changes:
@@ -166,10 +219,10 @@ Default portfolio settings are defined centrally in `config.py`:
 | Minimum position size per asset | 0.50% |
 | Long/short optimization | Disabled |
 | Gross exposure limit | 2.0x |
-| Cache TTL (report) | 20 hours |
-| Cache TTL (price) | 6 hours |
-| Cache TTL (sector/industry) | 20 hours |
-| Cache TTL (eToro) | 6 hours |
+| Cache TTL (report) | 24 hours |
+| Cache TTL (price) | 24 hours |
+| Cache TTL (sector/industry) | 24 hours |
+| Cache TTL (eToro) | 24 hours |
 | Cache TTL (eToro PI) | 24 hours |
 | Default market data provider | `yfinance` |
 | Default benchmark candidates | `^AXJO`, `^GSPC`, `^STOXX50E`, `^FTSE`, `BTC-USD`, `^990100-USD-STRD` |

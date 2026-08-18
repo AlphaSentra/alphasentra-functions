@@ -27,7 +27,7 @@ pip install -r requirements.txt
 Create a `.env` file in the project root with the following variables:
 
 ```env
-# MongoDB Connection
+# MongoDB Connections
 USE_MONGODB_SRV=true
 MONGODB_SRV=mongodb_srv_connection_string
 MONGODB_HOST=mongodb_host
@@ -36,6 +36,18 @@ MONGODB_DATABASE=database_name
 MONGODB_USERNAME=mongodb_username
 MONGODB_PASSWORD=mongodb_password
 MONGODB_AUTH_SOURCE=auth_source
+
+# MongoDB Cache Database (optional, defaults to main database if not set)
+MONGODB_URI_CACHE=cache_mongodb_connection_string
+MONGODB_DATABASE_CACHE=cache_database_name
+
+# MongoDB Feed Database (for eToro feed collection)
+MONGODB_URI_FEED=feed_mongodb_connection_string
+MONGODB_DATABASE_FEED=feed_database_name
+
+# MongoDB Logs Database (for unmapped instruments tracking and batch logs)
+MONGODB_URI_LOGS=logs_mongodb_connection_string
+MONGODB_DATABASE_LOGS=logs_database_name
 
 # Gemini AI
 GEMINI_API_KEY=gemini_api_key
@@ -55,6 +67,10 @@ ETORO_PRIVATE_KEY=private_key1,private_key2,private_key3
 
 # Optional: Override default market data provider (default: yfinance)
 # MARKET_DATA_PROVIDER=yfinance
+
+# Email (Brevo) - optional, used for notifications
+BREVO_API_KEY=brevo_api_key
+BREVO_SENDER_EMAIL=sender@example.com
 ```
 
 | Variable | Required | Description |
@@ -67,6 +83,12 @@ ETORO_PRIVATE_KEY=private_key1,private_key2,private_key3
 | `MONGODB_USERNAME` | Yes | MongoDB authentication username |
 | `MONGODB_PASSWORD` | Yes | MongoDB authentication password |
 | `MONGODB_AUTH_SOURCE` | Yes | MongoDB authentication database (usually `admin`) |
+| `MONGODB_URI_CACHE` | No | Separate MongoDB URI for cache database (defaults to main URI) |
+| `MONGODB_DATABASE_CACHE` | No | Cache database name (defaults to `MONGODB_DATABASE`) |
+| `MONGODB_URI_FEED` | No | Separate MongoDB URI for feed database (defaults to main URI) |
+| `MONGODB_DATABASE_FEED` | No | Feed database name (defaults to `alphasentra-feed`) |
+| `MONGODB_URI_LOGS` | No | Separate MongoDB URI for logs database (defaults to main URI) |
+| `MONGODB_DATABASE_LOGS` | No | Logs database name (defaults to `alphasentra-logs`) |
 | `GEMINI_API_KEY` | Yes | Google Gemini AI API key for AI-powered analysis |
 | `GEMINI_DEFAULT` | No | Default Gemini model to use |
 | `GEMINI_FLASH_MODEL` | No | Gemini Flash model identifier |
@@ -76,6 +98,8 @@ ETORO_PRIVATE_KEY=private_key1,private_key2,private_key3
 | `ETORO_PUBLIC_KEY` | Yes | eToro public API key |
 | `ETORO_PRIVATE_KEY` | Yes | eToro private API key. Accepts a single key or a comma-separated list; one key is selected at random per request |
 | `MARKET_DATA_PROVIDER` | No | Market data provider (`yfinance` is default) |
+| `BREVO_API_KEY` | No | Brevo API key for email notifications |
+| `BREVO_SENDER_EMAIL` | No | Sender email address for Brevo notifications |
 
 \* Either `MONGODB_SRV` (when `USE_MONGODB_SRV=true`) or `MONGODB_HOST` + `MONGODB_PORT` (when `USE_MONGODB_SRV=false`) is required.
 
@@ -96,7 +120,7 @@ The app will start on `http://localhost:8888`.
 | `/` | GET | Function Index — auto-generated list of all registered routes |
 | `/auth` | POST | Set `etoro_authuser` cookie (24h). Origin required. |
 | `/logout` | POST | Clear `etoro_authuser` cookie. Origin required. |
-| `/etopi` | GET/POST | Portfolio & Risk Analytics (rendered live). **Auth required**, but cached reports bypass auth (TTL 20h). |
+| `/etopi` | GET/POST | Portfolio & Risk Analytics (rendered live). **Auth required**, but cached reports bypass auth (TTL 24h). |
 | `/port` | GET | Portfolio Investor Selection — Pro Investor ranking table with country resolution. **Auth required**, but cached page bypasses auth (TTL 24h). |
 | `/eqs` | GET | Stocks AI Screener (rendered live) |
 | `/wcr` | GET | Forex AI Screener (rendered live) |
@@ -195,19 +219,9 @@ register_route(app, '/etopi/api/metrics', 'Portfolio metrics as JSON', portfolio
 
 ## Deployment
 
-### Gunicorn (Production)
+### Render.com (Web Service)
 
-A `Procfile` is included for running the app with Gunicorn in production:
-
-```
-web: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
-```
-
-This starts the app using the **gevent** worker class with 2 workers and 25 concurrent connections per worker.
-
-### Render.com
-
-A `render.yaml` configuration is included for deploying to [Render.com](https://render.com):
+A `render.yaml` configuration is included for deploying the web service to [Render.com](https://render.com):
 
 ```yaml
 services:
@@ -216,29 +230,30 @@ services:
     env: python
     plan: starter
     buildCommand: pip install -r requirements.txt
-    startCommand: gunicorn -w 2 -k gevent --worker-connections 25 --max-requests 500 --preload -b 0.0.0.0:$PORT app:app
+    startCommand: gunicorn -w 2 --max-requests 2 --max-requests-jitter 2 --timeout 600 -b 0.0.0.0:$PORT app:app
     healthCheckPath: /
-
-  - type: cron
-    name: ago-batch-cache
-    env: python
-    plan: starter
-    schedule: "0 0 * * *"
-    buildCommand: pip install -r requirements.txt
-    startCommand: python Functions/batch/cache_job.py
-    autoDeploy: true
 ```
 
 #### Environment Variables
 
-Set all required environment variables in the Render dashboard. To share variables between the `web` and `cron` services, use **Render Environment Groups**:
+Set all required environment variables in the Render dashboard. To share variables across services, use **Render Environment Groups**:
 
 1. In the Render dashboard, go to **Environment** → **Environment Groups**.
 2. Create an environment group and add all shared variables (MongoDB, eToro, etc.).
-3. Attach the environment group to both the `ago-functions` web service and the `ago-batch-cache` cron service.
+3. Attach the environment group to the `ago-functions` web service.
 
-This avoids duplicating secrets and keeps them in sync across services.
+### GitHub Actions (Batch Jobs)
+
+Scheduled batch jobs (cache warming, feed collection, logs maintenance) are orchestrated via GitHub Actions workflows rather than Render Cron Jobs:
+
+| Workflow | File | Schedule | Purpose |
+|----------|------|----------|---------|
+| Batch Functions Cache Job | `.github/workflows/batch-job.yml` | Daily at 22:00 UTC | Clears cache and warms index + portfolio selection |
+| Batch Portfolio Report Cache Job | `.github/workflows/batch-report-job.yml` | Every 4 hours + on push to main | Pre-generates portfolio reports for active users |
+| Batch Feed Collection Job | `.github/workflows/feed-job.yml` | Daily at 03:00 UTC | Collects eToro feed data (trending PI, instruments, posts) |
+
+Secrets are stored in the GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`).
 
 Key production dependencies:
 - `gunicorn` — WSGI HTTP server
-- `gevent` — async worker class for Gunicorn
+- `gevent` — async worker class for Gunicorn (removed in current deployment in favor of default sync workers with increased timeout)

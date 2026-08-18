@@ -327,6 +327,8 @@ GET https://public-api.etoro.com/api/v1/market-data/search?instrumentId={id}
 - `client.py:get_investor_portfolio()` — to resolve live portfolio instruments
 - `Functions/data/loader.py:load_transactions_from_etoro()` — to resolve trade history instruments
 
+**DB Fallback:** When the live search API returns no data for an instrument, `resolve_instrument_metadata()` falls back to the `etoro_instruments` MongoDB collection via `Functions/db/repositories.py:lookup_etoro_instruments_from_db()`. This provides a secondary resolution path for instruments not found in the eToro search API.
+
 ---
 
 ### 8. Trade history (credit/flat)
@@ -427,6 +429,45 @@ All public client methods raise `EToroClientError` on failure. Callers typically
 - Local price-derived returns in `engine/analyzer.py`
 
 Network errors, non-2xx status codes, and JSON parsing failures are all wrapped in `EToroClientError` with descriptive messages.
+
+## Unmapped Instruments Logging
+
+When the eToro portfolio API returns positions with instrument IDs that cannot be resolved to canonical tickers, the system records these in the `etoro_unmapped_instruments` collection in the logs MongoDB database.
+
+### `_record_unmapped_instruments()`
+
+`Functions/etoro/client.py:_record_unmapped_instruments()` writes a document for each unresolved instrument containing:
+
+| Field | Description |
+|-------|-------------|
+| `username` | eToro username |
+| `instrument_id` | Unresolved eToro instrument ID |
+| `symbol_full` | Any symbol available from the eToro symbol map |
+| `raw_symbol` | Raw symbol from the API response |
+| `display_name` | Display name from the API response |
+| `open_rate` | Open rate from the API response |
+| `investment_pct` | Investment percentage from the API response |
+| `position_id` | Position ID from the API response |
+| `is_buy` | Trade direction from the API response |
+| `leverage` | Leverage from the API response |
+| `detected_at` | UTC timestamp when the instrument was detected as unmapped |
+
+### Stale Cache Refusal
+
+If a cached portfolio report contains unmapped instruments (`unmapped_instrument_ids` is non-empty), the system refuses to serve the stale cache and forces a fresh API fetch instead. This prevents serving incomplete portfolio snapshots.
+
+**Code:** `client.py:get_investor_portfolio()` — when `live_portfolio_api_failed` and `stale.unmapped_instrument_ids` is truthy, the stale cache is bypassed and the exception is re-raised.
+
+### Deduplication
+
+Run `Functions/batch/logs_rm_duplicated.py` to deduplicate the `etoro_unmapped_instruments` collection. The script retains the most recent document per `(username, instrument_id)` group and deletes all others.
+
+### Required Environment Variables
+
+| Variable | Default | Description |
+|----------|---------|-------------|
+| `MONGODB_URI_LOGS` | — | **Required.** MongoDB connection URI for the logs database. |
+| `MONGODB_DATABASE_LOGS` | `alphasentra-logs` | Logs database name. |
 
 ---
 

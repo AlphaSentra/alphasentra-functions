@@ -80,8 +80,11 @@ def run_script(script_path: Path) -> dict:
         }
 
 
-def main() -> None:
-    """Run all batch scripts in the predefined order and print a summary report."""
+PAUSE_SECONDS = 5 * 60
+
+
+def run_batch() -> bool:
+    """Run all batch scripts in the predefined order and return True if all passed."""
     base_dir = Path(__file__).resolve().parent
     started_at = datetime.now(timezone.utc)
 
@@ -123,8 +126,18 @@ def main() -> None:
     print(f"Result  : {ok_count} passed, {fail_count} failed out of {len(results)} scripts")
     print("=" * 60)
 
-    if failed:
-        sys.exit(1)
+    return not failed
+
+
+def main() -> None:
+    """Run the batch job indefinitely, pausing between runs."""
+    run_number = 0
+    while True:
+        run_number += 1
+        print(f"\n>>> Starting run #{run_number}")
+        run_batch()
+        print(f"\n[PAUSE] Sleeping for {_format_duration(PAUSE_SECONDS)} before next run...")
+        time.sleep(PAUSE_SECONDS)
 
 
 if __name__ == "__main__":

@@ -343,6 +343,7 @@ def _prepare_documents(posts: list) -> list:
         raw = post.get("raw") or {}
         post_data = raw.get("post") or {}
         tags = post_data.get("tags") or []
+        attachments = post_data.get("attachments") or []
         badges = [
             tag.get("market", {}).get("symbolName")
             for tag in tags
@@ -356,6 +357,7 @@ def _prepare_documents(posts: list) -> list:
                 "post_id": post["post_id"],
                 "post_url": post_url,
                 "badges": badges,
+                "attachments": attachments,
                 "created": created_at,
                 "owner_username": post.get("owner_username"),
                 "message_text": post.get("message_text"),

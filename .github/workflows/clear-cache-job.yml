@@ -1,0 +1,42 @@
+name: Clear Cache Job
+
+on:
+  schedule:
+    - cron: '30 23 * * *'
+  workflow_dispatch:
+
+jobs:
+  clear-cache:
+    runs-on: ubuntu-latest
+    env:
+      USE_MONGODB_SRV: ${{ secrets.USE_MONGODB_SRV }}
+      MONGODB_SRV: ${{ secrets.MONGODB_SRV }}
+      MONGODB_HOST: ${{ secrets.MONGODB_HOST }}
+      MONGODB_PORT: ${{ secrets.MONGODB_PORT }}
+      MONGODB_DATABASE: ${{ secrets.MONGODB_DATABASE }}
+      MONGODB_USERNAME: ${{ secrets.MONGODB_USERNAME }}
+      MONGODB_PASSWORD: ${{ secrets.MONGODB_PASSWORD }}
+      MONGODB_AUTH_SOURCE: ${{ secrets.MONGODB_AUTH_SOURCE }}
+      MONGODB_URI_CACHE: ${{ secrets.MONGODB_URI_CACHE }}
+      MONGODB_DATABASE_CACHE: ${{ secrets.MONGODB_DATABASE_CACHE }}
+      MONGODB_URI_FEED: ${{ secrets.MONGODB_URI_FEED }}
+      MONGODB_DATABASE_FEED: ${{ secrets.MONGODB_DATABASE_FEED }}
+      MONGODB_URI_LOGS: ${{ secrets.MONGODB_URI_LOGS }}
+      MONGODB_DATABASE_LOGS: ${{ secrets.MONGODB_DATABASE_LOGS }}
+      ETORO_PRIVATE_KEY: ${{ secrets.ETORO_PRIVATE_KEY }}
+      ETORO_PUBLIC_KEY: ${{ secrets.ETORO_PUBLIC_KEY }}
+      GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
+      GEMINI_DEFAULT: ${{ secrets.GEMINI_DEFAULT }}
+      GEMINI_FLASH_MODEL: ${{ secrets.GEMINI_FLASH_MODEL }}
+      GEMINI_FLASH_LITE_MODEL: ${{ secrets.GEMINI_FLASH_LITE_MODEL }}
+      GEMINI_PRO_MODEL: ${{ secrets.GEMINI_PRO_MODEL }}
+      ENCRYPTION_SECRET: ${{ secrets.ENCRYPTION_SECRET }}
+      BREVO_API_KEY: ${{ secrets.BREVO_API_KEY }}
+      BREVO_SENDER_EMAIL: ${{ secrets.BREVO_SENDER_EMAIL }}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.14'
+      - run: pip install -r requirements.txt
+      - run: python Functions/batch/clear_cache.py

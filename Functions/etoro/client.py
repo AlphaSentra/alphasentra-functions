@@ -2,7 +2,6 @@ import json
 import os
 import sys
 import time
-import logging
 import threading
 from datetime import datetime, timezone
 from pathlib import Path
@@ -13,6 +12,7 @@ import requests
 
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.port.config import CACHE_TTL_ETORO as _ETORO_TTL
+from Functions.logging_utils import log_info, log_warning, log_error, log_debug
 
 _current_dir = Path(__file__).resolve().parent
 _parent_dir = _current_dir.parent
@@ -75,10 +75,8 @@ def _maybe_pause_after_api_call() -> None:
         _etoro_api_call_count += 1
         if _etoro_api_call_count >= _ETORO_PAUSE_AFTER_API_CALLS:
             _etoro_api_call_count = 0
-            logger.info(
-                "Pausing eToro API calls for %ds after %d requests...",
-                _ETORO_PAUSE_DURATION_SECONDS,
-                _ETORO_PAUSE_AFTER_API_CALLS,
+            log_info(
+                f"Pausing eToro API calls for {_ETORO_PAUSE_DURATION_SECONDS}s after {_ETORO_PAUSE_AFTER_API_CALLS} requests..."
             )
             time.sleep(_ETORO_PAUSE_DURATION_SECONDS)
 
@@ -93,7 +91,7 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
         try:
             resp = session.get(url, **kwargs)
         except requests.RequestException as exc:
-            logger.warning("eToro API error on attempt %d for %s: %s", attempt + 1, url, exc)
+            log_warning(f"eToro API error on attempt {attempt + 1} for {url}: {exc}")
             _maybe_pause_after_api_call()
             if attempt == max_retries - 1:
                 raise EToroClientError(
@@ -101,13 +99,13 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
                 ) from exc
             if attempt < max_retries - 1:
                 delay = base_delay * (1.1 ** attempt) + __import__('random').uniform(0, 1.0)
-                logger.info("Retrying %s in %.1fs...", url, delay)
+                log_info(f"Retrying {url} in {delay:.1f}s...")
                 time.sleep(delay)
             continue
         _maybe_pause_after_api_call()
         try:
             if resp.status_code == 401:
-                logger.warning("eToro API 401 on attempt %d for %s", attempt + 1, url)
+                log_warning(f"eToro API 401 on attempt {attempt + 1} for {url}")
             elif resp.status_code == 404:
                 raise EToroClientError(
                     f"GET {url} failed: not found (404)",
@@ -122,9 +120,8 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
                     last_body_preview = str(body)[:200]
                 except Exception:
                     last_body_preview = resp.text[:200]
-                logger.warning(
-                    "eToro API HTTP %d on attempt %d for %s body=%s",
-                    last_status, attempt + 1, url, last_body_preview,
+                log_warning(
+                    f"eToro API HTTP {last_status} on attempt {attempt + 1} for {url} body={last_body_preview}"
                 )
             else:
                 raise EToroClientError(
@@ -132,14 +129,14 @@ def _session_get_with_retry(session_factory, url: str, **kwargs) -> requests.Res
                     status_code=resp.status_code,
                 )
         except requests.RequestException as exc:
-            logger.warning("eToro API error on attempt %d for %s: %s", attempt + 1, url, exc)
+            log_warning(f"eToro API error on attempt {attempt + 1} for {url}: {exc}")
             if attempt == max_retries - 1:
                 raise EToroClientError(
                     f"GET {url} failed after {max_retries} attempts: {exc}"
                 ) from exc
         if attempt < max_retries - 1:
             delay = base_delay * (1.1 ** attempt) + __import__('random').uniform(0, 1.0)
-            logger.info("Retrying %s in %.1fs...", url, delay)
+            log_info(f"Retrying {url} in {delay:.1f}s...")
             time.sleep(delay)
     raise EToroClientError(
         f"GET {url} failed after {max_retries} attempts: "
@@ -168,7 +165,7 @@ def _save_instrument_cache(metadata: Dict[str, Dict[str, str]]) -> None:
         with open(_INSTRUMENT_CACHE_PATH, "w", encoding="utf-8") as f:
             json.dump(cache, f)
     except Exception as exc:
-        logger.debug("Failed to save instrument metadata cache: %s", exc)
+        log_debug(f"Failed to save instrument metadata cache: {exc}")
 
 
 def _remove_from_instrument_cache(iid: str) -> None:
@@ -180,9 +177,9 @@ def _remove_from_instrument_cache(iid: str) -> None:
             _INSTRUMENT_CACHE_PATH.parent.mkdir(parents=True, exist_ok=True)
             with open(_INSTRUMENT_CACHE_PATH, "w", encoding="utf-8") as f:
                 json.dump(cache, f)
-            logger.debug("Removed instrument %s from cache due to numerical symbol.", iid)
+            log_debug(f"Removed instrument {iid} from cache due to numerical symbol.")
     except Exception as exc:
-        logger.debug("Failed to remove instrument %s from cache: %s", iid, exc)
+        log_debug(f"Failed to remove instrument {iid} from cache: {exc}")
 
 
 def _record_unmapped_instruments(username: str, raw_positions: List[Dict[str, Any]], unmapped_ids: List[str], etoro_symbol_map: Dict[str, str]) -> None:
@@ -214,9 +211,9 @@ def _record_unmapped_instruments(username: str, raw_positions: List[Dict[str, An
             })
         if docs:
             coll.insert_many(docs)
-            logger.info("Recorded %d unmapped instrument(s) for %s in etoro_unmapped_instruments", len(docs), username)
+            log_info(f"Recorded {len(docs)} unmapped instrument(s) for {username} in etoro_unmapped_instruments")
     except Exception as exc:
-        logger.warning("Failed to record unmapped instruments for %s: %s", username, exc)
+        log_warning(f"Failed to record unmapped instruments for {username}: {exc}")
 
 
 def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: str) -> Optional[Dict[str, str]]:
@@ -243,11 +240,8 @@ def _fetch_instrument_metadata(session: requests.Session, search_url: str, iid: 
         if symbol:
             return {"symbol": str(symbol), "name": str(name)}
     except Exception as exc:
-        logger.debug("Failed to resolve instrument %s: %s", iid, exc)
+        log_debug(f"Failed to resolve instrument {iid}: {exc}")
     return None
-
-
-logger = logging.getLogger(__name__)
 
 
 class EToroClientError(Exception):
@@ -316,7 +310,7 @@ class ETPublicClient:
         req = requests.Request("GET", url, params=params)
         _preview_session = public_api_session(self._api_key, self._user_key, timeout=self._timeout)
         prepared = _preview_session.prepare_request(req)
-        logger.info("EToro request URL: %s", prepared.url)
+        log_info(f"EToro request URL: {prepared.url}")
 
         def _session_factory():
             return public_api_session(self._api_key, get_random_private_key(), timeout=self._timeout)
@@ -381,23 +375,21 @@ class ETPublicClient:
         except EToroClientError:
             if stale is not None:
                 if getattr(stale, 'unmapped_instrument_ids', []):
-                    logger.warning(
-                        "Stale cache for %s has %d unmapped instruments; refusing to serve incomplete portfolio",
-                        username, len(stale.unmapped_instrument_ids),
+                    log_warning(
+                        f"Stale cache for {username} has {len(stale.unmapped_instrument_ids)} unmapped instruments; refusing to serve incomplete portfolio"
                     )
                 else:
-                    logger.warning("Live portfolio API failed for %s; using stale cache", username)
+                    log_warning(f"Live portfolio API failed for {username}; using stale cache")
                     return stale
             raise
         except requests.RequestException as exc:
             if stale is not None:
                 if getattr(stale, 'unmapped_instrument_ids', []):
-                    logger.warning(
-                        "Stale cache for %s has %d unmapped instruments; refusing to serve incomplete portfolio",
-                        username, len(stale.unmapped_instrument_ids),
+                    log_warning(
+                        f"Stale cache for {username} has {len(stale.unmapped_instrument_ids)} unmapped instruments; refusing to serve incomplete portfolio"
                     )
                 else:
-                    logger.warning("Live portfolio API error for %s (%s); using stale cache", username, exc)
+                    log_warning(f"Live portfolio API error for {username} ({exc}); using stale cache")
                     return stale
             raise EToroClientError(f"GET investor portfolio failed: {exc}") from exc
 
@@ -427,10 +419,9 @@ class ETPublicClient:
                 ]
                 if not numerical_iids:
                     break
-                logger.warning(
-                    "Numerical symbol(s) detected for instrument(s) %s (attempt %d/5). "
-                    "Clearing cache and retrying...",
-                    numerical_iids, attempt + 1,
+                log_warning(
+                    f"Numerical symbol(s) detected for instrument(s) {numerical_iids} (attempt {attempt + 1}/5). "
+                    "Clearing cache and retrying..."
                 )
                 for iid in numerical_iids:
                     _remove_from_instrument_cache(iid)
@@ -442,7 +433,7 @@ class ETPublicClient:
                         if meta.get("symbol"):
                             etoro_symbol_map[iid] = meta["symbol"]
                 except Exception as exc:
-                    logger.warning("Retry failed to resolve symbols: %s", exc)
+                    log_warning(f"Retry failed to resolve symbols: {exc}")
                     for iid in numerical_iids:
                         etoro_symbol_map.pop(iid, None)
             else:
@@ -457,7 +448,7 @@ class ETPublicClient:
         except InvalidSymbolError:
             raise
         except Exception as exc:
-            logger.warning("Failed to resolve live symbols from eToro search API: %s", exc)
+            log_warning(f"Failed to resolve live symbols from eToro search API: {exc}")
 
         for retry_round in range(3):
             failed_iids = [
@@ -466,9 +457,8 @@ class ETPublicClient:
             ]
             if not failed_iids:
                 break
-            logger.warning(
-                "Symbol resolution failed for %d instrument(s) %s (retry %d/3). Retrying...",
-                len(failed_iids), failed_iids, retry_round + 1,
+            log_warning(
+                f"Symbol resolution failed for {len(failed_iids)} instrument(s) {failed_iids} (retry {retry_round + 1}/3). Retrying..."
             )
             for iid in failed_iids:
                 _remove_from_instrument_cache(iid)
@@ -479,7 +469,7 @@ class ETPublicClient:
                     if meta.get("symbol"):
                         etoro_symbol_map[iid] = meta["symbol"]
             except Exception as exc:
-                logger.warning("Symbol resolution retry %d failed: %s", retry_round + 1, exc)
+                log_warning(f"Symbol resolution retry {retry_round + 1} failed: {exc}")
 
         # --- 3. Pull from MongoDB and compare fields ---
         instrument_ids = list({str(item["instrumentId"]) for item in raw_positions if item.get("instrumentId")})
@@ -490,7 +480,7 @@ class ETPublicClient:
             for key, db_ticker in db_symbol_map.items():
                 matched_symbol = etoro_symbol_map.get(key)
                 if matched_symbol and matched_symbol != db_ticker:
-                    logger.info(
+                    log_info(
                         f"Symbol mismatch for key '{key}': "
                         f"eToro says '{matched_symbol}', DB mapping says '{db_ticker}'. "
                         f"Using DB canonical ticker '{db_ticker}'."
@@ -513,17 +503,15 @@ class ETPublicClient:
                 resolved_symbol = resolved_symbol[:-4]
 
             if resolved_symbol is None:
-                logger.warning(
-                    "No DB mapping for instrumentId=%s or symbol_full=%s; "
-                    "position will be skipped (tickers.ticker is mandatory).",
-                    iid, symbol_full,
+                log_warning(
+                    f"No DB mapping for instrumentId={iid} or symbol_full={symbol_full}; "
+                    "position will be skipped (tickers.ticker is mandatory)."
                 )
                 unmapped_instrument_ids.append(iid)
                 continue
 
-            logger.info(
-                "Resolved instrumentId=%s symbol_full=%s -> canonical ticker=%s",
-                iid, symbol_full, resolved_symbol,
+            log_info(
+                f"Resolved instrumentId={iid} symbol_full={symbol_full} -> canonical ticker={resolved_symbol}"
             )
     
             positions.append(
@@ -629,10 +617,9 @@ class ETPublicClient:
             unmapped_instrument_ids=unmapped_instrument_ids,
         )
         if unmapped_instrument_ids:
-            logger.warning(
-                "Portfolio for %s has %d unmapped instrument(s) out of %d raw positions; "
-                "skipping cache to avoid serving incomplete snapshot.",
-                username, len(unmapped_instrument_ids), len(raw_positions),
+            log_warning(
+                f"Portfolio for {username} has {len(unmapped_instrument_ids)} unmapped instrument(s) out of {len(raw_positions)} raw positions; "
+                "skipping cache to avoid serving incomplete snapshot."
             )
             _record_unmapped_instruments(username, raw_positions, unmapped_instrument_ids, etoro_symbol_map)
         else:
@@ -806,7 +793,7 @@ class ETPublicClient:
                     if meta:
                         result[str(iid)] = meta
                 except Exception as exc:
-                    logger.warning("Instrument resolution future failed for %s: %s", iid, exc)
+                    log_warning(f"Instrument resolution future failed for {iid}: {exc}")
 
         unresolved = [iid for iid in remaining if str(iid) not in result]
         if unresolved:
@@ -815,9 +802,9 @@ class ETPublicClient:
                 for iid, meta in db_meta.items():
                     if meta.get("symbol"):
                         result[iid] = meta
-                        logger.info("Resolved instrumentId=%s from etoro_instruments DB fallback", iid)
+                        log_info(f"Resolved instrumentId={iid} from etoro_instruments DB fallback")
             except Exception as exc:
-                logger.warning("etoro_instruments DB fallback failed: %s", exc)
+                log_warning(f"etoro_instruments DB fallback failed: {exc}")
 
         if result:
             _save_instrument_cache(result)
@@ -987,10 +974,8 @@ class ETPublicClient:
 def get_public_client_from_env(timeout: int = 30) -> ETPublicClient:
     api_key = os.getenv("ETORO_PUBLIC_KEY")
     user_key = get_random_private_key()
-    logger.info(
-        "EToro public client init: api_key=%s, user_key=%s",
-        "present" if api_key else "missing",
-        "present" if user_key else "missing",
+    log_info(
+        f"EToro public client init: api_key={'present' if api_key else 'missing'}, user_key={'present' if user_key else 'missing'}"
     )
     if not api_key:
         raise EToroClientError(

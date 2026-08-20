@@ -16,6 +16,7 @@ SCRIPT_ORDER = [
     "feed_get_instruments.py",
     "feed_get_posts_from_pi.py",
     "feed_get_posts_from_instruments.py",
+    "feed_get_posts_from_users.py",
 ]
 
 SCRIPT_TIMEOUT_SECONDS = 3 * 60 * 60

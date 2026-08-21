@@ -743,7 +743,7 @@ def _fetch_user_feed(session_factory, user_id: str) -> list:
     )
 
 
-def _write_to_feed(posts: list, comments: list, replies: list) -> int:
+def _write_to_feed(posts: list, comments: list, replies: list, feed_client: MongoClient | None = None) -> int:
     """Upsert post documents and their comments/replies into MongoDB.
 
     Posts are keyed by ``post_id`` in ``etoro_posts``.
@@ -754,6 +754,8 @@ def _write_to_feed(posts: list, comments: list, replies: list) -> int:
         posts: Post documents to store.
         comments: Comment documents to store.
         replies: Reply documents to store.
+        feed_client: Optional existing MongoDB client for the feed database.
+            If not provided, a new client is created.
 
     Returns:
         Total number of documents successfully upserted.
@@ -761,11 +763,14 @@ def _write_to_feed(posts: list, comments: list, replies: list) -> int:
     Raises:
         PyMongoError: If all MongoDB write attempts fail.
     """
-    uri = os.getenv("MONGODB_URI_FEED", "")
+    own_client = False
     db_name = os.getenv("MONGODB_DATABASE_FEED", "alphasentra-feed")
-    client = MongoClient(uri, serverSelectionTimeoutMS=30000)
+    if feed_client is None:
+        uri = os.getenv("MONGODB_URI_FEED", "")
+        feed_client = MongoClient(uri, serverSelectionTimeoutMS=30000)
+        own_client = True
     try:
-        db = client[db_name]
+        db = feed_client[db_name]
         posts_collection = db["etoro_posts"]
         comments_collection = db["etoro_comments"]
         replies_collection = db["etoro_replies"]
@@ -811,7 +816,8 @@ def _write_to_feed(posts: list, comments: list, replies: list) -> int:
                     raise
                 time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
     finally:
-        client.close()
+        if own_client:
+            feed_client.close()
 
     if last_exception is not None:
         raise last_exception
@@ -823,8 +829,6 @@ def main() -> None:
     api_key = os.getenv("ETORO_PUBLIC_KEY", "")
     if not api_key:
         raise EnvironmentError("ETORO_PUBLIC_KEY environment variable is required")
-
-    log_info("Fetching trending PI user IDs from feed.etoro_trending_pi...")
 
     log_info("Fetching trending PI user IDs from feed.etoro_trending_pi...")
 
@@ -841,79 +845,140 @@ def main() -> None:
     log_info(f"Found {len(user_ids)} PI user IDs to process.")
 
     session_factory = lambda: public_api_session(api_key, get_random_private_key(), timeout=30)
+    feed_client = _get_feed_client()
 
     seen_ids = set()
     pending_posts = []
-    pending_comments = []
-    pending_replies = []
     total_upserted = 0
 
-    for idx, user_id in enumerate(user_ids, start=1):
-        log_info(f"Fetching feed for user {user_id} ({idx}/{len(user_ids)})...")
-        try:
-            posts = _fetch_user_feed(session_factory, user_id)
-            for post in posts:
-                post_id = post.get("post_id")
-                if not post_id:
-                    continue
-                if post_id not in seen_ids:
-                    seen_ids.add(post_id)
-                    pending_posts.append(post)
-                else:
-                    existing = next((p for p in pending_posts if p.get("post_id") == post_id), None)
-                    if existing is not None and existing.get("created_at") is None and post.get("created_at") is not None:
-                        existing.update(post)
+    def _flush_batch(posts, batch_idx):
+        nonlocal total_upserted
+        if not posts:
+            return
+
+        db = feed_client[os.getenv("MONGODB_DATABASE_FEED", "alphasentra-feed")]
+        posts_collection = db["etoro_posts"]
+
+        post_ids = [p["post_id"] for p in posts if p.get("post_id")]
+        existing_posts_by_id = {}
+        if post_ids:
+            cursor = posts_collection.find(
+                {"post_id": {"$in": post_ids}},
+                {"post_id": 1, "likes": 1, "comments": 1, "message_text": 1},
+            )
+            for doc in cursor:
+                existing_posts_by_id[doc["post_id"]] = doc
+
+        posts_needing_comments = set()
+        for post in posts:
+            pid = post.get("post_id")
+            if not pid:
+                continue
+            if pid not in existing_posts_by_id:
+                posts_needing_comments.add(pid)
+            else:
+                existing = existing_posts_by_id[pid]
+                if (
+                    post.get("likes", 0) != existing.get("likes", 0)
+                    or post.get("comments", 0) != existing.get("comments", 0)
+                    or post.get("message_text") != existing.get("message_text")
+                ):
+                    posts_needing_comments.add(pid)
+
+        log_info(f"Fetching comments for {len(posts_needing_comments)} new/updated posts in batch...")
+        pending_comments = []
+        for post in posts:
+            post_id = post.get("post_id")
+            if post_id in posts_needing_comments:
                 try:
                     comments = _fetch_post_comments(session_factory, post_id)
                     pending_comments.extend(comments)
                     if comments:
                         log_info(f"Collected {len(comments)} comments for post {post_id}.")
-                    for comment in comments:
-                        comment_id = comment.get("comment_id")
-                        if not comment_id:
-                            continue
-                        try:
-                            replies = _fetch_comment_replies(session_factory, post_id, comment_id)
-                            pending_replies.extend(replies)
-                            if replies:
-                                log_info(f"Collected {len(replies)} replies for comment {comment_id}.")
-                        except Exception as exc:
-                            log_warning(f"Failed to fetch replies for comment {comment_id}: {exc}")
                 except Exception as exc:
                     log_warning(f"Failed to fetch comments for post {post_id}: {exc}")
-            log_info(f"Collected {len(posts)} posts for user {user_id}.")
-        except Exception as exc:
-            log_warning(f"Failed to fetch feed for user {user_id}: {exc}")
-            continue
 
-        if idx % _BATCH_WRITE_USERS == 0 and pending_posts:
-            documents = _prepare_documents(pending_posts)
-            if documents:
-                upserted = _write_to_feed(documents, pending_comments, pending_replies)
-                total_upserted += upserted
-                log_info(
-                    f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments/etoro_replies "
-                    f"(batch at user {idx})."
-                )
+        comment_ids = [c["comment_id"] for c in pending_comments if c.get("comment_id")]
+        existing_comments_by_id = {}
+        if comment_ids:
+            cursor = db["etoro_comments"].find(
+                {"comment_id": {"$in": comment_ids}},
+                {"comment_id": 1, "replies_count": 1},
+            )
+            for doc in cursor:
+                existing_comments_by_id[doc["comment_id"]] = doc
 
-            pending_posts.clear()
-            pending_comments.clear()
-            pending_replies.clear()
+        comments_needing_replies = set()
+        for comment in pending_comments:
+            cid = comment.get("comment_id")
+            if not cid:
+                continue
+            if cid not in existing_comments_by_id:
+                comments_needing_replies.add(cid)
+            else:
+                fetched_count = comment.get("replies_count", 0)
+                stored_count = existing_comments_by_id[cid].get("replies_count", 0)
+                if fetched_count != stored_count:
+                    comments_needing_replies.add(cid)
 
-        if idx < len(user_ids):
-            time.sleep(_RATE_LIMIT_DELAY_SECONDS)
+        log_info(f"Fetching replies for {len(comments_needing_replies)} new/updated comments in batch...")
+        pending_replies = []
+        for comment in pending_comments:
+            cid = comment.get("comment_id")
+            if cid in comments_needing_replies:
+                post_id = comment.get("post_id")
+                try:
+                    replies = _fetch_comment_replies(session_factory, post_id, cid)
+                    pending_replies.extend(replies)
+                    if replies:
+                        log_info(f"Collected {len(replies)} replies for comment {cid}.")
+                except Exception as exc:
+                    log_warning(f"Failed to fetch replies for comment {cid}: {exc}")
 
-    if pending_posts:
-        documents = _prepare_documents(pending_posts)
-        if documents:
-            upserted = _write_to_feed(documents, pending_comments, pending_replies)
-            total_upserted += upserted
-            log_info("Upserted %d documents into feed.etoro_posts/etoro_comments/etoro_replies (final batch)." % upserted)
+        documents = _prepare_documents(posts)
+        upserted = _write_to_feed(documents, pending_comments, pending_replies, feed_client)
+        total_upserted += upserted
+        log_info(
+            f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments/etoro_replies "
+            f"(batch at user {batch_idx})."
+        )
 
-    if total_upserted > 0:
-        log_info(f"Total upserted {total_upserted} documents across all batches.")
-    else:
-        log_warning("No posts collected or all posts were duplicates.")
+    try:
+        for idx, user_id in enumerate(user_ids, start=1):
+            log_info(f"Fetching feed for user {user_id} ({idx}/{len(user_ids)})...")
+            try:
+                posts = _fetch_user_feed(session_factory, user_id)
+                for post in posts:
+                    post_id = post.get("post_id")
+                    if not post_id:
+                        continue
+                    if post_id not in seen_ids:
+                        seen_ids.add(post_id)
+                        pending_posts.append(post)
+                    else:
+                        existing = next((p for p in pending_posts if p.get("post_id") == post_id), None)
+                        if existing is not None and existing.get("created_at") is None and post.get("created_at") is not None:
+                            existing.update(post)
+            except Exception as exc:
+                log_warning(f"Failed to fetch feed for user {user_id}: {exc}")
+                continue
+
+            if idx % _BATCH_WRITE_USERS == 0 and pending_posts:
+                _flush_batch(pending_posts, idx)
+                pending_posts.clear()
+
+            if idx < len(user_ids):
+                time.sleep(_RATE_LIMIT_DELAY_SECONDS)
+
+        if pending_posts:
+            _flush_batch(pending_posts, len(user_ids))
+
+        if total_upserted > 0:
+            log_info(f"Total upserted {total_upserted} documents across all batches.")
+        else:
+            log_warning("No posts collected or all posts were duplicates.")
+    finally:
+        feed_client.close()
 
 
 if __name__ == "__main__":

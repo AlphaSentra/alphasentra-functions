@@ -37,6 +37,7 @@ from Functions.etoro.client import (
     _ETORO_PUBLIC_API_BASE,
     _ETORO_ENDPOINT_INSTRUMENT_FEED as _FEED_ENDPOINT,
     _ETORO_ENDPOINT_POST_COMMENTS as _POST_COMMENTS_ENDPOINT,
+    _ETORO_ENDPOINT_COMMENT_REPLIES as _COMMENT_REPLIES_ENDPOINT,
 )
 from Functions.logging_utils import log_info, log_warning, log_error
 
@@ -423,6 +424,182 @@ def _prepare_comment_documents(comments: list) -> list:
     return documents
 
 
+def _build_replies_url(
+    post_id: str,
+    comment_id: str,
+    take: int = 20,
+    order: str = "Desc",
+    offset_entity_id: str | None = None,
+) -> str:
+    base = _COMMENT_REPLIES_ENDPOINT.format(post_id=post_id, comment_id=comment_id)
+    params = [
+        f"take={min(max(take, 1), 100)}",
+        f"order={'Asc' if order == 'Asc' else 'Desc'}",
+    ]
+    if offset_entity_id:
+        params.append(f"offsetEntityId={offset_entity_id}")
+    return f"{base}?{'&'.join(params)}"
+
+
+def _fetch_comment_replies(
+    session_factory,
+    post_id: str,
+    comment_id: str,
+    take: int = 20,
+    order: str = "Desc",
+) -> list:
+    replies = []
+    offset_entity_id = None
+    last_status = None
+    last_body_preview = ""
+
+    for attempt in range(_MAX_RETRIES):
+        session = session_factory()
+        current_url = _build_replies_url(post_id, comment_id, take=take, order=order, offset_entity_id=offset_entity_id)
+        should_retry = False
+
+        while current_url:
+            try:
+                resp = session.get(current_url, timeout=30)
+            except requests.RequestException as exc:
+                log_warning(
+                    "Replies API error for post %s comment %s on attempt %d/%d: %s"
+                    % (post_id, comment_id, attempt + 1, _MAX_RETRIES, exc)
+                )
+                should_retry = True
+                break
+
+            last_status = resp.status_code
+            try:
+                last_body_preview = resp.text[:200]
+            except Exception:
+                last_body_preview = ""
+
+            if resp.status_code == 429 or resp.status_code >= 500:
+                log_warning(
+                    "Replies API HTTP %d for post %s comment %s on attempt %d/%d body=%s"
+                    % (
+                        resp.status_code,
+                        post_id,
+                        comment_id,
+                        attempt + 1,
+                        _MAX_RETRIES,
+                        last_body_preview,
+                    )
+                )
+                if attempt == _MAX_RETRIES - 1:
+                    resp.raise_for_status()
+                should_retry = True
+                break
+
+            if resp.status_code == 401:
+                log_warning(
+                    "Replies API HTTP 401 for post %s comment %s on attempt %d/%d; rotating session"
+                    % (post_id, comment_id, attempt + 1, _MAX_RETRIES)
+                )
+                should_retry = True
+                break
+
+            resp.raise_for_status()
+            data = resp.json()
+
+            items = data.get("items") or data.get("comments") or []
+            for item in items:
+                entity = item.get("entity") or item if isinstance(item, dict) else item
+                reply_id = None
+                if isinstance(entity, dict):
+                    reply_id = (
+                        entity.get("id")
+                        or entity.get("replyId")
+                        or item.get("id")
+                        or item.get("replyId")
+                    )
+                if reply_id:
+                    replies.append(
+                        {
+                            "reply_id": str(reply_id),
+                            "comment_id": comment_id,
+                            "post_id": post_id,
+                            "raw": item,
+                        }
+                    )
+
+            paging = data.get("paging") or {}
+            offset_entity_id = paging.get("offsetEntityId") or paging.get("next")
+            if offset_entity_id:
+                current_url = _build_replies_url(post_id, comment_id, take=take, order=order, offset_entity_id=offset_entity_id)
+                time.sleep(_RATE_LIMIT_DELAY_SECONDS)
+            else:
+                current_url = None
+
+        if not should_retry:
+            return replies
+
+        if attempt == _MAX_RETRIES - 1:
+            break
+        time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
+
+    raise RuntimeError(
+        f"GET {_COMMENT_REPLIES_ENDPOINT.format(post_id=post_id, comment_id=comment_id)} failed after {_MAX_RETRIES} attempts for post {post_id} comment {comment_id}: "
+        f"last_status={last_status}, body={last_body_preview!r}"
+    )
+
+
+def _prepare_reply_documents(replies: list) -> list:
+    """Build normalized reply documents with key extracted fields.
+
+    Args:
+        replies: List of reply dicts with reply_id, comment_id, post_id, and raw item.
+
+    Returns:
+        List of reply documents ready for MongoDB upsert.
+    """
+    documents = []
+    for reply in replies:
+        raw = reply.get("raw") or {}
+        entity = raw.get("entity") or {}
+        message = entity.get("message") or {}
+        owner = entity.get("owner") or {}
+        emotions_data = raw.get("emotionsData") or {}
+        like_data = emotions_data.get("like") or {}
+        like_paging = like_data.get("paging") or {}
+        likes = int((like_paging.get("totalCount") or 0))
+        replies_count = int(raw.get("repliesCount") or 0)
+        created_raw = entity.get("created")
+        created_at = None
+        if created_raw:
+            for fmt in (
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+                "%Y-%m-%dT%H:%M:%SZ",
+                "%Y-%m-%dT%H:%M:%S.%f",
+                "%Y-%m-%dT%H:%M:%S",
+            ):
+                try:
+                    created_at = datetime.strptime(str(created_raw), fmt).replace(tzinfo=timezone.utc)
+                    break
+                except ValueError:
+                    continue
+
+        documents.append(
+            {
+                "reply_id": reply.get("reply_id"),
+                "comment_id": reply.get("comment_id"),
+                "post_id": reply.get("post_id"),
+                "created": created_at,
+                "text": message.get("text"),
+                "language_code": message.get("languageCode"),
+                "username": owner.get("username"),
+                "owner_id": owner.get("id"),
+                "is_spam": entity.get("isSpam"),
+                "edit_status": entity.get("editStatus"),
+                "replies_count": replies_count,
+                "likes": likes,
+                "raw": raw,
+            }
+        )
+    return documents
+
+
 def _fetch_instrument_feed(session_factory, market_id: str) -> list:
     """Fetch all posts for an instrument within the lookback window.
 
@@ -523,15 +700,19 @@ def _fetch_instrument_feed(session_factory, market_id: str) -> list:
     )
 
 
-def _write_to_feed(posts: list, comments: list) -> int:
-    """Upsert post documents and their comments into MongoDB.
+def _write_to_feed(posts: list, comments: list, replies: list, feed_client: MongoClient | None = None) -> int:
+    """Upsert post documents and their comments/replies into MongoDB.
 
     Posts are keyed by ``post_id`` in ``etoro_posts``.
     Comments are keyed by ``comment_id`` in ``etoro_comments``.
+    Replies are keyed by ``reply_id`` in ``etoro_replies``.
 
     Args:
         posts: Post documents to store.
         comments: Comment documents to store.
+        replies: Reply documents to store.
+        feed_client: Optional existing MongoDB client for the feed database.
+            If not provided, a new client is created.
 
     Returns:
         Total number of documents successfully upserted.
@@ -539,16 +720,21 @@ def _write_to_feed(posts: list, comments: list) -> int:
     Raises:
         PyMongoError: If all MongoDB write attempts fail.
     """
-    uri = os.getenv("MONGODB_URI_FEED", "")
+    own_client = False
     db_name = os.getenv("MONGODB_DATABASE_FEED", "alphasentra-feed")
-    client = MongoClient(uri, serverSelectionTimeoutMS=30000)
+    if feed_client is None:
+        uri = os.getenv("MONGODB_URI_FEED", "")
+        feed_client = MongoClient(uri, serverSelectionTimeoutMS=30000)
+        own_client = True
     try:
-        db = client[db_name]
+        db = feed_client[db_name]
         posts_collection = db["etoro_posts"]
         comments_collection = db["etoro_comments"]
+        replies_collection = db["etoro_replies"]
 
         post_documents = _prepare_documents(posts)
         comment_documents = _prepare_comment_documents(comments)
+        reply_documents = _prepare_reply_documents(replies)
 
         post_ops = [
             UpdateOne({"post_id": doc["post_id"]}, {"$set": doc}, upsert=True)
@@ -558,9 +744,13 @@ def _write_to_feed(posts: list, comments: list) -> int:
             UpdateOne({"comment_id": doc["comment_id"]}, {"$set": doc}, upsert=True)
             for doc in comment_documents
         ]
+        reply_ops = [
+            UpdateOne({"reply_id": doc["reply_id"]}, {"$set": doc}, upsert=True)
+            for doc in reply_documents
+        ]
 
-        if not post_ops and not comment_ops:
-            log_warning("No post or comment documents to store.")
+        if not post_ops and not comment_ops and not reply_ops:
+            log_warning("No post, comment, or reply documents to store.")
             return 0
 
         last_exception = None
@@ -570,7 +760,9 @@ def _write_to_feed(posts: list, comments: list) -> int:
                     posts_collection.bulk_write(post_ops, ordered=False)
                 if comment_ops:
                     comments_collection.bulk_write(comment_ops, ordered=False)
-                return len(post_ops) + len(comment_ops)
+                if reply_ops:
+                    replies_collection.bulk_write(reply_ops, ordered=False)
+                return len(post_ops) + len(comment_ops) + len(reply_ops)
             except PyMongoError as exc:
                 last_exception = exc
                 log_warning(
@@ -581,7 +773,8 @@ def _write_to_feed(posts: list, comments: list) -> int:
                     raise
                 time.sleep(_BASE_DELAY_SECONDS * (1.1 ** attempt) + random.uniform(0, 1.0))
     finally:
-        client.close()
+        if own_client:
+            feed_client.close()
 
     if last_exception is not None:
         raise last_exception
@@ -593,8 +786,6 @@ def main() -> None:
     api_key = os.getenv("ETORO_PUBLIC_KEY", "")
     if not api_key:
         raise EnvironmentError("ETORO_PUBLIC_KEY environment variable is required")
-
-    log_info("Fetching trending instrument IDs from feed.etoro_trending_instruments...")
 
     log_info("Fetching trending instrument IDs from feed.etoro_trending_instruments...")
 
@@ -611,9 +802,9 @@ def main() -> None:
     log_info(f"Found {len(instrument_ids)} instrument IDs to process.")
 
     session_factory = lambda: public_api_session(api_key, get_random_private_key(), timeout=30)
+    feed_client = _get_feed_client()
 
     all_posts = []
-    pending_comments = []
     for idx, instrument_id in enumerate(instrument_ids, start=1):
         log_info(f"Fetching feed for instrument {instrument_id} ({idx}/{len(instrument_ids)})...")
         try:
@@ -622,13 +813,6 @@ def main() -> None:
                 post_id = post.get("post_id")
                 if post_id:
                     all_posts.append(post)
-                    try:
-                        comments = _fetch_post_comments(session_factory, post_id)
-                        pending_comments.extend(comments)
-                        if comments:
-                            log_info(f"Collected {len(comments)} comments for post {post_id}.")
-                    except Exception as exc:
-                        log_warning(f"Failed to fetch comments for post {post_id}: {exc}")
             log_info(f"Collected {len(posts)} posts for instrument {instrument_id}.")
         except Exception as exc:
             log_warning(f"Failed to fetch feed for instrument {instrument_id}: {exc}")
@@ -639,6 +823,7 @@ def main() -> None:
 
     if not all_posts:
         log_warning("No posts collected from any instrument feed.")
+        feed_client.close()
         return
 
     seen_ids = set()
@@ -660,8 +845,88 @@ def main() -> None:
     documents = _prepare_documents(unique_posts)
     log_info(f"Prepared {len(documents)} post documents.")
 
-    upserted = _write_to_feed(documents, pending_comments)
-    log_info(f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments.")
+    db = feed_client[os.getenv("MONGODB_DATABASE_FEED", "alphasentra-feed")]
+    posts_collection = db["etoro_posts"]
+
+    post_ids = [doc["post_id"] for doc in documents if doc.get("post_id")]
+    existing_posts_by_id = {}
+    if post_ids:
+        cursor = posts_collection.find(
+            {"post_id": {"$in": post_ids}},
+            {"post_id": 1, "likes": 1, "comments": 1, "message_text": 1},
+        )
+        for doc in cursor:
+            existing_posts_by_id[doc["post_id"]] = doc
+
+    posts_needing_comments = set()
+    for post in unique_posts:
+        pid = post.get("post_id")
+        if not pid:
+            continue
+        if pid not in existing_posts_by_id:
+            posts_needing_comments.add(pid)
+        else:
+            existing = existing_posts_by_id[pid]
+            if (
+                post.get("likes", 0) != existing.get("likes", 0)
+                or post.get("comments", 0) != existing.get("comments", 0)
+                or post.get("message_text") != existing.get("message_text")
+            ):
+                posts_needing_comments.add(pid)
+
+    log_info(f"Fetching comments for {len(posts_needing_comments)} new/updated posts...")
+    pending_comments = []
+    for post in unique_posts:
+        post_id = post.get("post_id")
+        if post_id in posts_needing_comments:
+            try:
+                comments = _fetch_post_comments(session_factory, post_id)
+                pending_comments.extend(comments)
+                if comments:
+                    log_info(f"Collected {len(comments)} comments for post {post_id}.")
+            except Exception as exc:
+                log_warning(f"Failed to fetch comments for post {post_id}: {exc}")
+
+    comment_ids = [c["comment_id"] for c in pending_comments if c.get("comment_id")]
+    existing_comments_by_id = {}
+    if comment_ids:
+        cursor = db["etoro_comments"].find(
+            {"comment_id": {"$in": comment_ids}},
+            {"comment_id": 1, "replies_count": 1},
+        )
+        for doc in cursor:
+            existing_comments_by_id[doc["comment_id"]] = doc
+
+    comments_needing_replies = set()
+    for comment in pending_comments:
+        cid = comment.get("comment_id")
+        if not cid:
+            continue
+        if cid not in existing_comments_by_id:
+            comments_needing_replies.add(cid)
+        else:
+            fetched_count = comment.get("replies_count", 0)
+            stored_count = existing_comments_by_id[cid].get("replies_count", 0)
+            if fetched_count != stored_count:
+                comments_needing_replies.add(cid)
+
+    log_info(f"Fetching replies for {len(comments_needing_replies)} new/updated comments...")
+    pending_replies = []
+    for comment in pending_comments:
+        cid = comment.get("comment_id")
+        if cid in comments_needing_replies:
+            post_id = comment.get("post_id")
+            try:
+                replies = _fetch_comment_replies(session_factory, post_id, cid)
+                pending_replies.extend(replies)
+                if replies:
+                    log_info(f"Collected {len(replies)} replies for comment {cid}.")
+            except Exception as exc:
+                log_warning(f"Failed to fetch replies for comment {cid}: {exc}")
+
+    upserted = _write_to_feed(documents, pending_comments, pending_replies, feed_client)
+    log_info(f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments/etoro_replies.")
+    feed_client.close()
 
 
 if __name__ == "__main__":

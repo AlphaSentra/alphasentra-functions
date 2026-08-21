@@ -153,6 +153,26 @@ def _get_user_avatar(username: str) -> Optional[str]:
     if username in _AVATAR_CACHE:
         return _AVATAR_CACHE[username]
 
+    db_name = os.getenv("MONGODB_DATABASE", "alphasentra-core")
+    try:
+        db = DatabaseManager().get_client()
+        coll = db[db_name]["etoro_pi"]
+        doc = coll.find_one(
+            {"$or": [{"userName": username}, {"username": username}]},
+            {"avatars": 1},
+        )
+        if isinstance(doc, dict):
+            avatars = doc.get("avatars") or []
+            for av in avatars:
+                url = av.get("url")
+                if url:
+                    _AVATAR_CACHE[username] = url
+                    return url
+            _AVATAR_CACHE[username] = None
+            return None
+    except Exception:
+        pass
+
     client = _get_etoro_client()
     if client is None:
         _AVATAR_CACHE[username] = None

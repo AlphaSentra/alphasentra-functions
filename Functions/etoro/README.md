@@ -321,7 +321,7 @@ GET https://public-api.etoro.com/api/v1/market-data/search?instrumentId={id}
 **Field fallback chain for name:**
 `internalInstrumentDisplayName` → `displayname` → `displayName` → `instrumentDisplayName` → `name` → `instrumentName` → `title`
 
-**Caching:** Results are persisted to `data/.etoro_instrument_cache.json` with a 24-hour TTL.
+**Caching:** Results are persisted to `.etoro_instrument_cache.json` at the project root with a 24-hour TTL.
 
 **Called from:**
 - `client.py:get_investor_portfolio()` — to resolve live portfolio instruments

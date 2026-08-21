@@ -280,9 +280,9 @@ sector_industry_df = pd.DataFrame({
 # Index = ticker symbols
 ```
 
-**Source**: Yahoo Finance via the **Market Data Provider layer** (`engine/data/yfinance_provider.py`), returning an `AssetMetadata` dataclass (`engine/data/models.py`) that is materialised into this DataFrame. `dividendYield` values are normalised by the provider (raw yfinance values > 1 are divided by 100; `None` becomes `0.0`).
+**Source**: Yahoo Finance via the **Market Data Provider layer** (`Functions/data/yfinance_provider.py`), returning an `AssetMetadata` dataclass (`Functions/data/models.py`) that is materialised into this DataFrame. `dividendYield` values are normalised by the provider (raw yfinance values > 1 are divided by 100; `None` becomes `0.0`).
 
-**Created by**: `get_sector_industry_data()` — facade in `engine/data/market.py` (delegates to the provider returned by `engine/data/provider_factory.py:get_market_data_provider()`).
+**Created by**: `get_sector_industry_data()` — facade in `Functions/data/market.py` (delegates to the provider returned by `Functions/data/provider_factory.py:get_market_data_provider()`).
 
 **Used for**: Sector/industry breakdown, dividend yield calculations, valuation comparisons, ROE and current-ratio enrichment in the holdings tab.
 
@@ -926,12 +926,12 @@ All datasets are constructed in these files:
 
 | Dataset | Created In | Line Reference |
 |---------|------------|----------------|
-| `prices` | `analyzer.py:download_and_process_prices()` | lines 165–199 |
+| `prices` | `analyzer.py:download_and_process_prices()` | lines 280–299 |
 | `ts` | `engine/modeling/timeseries.py:build_portfolio_timeseries()` | lines 9–350 |
 | `returns` | `engine/modeling/timeseries.py:calculate_returns()` | lines 341–350 |
 | `asset_returns` | `analyzer.py:generate_charts()` | line 620 |
 | `risk_df` | `engine/modeling/risk.py:calculate_risk_contribution()` | lines 87–126 |
-| `sector_industry_df` | `engine/data/market.py:get_sector_industry_data()` | lines 167–232 |
+| `sector_industry_df` | `Functions/data/market.py:get_sector_industry_data()` | lines 167–232 |
 | `holdings_df` | `engine/modules/holdings/renderer.py:` + `generate_portfolio_holdings_analysis()` | lines 9–1465 |
 | `metrics` | `engine/modeling/metrics.py` + `analyzer.py:calculate_metrics()` | lines 61–263 / 369–433 |
 | `mc_simulations` | `engine/modeling/risk.py:run_monte_carlo_simulation()` | lines 40–84 |
@@ -944,13 +944,13 @@ All datasets are constructed in these files:
 Market data access is now routed through a provider interface rather than being hard-coded in `market.py`.
 
 **Modules**:
-- `engine/data/protocols.py` — `MarketDataProvider` ABC defining `download_price_data()` and `get_sector_industry_data()`.
-- `engine/data/models.py` — `AssetMetadata` dataclass returned per ticker by the sector/industry lookup, including: `ticker`, `name`, `sector`, `industry`, `dividend_yield`, `market_cap`, `eps`, `ev_ebitda`, `eps_growth`, `forward_pe`, `roe`, `current_ratio`.
-- `engine/data/yfinance_provider.py` — Yahoo Finance implementation of the ABC. Normalises `.ASX` → `.AX`, converts raw dividend yield values (None → 0.0; >1 → /100), and materialises `AssetMetadata` rows.
-- `engine/data/provider_factory.py` — `get_market_data_provider()` selects the provider based on the `DATA_PROVIDER` config key (default `"yfinance"`) or the `MARKET_DATA_PROVIDER` environment variable.
-- `engine/data/market.py` — thin facade that forwards `download_price_data()` and `get_sector_industry_data()` to the provider instance, while retaining local helpers `detect_newly_available_stocks()` and `detect_relisted_stocks()`.
+- `Functions/data/protocols.py` — `MarketDataProvider` ABC defining `download_price_data()` and `get_sector_industry_data()`.
+- `Functions/data/models.py` — `AssetMetadata` dataclass returned per ticker by the sector/industry lookup, including: `ticker`, `name`, `sector`, `industry`, `dividend_yield`, `market_cap`, `eps`, `ev_ebitda`, `eps_growth`, `forward_pe`, `roe`, `current_ratio`.
+- `Functions/data/yfinance_provider.py` — Yahoo Finance implementation of the ABC. Normalises `.ASX` → `.AX`, converts raw dividend yield values (None → 0.0; >1 → /100), and materialises `AssetMetadata` rows.
+- `Functions/data/provider_factory.py` — `get_market_data_provider()` selects the provider based on the `DATA_PROVIDER` config key (default `"yfinance"`) or the `MARKET_DATA_PROVIDER` environment variable.
+- `Functions/data/market.py` — thin facade that forwards `download_price_data()` and `get_sector_industry_data()` to the provider instance, while retaining local helpers `detect_newly_available_stocks()` and `detect_relisted_stocks()`.
 
-This layer enables pluggable data sources without changing downstream callers that import from `engine.data.market`.
+This layer enables pluggable data sources without changing downstream callers that import from `Functions.data.market`.
 | `html_report` | `engine/output/html.py:generate_html_report()` | lines 97–209 |
 
 ---

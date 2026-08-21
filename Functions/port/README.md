@@ -21,7 +21,7 @@ graph LR
 
 ## Data Provider Architecture
 
-Market data is abstracted behind a provider interface (`data/protocols.py`) to support pluggable data sources. The default provider is **Yahoo Finance** (`data/yfinance_provider.py`), selected via the `DATA_PROVIDER` config key (`config.py:25`) or the `MARKET_DATA_PROVIDER` environment variable. The facade `data/market.py` preserves existing function signatures while delegating to the chosen provider.
+Market data is abstracted behind a provider interface (`../data/protocols.py`) to support pluggable data sources. The default provider is **Yahoo Finance** (`../data/yfinance_provider.py`), selected via the `DATA_PROVIDER` config key (`config.py:42`) or the `MARKET_DATA_PROVIDER` environment variable. The facade `../data/market.py` preserves existing function signatures while delegating to the chosen provider.
 
 See [../data/DATA_PROVIDER.md](../data/DATA_PROVIDER.md) for details.
 

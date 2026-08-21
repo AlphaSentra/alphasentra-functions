@@ -7,12 +7,13 @@
 This is the **Functions App** for the **AlphaSentra Project** — a Flask backend that serves and renders the outputs of various analytical functions. It acts as a unified gateway for portfolio analytics and AI-powered screening tools, with most modules rendering live HTML reports or redirecting to the AlphaSentra web application.
 
 - **PORT (Portfolio & Risk Analytics)** — Connects to eToro accounts and delivers deep portfolio analytics via the eToro API. Runs a full `PortfolioAnalyzer` pipeline that computes performance metrics, generates charts, evaluates risk, analyzes sector/industry exposure, and produces a rendered HTML report. Supports AI commentary generation powered by Google Gemini.
-- **EQS (Stocks AI Screener)** — Redirects to the AlphaSentra stock screener (`/screener?asset_class=EQ`) for AI-powered equity screening.
-- **WCR (Forex AI Screener)** — Redirects to the AlphaSentra forex screener (`/screener?asset_class=FX`) for AI-powered currency screening.
-- **CRYP (Cryptocurrency AI Screener)** — Redirects to the AlphaSentra crypto screener (`/screener?asset_class=CR`) for AI-powered digital asset screening.
-- **ANA (Analyse)** — Redirects to the AlphaSentra analysis search page for general asset analysis.
+- **PORT_SEL (Portfolio Investor Selection)** — Renders a searchable Pro Investor ranking table with flag + ISO country badges, country resolution via the countries.dev API, and a My Portfolio row for authenticated users.
+- **EQS (Stocks AI Screener)** — Redirects to the AlphaSentra stock screener (`/screener?asset_class=EQ`).
+- **WCR (Forex AI Screener)** — Redirects to the AlphaSentra forex screener (`/screener?asset_class=FX`).
+- **CRYP (Cryptocurrency AI Screener)** — Redirects to the AlphaSentra crypto screener (`/screener?asset_class=CR`).
+- **ANA (Analyse)** — Redirects to the AlphaSentra analysis search page.
 
-The app uses a **route registry** pattern where each function module is loaded dynamically from the `Functions/` directory via `importlib.util`, allowing modules to remain gitignored while still being discoverable and documented at runtime. Supporting utilities include MongoDB-backed data lookups (ticker resolution, settings), Gemini AI integration with usage tracking, Fernet-based encryption for sensitive strings, and structured file/console logging with unique error codes.
+The app uses a **route registry** pattern where each function module is loaded via explicit imports in `app.py` and registered with `register_route()`. `Functions/routes.py` also uses `importlib.util` to load theme and portfolio modules from filesystem paths. Supporting utilities include MongoDB-backed data lookups (ticker resolution, settings), Gemini AI integration with usage tracking, Fernet-based encryption for sensitive strings, and structured file/console logging with unique error codes.
 
 ## Setup
 
@@ -122,9 +123,10 @@ The app will start on `http://localhost:8888`.
 | `/logout` | POST | Clear `etoro_authuser` cookie. Origin required. |
 | `/etopi` | GET/POST | Portfolio & Risk Analytics (rendered live). **Auth required**, but cached reports bypass auth (TTL 24h). |
 | `/port` | GET | Portfolio Investor Selection — Pro Investor ranking table with country resolution. **Auth required**, but cached page bypasses auth (TTL 24h). |
-| `/eqs` | GET | Stocks AI Screener (rendered live) |
-| `/wcr` | GET | Forex AI Screener (rendered live) |
-| `/cryp` | GET | Cryptocurrency AI Screener (rendered live) |
+| `/eqs` | GET | Stocks AI Screener (redirects to `/screener?asset_class=EQ`) |
+| `/wcr` | GET | Forex AI Screener (redirects to `/screener?asset_class=FX`) |
+| `/cryp` | GET | Cryptocurrency AI Screener (redirects to `/screener?asset_class=CR`) |
+| `/ana` | GET | Analyse redirect (redirects to `/search`) |
 
 ## How It Works
 
@@ -133,16 +135,14 @@ The Flask app uses a **route registry** pattern to manage all available endpoint
 1. `Functions/routes.py` defines a global `ROUTES` list and a `register_route(app, path, description, handler)` function.
 2. Each call to `register_route()` appends `(path, description)` to `ROUTES` and applies the standard Flask `app.route(path)(handler)` decorator.
 3. The `/` (root) route renders an auto-generated Function Index page by reading `Functions/index/index.html` and passing the `ROUTES` list to it.
-4. All function modules live under `Functions/`. They are loaded by filesystem path using `importlib.util`, which allows the `Functions/` directory to remain gitignored.
-
-    This makes it trivial to discover and document endpoints as the project grows.
+4. All function modules are loaded by explicit imports in `app.py` and `Functions/routes.py`. `importlib.util` is used to load the theme, font, and portfolio main modules from filesystem paths.
 
     ```mermaid
     flowchart TD
         B[Flask App<br>app.py]
         C[Route Registry<br>Functions/routes.py]
         D[ROUTES list]
-        E[Function Modules<br>Functions/*/main.py]
+        E[Function Modules<br>Functions/port/main.py]
         F[HTML string]
         G[index page /]
         B --> C
@@ -215,7 +215,6 @@ register_route(app, '/etopi/api/metrics', 'Portfolio metrics as JSON', portfolio
 
 - `ROUTES` is a plain Python list populated at import time, so every route registered in `app.py` is automatically reflected on the Function Index.
 - No `@register_route` decorator syntax is used — all routes are explicitly registered via the function call.
-- The `Functions/` directory is gitignored; it is loaded at runtime from the filesystem using `importlib.util`, so there is no need to add function directories to `sys.path` manually.
 
 ## Deployment
 
@@ -244,16 +243,15 @@ Set all required environment variables in the Render dashboard. To share variabl
 
 ### GitHub Actions (Batch Jobs)
 
-Scheduled batch jobs (cache warming, feed collection, logs maintenance) are orchestrated via GitHub Actions workflows rather than Render Cron Jobs:
+Scheduled batch jobs (cache warming, feed collection, logs maintenance, portfolio report caching) are orchestrated via GitHub Actions workflows rather than Render Cron Jobs:
 
 | Workflow | File | Schedule | Purpose |
 |----------|------|----------|---------|
-| Batch Functions Cache Job | `.github/workflows/batch-job.yml` | Daily at 22:00 UTC | Clears cache and warms index + portfolio selection |
-| Batch Portfolio Report Cache Job | `.github/workflows/batch-report-job.yml` | Every 4 hours + on push to main | Pre-generates portfolio reports for active users |
-| Batch Feed Collection Job | `.github/workflows/feed-job.yml` | Daily at 03:00 UTC | Collects eToro feed data (trending PI, instruments, posts) |
+| Batch Functions Cache Job | `.github/workflows/functions-cache-job.yml` | Daily at 22:00 UTC | Clears cache and warms index + portfolio selection |
+| Batch Portfolio Selection Cache Job | `.github/workflows/batch-portf-selection-cache-job.yml` | Daily at 01:00 and 03:00 UTC | Pre-caches portfolio selection pages for all ranking combos and DB users |
+| Batch Feed Collection Job | `.github/workflows/feed-job.yml` | Every 4 hours + on push to main | Collects eToro feed data (trending PI, instruments, posts) |
 
 Secrets are stored in the GitHub repository settings (`Settings` → `Secrets and variables` → `Actions`).
 
 Key production dependencies:
-- `gunicorn` — WSGI HTTP server
-- `gevent` — async worker class for Gunicorn (removed in current deployment in favor of default sync workers with increased timeout)
+- `gunicorn` — WSGI HTTP server (sync workers, 2 workers, 600s timeout)

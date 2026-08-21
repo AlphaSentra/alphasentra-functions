@@ -351,7 +351,7 @@ HTTP 403 - origin not allowed
 
 ### Protected routes
 
-All routes except `/auth`, `/logout`, `/etopi/check_cache`, and `/test_iframe_auth.html` require the `etoro_authuser` cookie.
+All routes except `/auth`, `/logout`, `/etopi/check_cache`, `/port/search_investors`, `/auth.htm`, and `/static/*` require the `etoro_authuser` cookie.
 
 ```
 GET /etopi

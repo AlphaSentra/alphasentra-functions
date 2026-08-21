@@ -2,7 +2,7 @@
 
 Drops all documents from ``etoro_trending_instruments`` and
 ``etoro_trending_pi``, then removes stale documents from ``etoro_posts``
-where ``created`` is older than 60 days.
+where ``created`` is older than 10 days.
 
 Environment variables:
     MONGODB_URI_FEED        - MongoDB connection URI for the feed database.
@@ -47,7 +47,7 @@ _FULL_CLEAR_COLLECTIONS = [
 ]
 
 # Age threshold (in days) for pruning etoro_posts documents.
-_POSTS_STALE_DAYS = 60
+_POSTS_STALE_DAYS = 10
 
 
 # ---------------------------------------------------------------------------

@@ -36,11 +36,12 @@ Collects eToro feed data (trending PIs, instruments, and posts) and stores it in
 
 | Order | Script | Purpose |
 |-------|--------|---------|
-| 1 | `clear_feed.py` | Drops `etoro_trending_instruments` and `etoro_trending_pi` collections; removes `etoro_posts` older than 60 days. |
+| 1 | `clear_feed.py` | Drops `etoro_trending_instruments` and `etoro_trending_pi` collections; removes `etoro_posts` older than 10 days. |
 | 2 | `feed_get_pi.py` | Fetches current-year top-copier Popular Investor rankings and upserts into `etoro_trending_pi`. |
 | 3 | `feed_get_instruments.py` | Fetches top 100 instruments by 7-day viewer popularity and trader change, upserts into `etoro_trending_instruments`. |
 | 4 | `feed_get_posts_from_pi.py` | Reads `etoro_trending_pi`, fetches each PI's public feed posts (last 30 days), stores in `etoro_posts`. |
 | 5 | `feed_get_posts_from_instruments.py` | Reads `etoro_trending_instruments`, fetches each instrument's public market feed posts (last 30 days), stores in `etoro_posts`. |
+| 6 | `feed_get_posts_from_users.py` | Reads `users` collection, fetches public feed posts for each user with `etoro_username` (last 30 days), stores in `etoro_posts`. |
 
 **Timeout:** 3 hours per script (`SCRIPT_TIMEOUT_SECONDS = 10800`).
 
@@ -152,31 +153,31 @@ The batch scripts touch multiple MongoDB databases, eToro auth, AI services, and
 
 Runs daily at 22:00 UTC and on manual dispatch. Clears cache and warms index + portfolio selection pages.
 
-**Workflow file:** `.github/workflows/batch-job.yml`
+**Workflow file:** `.github/workflows/functions-cache-job.yml`
 
 **Triggers:**
 - Schedule: `0 22 * * *` (daily at 22:00 UTC)
 - `workflow_dispatch` (manual)
 
-### Batch Portfolio Report Cache Job
+### Batch Portfolio Selection Cache Job
 
-Runs every 4 hours, on push to `main`, and on manual dispatch. Pre-generates portfolio reports for active users.
+Runs daily at 01:00 and 03:00 UTC and on manual dispatch. Pre-caches portfolio selection pages for all ranking combos and DB users.
 
-**Workflow file:** `.github/workflows/batch-report-job.yml`
+**Workflow file:** `.github/workflows/batch-portf-selection-cache-job.yml`
 
 **Triggers:**
-- Push to `main`
-- Schedule: `0 */4 * * *` (every 4 hours)
+- Schedule: `0 1,3 * * *` (daily at 01:00 and 03:00 UTC)
 - `workflow_dispatch` (manual)
 
 ### Batch Feed Collection Job
 
-Runs daily at 03:00 UTC and on manual dispatch. Collects eToro feed data.
+Runs every 4 hours, on push to `main`, and on manual dispatch. Collects eToro feed data.
 
 **Workflow file:** `.github/workflows/feed-job.yml`
 
 **Triggers:**
-- Schedule: `0 3 * * *` (daily at 03:00 UTC)
+- Push to `main`
+- Schedule: `0 4,8,12,16,20 * * *` (every 4 hours)
 - `workflow_dispatch` (manual)
 
 ### Required GitHub Secrets
@@ -193,14 +194,14 @@ All workflows share a common set of secrets configured in the repository setting
 | `MONGODB_USERNAME` | All jobs |
 | `MONGODB_PASSWORD` | All jobs |
 | `MONGODB_AUTH_SOURCE` | All jobs |
-| `MONGODB_URI_CACHE` | `batch-job.yml`, `batch-report-job.yml` |
-| `MONGODB_DATABASE_CACHE` | `batch-job.yml`, `batch-report-job.yml` |
-| `MONGODB_URI_FEED` | `feed-job.yml`, `batch-job.yml`, `batch-report-job.yml` |
-| `MONGODB_DATABASE_FEED` | `feed-job.yml`, `batch-job.yml`, `batch-report-job.yml` |
-| `MONGODB_URI_LOGS` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
-| `MONGODB_DATABASE_LOGS` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
-| `ETORO_PRIVATE_KEY` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
-| `ETORO_PUBLIC_KEY` | `batch-job.yml`, `batch-report-job.yml`, `feed-job.yml` |
+| `MONGODB_URI_CACHE` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml` |
+| `MONGODB_DATABASE_CACHE` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml` |
+| `MONGODB_URI_FEED` | `feed-job.yml`, `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml` |
+| `MONGODB_DATABASE_FEED` | `feed-job.yml`, `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml` |
+| `MONGODB_URI_LOGS` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml`, `feed-job.yml` |
+| `MONGODB_DATABASE_LOGS` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml`, `feed-job.yml` |
+| `ETORO_PRIVATE_KEY` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml`, `feed-job.yml` |
+| `ETORO_PUBLIC_KEY` | `functions-cache-job.yml`, `batch-portf-selection-cache-job.yml`, `feed-job.yml` |
 | `GEMINI_API_KEY` | All jobs (optional) |
 | `GEMINI_DEFAULT` | All jobs (optional) |
 | `GEMINI_FLASH_MODEL` | All jobs (optional) |

@@ -677,7 +677,7 @@ def _fetch_user_feed(session_factory, user_id: str) -> list:
             except Exception:
                 last_body_preview = ""
 
-            if resp.status_code == 429 or resp.status_code == 417 or resp.status_code >= 500:
+            if resp.status_code == 429 or resp.status_code == 417 or resp.status_code == 401 or resp.status_code >= 500:
                 log_warning(
                     "Feed API HTTP %d for user %s on attempt %d/%d body=%s"
                     % (

@@ -1,6 +1,6 @@
 import importlib.util
 from pathlib import Path
-from flask import render_template_string, request
+from flask import render_template_string, request, g
 
 base_path = Path(__file__).resolve().parent.parent
 
@@ -98,6 +98,8 @@ def _redirect_html(title: str, message: str, url: str) -> str:
 from Functions.port.input import handle_portfolio_input, get_portfolio_cache_status # Import get_portfolio_cache_status
 from Functions.port.selection import get_portfolio_selection_html, cached_portfolio_selection_html
 from Functions.db.cache import get_index_cache_from_mongo
+from Functions.feed.page import get_feed_html
+from Functions.port.config import LOGIN_REDIRECT_URL
 
 
 def index():
@@ -141,6 +143,11 @@ def wcr():
 
 def ana():
     return _redirect_html("Analyse", "Redirecting to Analyse...", "https://app.alphasentra.com/search")
+
+
+def feed():
+    redirect_url = LOGIN_REDIRECT_URL if not getattr(g, 'etoro_authuser', '') else None
+    return get_feed_html(redirect_url=redirect_url)
 
 
 def cryp():

@@ -4,7 +4,7 @@ import threading
 import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
-from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel
+from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel, feed
 from Functions.port.selection import search_investors_api, get_portfolio_selection_html
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
@@ -77,6 +77,7 @@ def _require_etoro_auth():
         '/etopi/check_cache',
         '/port/search_investors',
         '/auth.htm',
+        '/feed',
     )
     if request.path in public_paths or request.path.startswith('/static'):
         return
@@ -324,6 +325,7 @@ register_route(app, '/port', 'Portfolio & Risk Analytics', sel)
 register_route(app, '/eqs', 'Stocks AI Screener', eqs)
 register_route(app, '/wcr', 'Forex AI Screener', wcr)
 register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)
+register_route(app, '/feed', 'eToro Feed: Trending Posts', feed)
 
 @app.route('/port/search_investors', methods=['GET'])
 def port_search_investors():

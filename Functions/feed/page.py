@@ -4,6 +4,7 @@ eToro Feed page - inbox-style list with reading panel.
 
 import json
 import os
+import re
 from datetime import datetime, timezone
 from pathlib import Path
 from typing import Any, Dict, List
@@ -132,6 +133,23 @@ def _truncate(text: str, length: int = 120) -> str:
     return text[:length].rstrip() + "..."
 
 
+_VIDEO_EXT_RE = re.compile(r"\.(mp4|webm|mov|m4v)(\?.*)?$", re.IGNORECASE)
+
+
+def _post_has_video(attachments: list) -> bool:
+    for att in attachments:
+        atype = (att.get("type") or att.get("mediaType") or "").lower() if isinstance(att, dict) else ""
+        if atype == "video":
+            return True
+        url = ""
+        if isinstance(att, dict):
+            url = att.get("url") or att.get("src") or att.get("href") or att.get("link") or ""
+        if url and _VIDEO_EXT_RE.search(str(url)):
+            return True
+    return False
+
+
+
 def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
     created = p.get("created")
     if isinstance(created, datetime):
@@ -157,6 +175,7 @@ def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
         "avatar": str(p.get("avatar_medium") or ""),
         "badges": [str(b) for b in (p.get("badges") or []) if b],
         "attachments": p.get("attachments") or [],
+        "has_video": _post_has_video(p.get("attachments") or []),
     }
 
 
@@ -414,7 +433,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-list-row-top {{
             display: flex;
             align-items: baseline;
-            justify-content: space-between;
             gap: 8px;
         }}
 
@@ -425,12 +443,30 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
+            flex-shrink: 1;
+            min-width: 0;
         }}
 
         .feed-list-date {{
             color: var(--text-muted);
             font-size: 11px;
             white-space: nowrap;
+            margin-left: auto;
+        }}
+
+        .feed-list-video-pill {{
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 1px 8px;
+            border-radius: 999px;
+            background: rgba(253, 255, 103, 0.2);
+            border: 1px solid rgba(253, 255, 103, 0.7);
+            color: #fdff67;
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
         }}
 
         .feed-list-preview {{
@@ -1321,6 +1357,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 <div class="feed-list-content">
                     <div class="feed-list-row-top">
                         <span class="feed-list-owner">${{_escape_js(post.owner)}}</span>
+                        ${{post.has_video ? '<span class="feed-list-video-pill">&#9654; Video</span>' : ''}}
                         <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
                     </div>
                     <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>

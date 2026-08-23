@@ -5,6 +5,7 @@ import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel, feed
+from Functions.feed.page import get_feed_posts_json
 from Functions.port.selection import search_investors_api, get_portfolio_selection_html
 from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
@@ -77,7 +78,6 @@ def _require_etoro_auth():
         '/etopi/check_cache',
         '/port/search_investors',
         '/auth.htm',
-        '/feed',
     )
     if request.path in public_paths or request.path.startswith('/static'):
         return
@@ -115,6 +115,9 @@ def _require_etoro_auth():
                 return
 
         if request.path == '/port' and request.method == 'GET':
+            return
+
+        if request.path == '/feed' or request.path.startswith('/feed/posts'):
             return
 
         if request.path == '/' and request.method == 'GET':
@@ -326,6 +329,13 @@ register_route(app, '/eqs', 'Stocks AI Screener', eqs)
 register_route(app, '/wcr', 'Forex AI Screener', wcr)
 register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)
 register_route(app, '/feed', 'eToro Feed: Trending Posts', feed)
+
+
+@app.route('/feed/posts', methods=['GET'])
+def feed_posts():
+    page = request.args.get('page', 1, type=int)
+    page_size = request.args.get('pageSize', 50, type=int)
+    return jsonify(json.loads(get_feed_posts_json(page=page, page_size=page_size)))
 
 @app.route('/port/search_investors', methods=['GET'])
 def port_search_investors():

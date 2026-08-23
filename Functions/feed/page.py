@@ -131,15 +131,35 @@ def _truncate(text: str, length: int = 120) -> str:
     return text[:length].rstrip() + "..."
 
 
-def _post_preview(post: Dict[str, Any]) -> str:
-    owner = str(post.get("owner_username") or "Unknown")
-    created = _format_created(post.get("created"))
-    message = str(post.get("message_text") or "")
-    preview = _truncate(message, 110)
-    return f"{owner} — {created}\n{preview}"
+def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
+    created = p.get("created")
+    if isinstance(created, datetime):
+        ts = created.timestamp()
+    else:
+        text = str(created or "")
+        if text.endswith("Z"):
+            text = text[:-1]
+        try:
+            ts = datetime.fromisoformat(text).timestamp()
+        except Exception:
+            ts = 0
+    return {
+        "id": str(p.get("post_id") or ""),
+        "owner": str(p.get("owner_username") or "Unknown"),
+        "created_raw": _format_relative_time(created),
+        "created_ts": ts,
+        "preview": _truncate(str(p.get("message_text") or ""), 110),
+        "message": str(p.get("message_text") or ""),
+        "likes": _safe_int(p.get("likes")),
+        "comments": _safe_int(p.get("comments")),
+        "post_url": str(p.get("post_url") or "#"),
+        "avatar": str(p.get("avatar_medium") or ""),
+        "badges": [str(b) for b in (p.get("badges") or []) if b],
+    }
 
 
-def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect_url: str = "") -> str:
+def fetch_feed_posts(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> tuple[List[Dict[str, Any]], str]:
+    client = None
     error_message = ""
     try:
         client = _get_feed_client()
@@ -175,12 +195,15 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             error_message = f"Query returned 0 posts but collection has {total_count} posts. Check skip/limit parameters."
         elif not raw_posts and total_count == 0:
             error_message = "Collection is empty. No posts found in database."
+
+        posts = [_transform_post(p) for p in raw_posts]
+        return posts, error_message
     except PyMongoError as exc:
         error_message = f"Feed database error: {exc}"
-        raw_posts = []
+        return [], error_message
     except EnvironmentError as exc:
         error_message = f"Feed configuration error: {exc}"
-        raw_posts = []
+        return [], error_message
     finally:
         if client:
             try:
@@ -188,35 +211,21 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             except Exception:
                 pass
 
-    posts: List[Dict[str, Any]] = []
-    for p in raw_posts:
-        created = p.get("created")
-        if isinstance(created, datetime):
-            ts = created.timestamp()
-        else:
-            text = str(created or "")
-            if text.endswith("Z"):
-                text = text[:-1]
-            try:
-                ts = datetime.fromisoformat(text).timestamp()
-            except Exception:
-                ts = 0
-        posts.append({
-            "id": str(p.get("post_id") or ""),
-            "owner": str(p.get("owner_username") or "Unknown"),
-            "created_raw": _format_relative_time(created),
-            "created_ts": ts,
-            "preview": _truncate(str(p.get("message_text") or ""), 110),
-            "message": str(p.get("message_text") or ""),
-            "likes": _safe_int(p.get("likes")),
-            "comments": _safe_int(p.get("comments")),
-            "post_url": str(p.get("post_url") or "#"),
-            "avatar": str(p.get("avatar_medium") or ""),
-            "badges": [str(b) for b in (p.get("badges") or []) if b],
-        })
 
+def get_feed_posts_json(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> str:
+    posts, error_message = fetch_feed_posts(page, page_size)
+    payload: Dict[str, Any] = {
+        "page": page,
+        "page_size": page_size,
+        "posts": posts,
+        "error": error_message or None,
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect_url: str = "") -> str:
+    posts, error_message = fetch_feed_posts(page, page_size)
     posts_json = json.dumps(posts, ensure_ascii=False)
-    total = len(posts)
 
     _error_list_html = ""
     if error_message:
@@ -293,11 +302,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             font-weight: bold;
             letter-spacing: 0.05em;
             text-transform: uppercase;
-        }}
-
-        .feed-count {{
-            color: var(--text-muted);
-            font-size: 12px;
         }}
 
         .feed-layout {{
@@ -589,6 +593,29 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             font-size: 13px;
         }}
 
+        .feed-list-loading {{
+            text-align: center;
+            padding: 16px;
+            color: var(--text-muted);
+            font-size: 12px;
+        }}
+
+        .feed-list-spinner {{
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--brand-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            margin-right: 8px;
+            vertical-align: middle;
+        }}
+
+        @keyframes spin {{
+            to {{ transform: rotate(360deg); }}
+        }}
+
         .feed-list-error {{
             text-align: center;
             padding: 40px 16px;
@@ -613,7 +640,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 <body>
     <div class="feed-toolbar">
         <div class="feed-title">eToro Feed</div>
-        <div class="feed-count">{total} post{total != 1 and 's' or ''}</div>
     </div>
     <div class="feed-layout">
         <div class="feed-list-panel" id="feedListPanel">
@@ -641,6 +667,9 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         const readingPanel = document.getElementById('feedReadingPanel');
         const readingClose = document.getElementById('feedReadingClose');
         let selectedIndex = -1;
+        let currentPage = 1;
+        let hasMore = true;
+        let loadingMore = false;
 
         readingClose.addEventListener('click', () => selectPost(-1));
 
@@ -648,7 +677,31 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             window.open(url, '_blank', 'width=900,height=700');
         }}
 
-        function renderList() {{
+        function createPostItem(post, index) {{
+            const item = document.createElement('div');
+            item.className = 'feed-list-item';
+            item.setAttribute('data-index', index);
+
+            const avatarHtml = post.avatar
+                ? `<img src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
+                : `<div class="feed-list-avatar-placeholder">${{_escape_js(post.owner)[0].toUpperCase()}}</div>`;
+
+            item.innerHTML = `
+                <div class="feed-list-avatar">${{avatarHtml}}</div>
+                <div class="feed-list-content">
+                    <div class="feed-list-row-top">
+                        <span class="feed-list-owner">${{_escape_js(post.owner)}}</span>
+                        <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
+                    </div>
+                    <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>
+                </div>
+            `;
+
+            item.addEventListener('click', () => selectPost(index));
+            return item;
+        }}
+
+        function renderList(reset) {{
             if (!posts.length) {{
                 if (listEmpty) listEmpty.style.display = '';
                 return;
@@ -657,31 +710,73 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 
             const fragment = document.createDocumentFragment();
             posts.forEach((post, index) => {{
-                const item = document.createElement('div');
-                item.className = 'feed-list-item';
-                item.setAttribute('data-index', index);
-
-                const avatarHtml = post.avatar
-                    ? `<img src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
-                    : `<div class="feed-list-avatar-placeholder">${{_escape_js(post.owner)[0].toUpperCase()}}</div>`;
-
-                item.innerHTML = `
-                    <div class="feed-list-avatar">${{avatarHtml}}</div>
-                    <div class="feed-list-content">
-                        <div class="feed-list-row-top">
-                            <span class="feed-list-owner">${{_escape_js(post.owner)}}</span>
-                            <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
-                        </div>
-                        <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>
-                    </div>
-                `;
-
-                item.addEventListener('click', () => selectPost(index));
-                fragment.appendChild(item);
+                fragment.appendChild(createPostItem(post, index));
             }});
 
-            listContainer.innerHTML = '';
+            if (reset) {{
+                listContainer.innerHTML = '';
+            }}
             listContainer.appendChild(fragment);
+        }}
+
+        function showLoading() {{
+            if (!document.getElementById('feedListLoading')) {{
+                const loader = document.createElement('div');
+                loader.className = 'feed-list-loading';
+                loader.id = 'feedListLoading';
+                loader.innerHTML = '<span class="feed-list-spinner"></span> Loading...';
+                listContainer.appendChild(loader);
+            }}
+        }}
+
+        function hideLoading() {{
+            const loader = document.getElementById('feedListLoading');
+            if (loader) loader.remove();
+        }}
+
+        function loadMorePosts() {{
+            if (loadingMore || !hasMore) return;
+            loadingMore = true;
+            showLoading();
+
+            fetch('/feed/posts?page=' + (currentPage + 1))
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
+                    hideLoading();
+                    loadingMore = false;
+
+                    if (!data || !data.posts || !data.posts.length) {{
+                        hasMore = false;
+                        return;
+                    }}
+
+                    currentPage = data.page || currentPage;
+                    hasMore = data.posts.length >= (data.page_size || 50);
+
+                    const startIndex = posts.length;
+                    data.posts.forEach(function(post) {{
+                        posts.push(post);
+                    }});
+
+                    const fragment = document.createDocumentFragment();
+                    data.posts.forEach(function(post, idx) {{
+                        fragment.appendChild(createPostItem(post, startIndex + idx));
+                    }});
+                    listContainer.appendChild(fragment);
+                }})
+                .catch(function() {{
+                    hideLoading();
+                    loadingMore = false;
+                }});
+        }}
+
+        function onListScroll() {{
+            const panel = document.getElementById('feedListPanel');
+            if (!panel) return;
+            const threshold = 200;
+            if (panel.scrollHeight - panel.scrollTop - panel.clientHeight <= threshold) {{
+                loadMorePosts();
+            }}
         }}
 
         function selectPost(index) {{
@@ -742,7 +837,8 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 .replace(/'/g, '&#39;');
         }}
 
-        renderList();
+        renderList(true);
+        document.getElementById('feedListPanel').addEventListener('scroll', onListScroll);
         {_redirect_script}
     </script>
 </body>

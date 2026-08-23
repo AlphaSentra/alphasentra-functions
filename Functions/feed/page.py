@@ -372,6 +372,11 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             grid-template-columns: 420px 1fr;
         }}
 
+        .feed-layout.has-selection .feed-list-ticker-pill,
+        .feed-layout.has-selection .feed-list-ticker-more {{
+            display: none;
+        }}
+
         .feed-list-panel {{
             overflow-y: auto;
             min-height: 0;
@@ -493,6 +498,40 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             display: -webkit-box;
             -webkit-line-clamp: 2;
             -webkit-box-orient: vertical;
+            flex: 1 1 auto;
+            min-width: 0;
+        }}
+
+        .feed-list-preview-row {{
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+        }}
+
+        .feed-list-ticker-pill {{
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--color-accent);
+            color: var(--color-accent);
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+        }}
+
+        .feed-list-ticker-more {{
+            display: inline-flex;
+            align-items: center;
+            padding: 1px 6px;
+            border-radius: 4px;
+            background: rgba(255, 255, 255, 0.06);
+            border: 1px solid var(--color-accent);
+            color: var(--color-accent);
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
         }}
 
         .feed-reading-panel {{
@@ -1400,7 +1439,11 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         <span class="feed-list-stat-pill">&#9993; ${{post.comments}}</span>
                         <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
                     </div>
-                    <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>
+                    <div class="feed-list-preview-row">
+                        <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>
+                        ${{(post.badges || []).slice(0, 5).map(function(b) {{ return '<span class="feed-list-ticker-pill">' + _escape_js(b) + '</span>'; }}).join('')}}
+                        ${{(post.badges || []).length > 5 ? '<span class="feed-list-ticker-more">+' + ((post.badges || []).length - 5) + '</span>' : ''}}
+                    </div>
                 </div>
             `;
 

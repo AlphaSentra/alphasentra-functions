@@ -1068,12 +1068,8 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             const content = document.getElementById('feedMediaOverlayContent');
             if (!overlay || !content) return;
 
-            console.log('[Feed] openMediaOverlay url=' + url + ' mediaType=' + mediaType);
-
-            let html = '';
             const youtubeEmbed = getYoutubeEmbedUrl(url);
             const videoId = getYoutubeVideoId(url);
-            console.log('[Feed] youtubeEmbed=' + youtubeEmbed);
             if (youtubeEmbed) {{
                 html = `<div class="youtube-container"><iframe src="${{_escape_js(youtubeEmbed)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;"></iframe></div>`;
             }} else if (isYoutubeUrl(url)) {{
@@ -1117,7 +1113,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 
         function getYoutubeVideoId(url) {{
             if (!url) return null;
-            console.log('[Feed] getYoutubeVideoId input=' + url);
             let id = null;
             if (url.indexOf('youtube.com/watch') !== -1) {{
                 const start = url.indexOf('v=');
@@ -1145,14 +1140,12 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             if (id) {{
                 id = id.split('/')[0].split('?')[0];
             }}
-            console.log('[Feed] getYoutubeVideoId result=' + id);
             return id || null;
         }}
 
         function isYoutubeUrl(url) {{
             if (!url) return false;
             const result = url.indexOf('youtube.com') !== -1 || url.indexOf('youtu.be') !== -1;
-            console.log('[Feed] isYoutubeUrl input=' + url + ' result=' + result);
             return result;
         }}
 
@@ -1427,18 +1420,15 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 : `<div class="feed-detail-avatar-placeholder">${{_escape_js(post.owner)[0].toUpperCase()}}</div>`;
 
             function renderAttachments(attachments) {{
-                console.log('[Feed] renderAttachments input:', attachments);
                 if (!attachments || !attachments.length) return '';
                 const mediaHtml = attachments.map(function(att, idx) {{
                     const type = (att.type || att.mediaType || '').toString().toLowerCase();
                     const url = att.url || att.src || att.href || att.link || '';
-                    console.log('[Feed] attachment[' + idx + '] type=' + type + ' url=' + url + ' rawKeys=' + (att ? Object.keys(att).slice(0,10).join(',') : 'null'));
                     if (!url) return '';
 
                     const youtubeEmbed = getYoutubeEmbedUrl(url);
                     const videoId = getYoutubeVideoId(url);
                     const isYoutube = !!(youtubeEmbed || (isYoutubeUrl(url) && videoId));
-                    console.log('[Feed] attachment[' + idx + '] isYoutube=' + isYoutube + ' youtubeEmbed=' + youtubeEmbed + ' videoId=' + videoId);
                     if (isYoutube) {{
                         const embedUrl = youtubeEmbed || `https://www.youtube.com/embed/${{_escape_js(videoId)}}`;
                         return `<div class="youtube-container"><iframe src="${{_escape_js(embedUrl)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(embedUrl)}}','video')"></iframe></div>`;
@@ -1450,7 +1440,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         return `<img src="${{_escape_js(url)}}" alt="" loading="lazy" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','image')">`;
                     }}
                     if (isVideoFile) {{
-                        console.log('[Feed] attachment[' + idx + '] FALLING BACK TO VIDEO TAG - isYoutube was false, url=' + url);
                         return `<video controls preload="metadata" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','video')"><source src="${{_escape_js(url)}}"></video>`;
                     }}
                     return '';

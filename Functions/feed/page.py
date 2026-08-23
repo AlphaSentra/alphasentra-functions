@@ -365,6 +365,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             grid-template-columns: 1fr;
             flex: 1;
             min-height: 0;
+            padding-bottom: 50px;
         }}
 
         .feed-layout.has-selection {{
@@ -495,15 +496,27 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         }}
 
         .feed-reading-panel {{
-            overflow-y: auto;
-            padding: 24px 28px;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            padding: 0;
             display: none;
             position: relative;
             min-height: 0;
         }}
 
         .feed-layout.has-selection .feed-reading-panel {{
-            display: block;
+            display: flex;
+        }}
+
+        .feed-reading-scroll {{
+            flex: 1 1 auto;
+            overflow-y: auto;
+            min-height: 0;
+        }}
+
+        .feed-reading-scroll-inner {{
+            padding: 24px 28px 0 28px;
         }}
 
         .feed-reading-close {{
@@ -677,7 +690,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             display: flex;
             align-items: center;
             gap: 8px;
-            margin-top: 12px;
             padding: 10px 12px;
             border-radius: 0;
             border: 1px solid var(--color-accent);
@@ -685,6 +697,9 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             font-size: 13px;
             cursor: pointer;
             transition: border-color 0.15s ease, color 0.15s ease;
+            flex-shrink: 0;
+            margin-right: 35px;
+            margin-left: 28px;
         }}
 
         .feed-comment-box:hover {{
@@ -1081,7 +1096,13 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 <div class="feed-reading-empty-icon">&#9993;</div>
                 <div class="feed-reading-empty-text">Select a post to read</div>
             </div>
-            <div id="feedReadingContent"></div>
+            <div class="feed-reading-scroll" id="feedReadingScroll">
+                <div class="feed-reading-scroll-inner" id="feedReadingScrollInner"></div>
+            </div>
+            <div class="feed-comment-box" id="feedCommentBox" style="display:none;">
+                <span class="feed-comment-caret"></span>
+                <span>Write a comment...</span>
+            </div>
         </div>
     </div>
     <script>
@@ -1089,7 +1110,9 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         const listContainer = document.getElementById('feedListItems');
         const listEmpty = document.getElementById('feedListEmpty');
         const readingEmpty = document.getElementById('feedReadingEmpty');
-        const readingContent = document.getElementById('feedReadingContent');
+        const readingScroll = document.getElementById('feedReadingScroll');
+        const readingScrollInner = document.getElementById('feedReadingScrollInner');
+        const commentBox = document.getElementById('feedCommentBox');
         const layout = document.querySelector('.feed-layout');
         const readingPanel = document.getElementById('feedReadingPanel');
         const readingClose = document.getElementById('feedReadingClose');
@@ -1460,14 +1483,15 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 layout.classList.remove('has-selection');
                 readingPanel.classList.remove('open');
                 readingEmpty.style.display = 'none';
-                readingContent.innerHTML = '';
+                readingScrollInner.innerHTML = '';
+                commentBox.style.display = 'none';
                 return;
             }}
 
             layout.classList.add('has-selection');
             readingEmpty.style.display = 'none';
             document.getElementById('feedReadingPanel').classList.add('open');
-            readingPanel.scrollTop = 0;
+            readingScroll.scrollTop = 0;
             const badgesHtml = post.badges.map(b => `<span class="feed-badge">${{_escape_js(b)}}</span>`).join('');
             const avatarHtml = post.avatar
                 ? `<img class="feed-detail-avatar-img" src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
@@ -1504,7 +1528,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 
             const attachmentsHtml = renderAttachments(post.attachments);
 
-            readingContent.innerHTML = `
+            readingScrollInner.innerHTML = `
                 <div class="feed-detail-header">
                     <a class="feed-detail-avatar-link" href="javascript:void(0)" onclick="openEtoroPost('${{_escape_js(post.post_url)}}')">
                         ${{avatarHtml}}
@@ -1525,11 +1549,9 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         <span class="feed-detail-stat-icon">&#9993;</span> ${{post.comments}}
                     </span>
                 </div>
-                <div class="feed-comment-box" onclick="openEtoroPost('${{_escape_js(post.post_url)}}')">
-                    <span class="feed-comment-caret"></span>
-                    <span>Write a comment...</span>
-                </div>
             `;
+            commentBox.style.display = '';
+            commentBox.onclick = function() {{ openEtoroPost(post.post_url); }};
         }}
 
         readingClose.addEventListener('click', () => selectPostByIndex(-1));

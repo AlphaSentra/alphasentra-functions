@@ -34,6 +34,7 @@ from Functions.themes import (
     _SEMANTIC_NEGATIVE_STRONG,
     font as _font_module,
 )
+from Functions.port.config import REPORT_LOGO_SRC
 
 FONT_FAMILY = _font_module.FONT_PRIMARY
 
@@ -247,7 +248,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
     return f"""<!DOCTYPE html>
 <html>
 <head>
-    <title>eToro Feed</title>
+    <title>Feed</title>
     <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
     <meta http-equiv="Pragma" content="no-cache">
     <meta http-equiv="Expires" content="0">
@@ -255,6 +256,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
     <style>
         :root {{
             --brand-primary: {_BRAND_PRIMARY};
+            --color-accent: {_BRAND_PRIMARY};
             --neutral-0: {_NEUTRAL_0};
             --text-primary: {_TEXT_PRIMARY};
             --text-heading: {_TEXT_HEADING};
@@ -289,19 +291,52 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-toolbar {{
             display: flex;
             align-items: center;
-            justify-content: space-between;
-            padding: 16px 20px;
+            padding: 12px 20px;
             border-bottom: 1px solid var(--border-default);
             background: var(--bg-default);
             flex-shrink: 0;
         }}
 
-        .feed-title {{
-            color: var(--text-heading);
-            font-size: 18px;
+        .feed-header-link {{
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            text-decoration: none;
+            color: inherit;
+            cursor: pointer;
+        }}
+
+        .feed-header-logo {{
+            height: 40px;
+            flex-shrink: 0;
+        }}
+
+        .feed-header-title {{
+            margin: 0;
+            flex-shrink: 0;
+            display: flex;
+            align-items: center;
+            font-family: {FONT_FAMILY};
+            font-size: 1em;
             font-weight: bold;
-            letter-spacing: 0.05em;
-            text-transform: uppercase;
+            color: var(--text-heading);
+            border-bottom: 2px solid var(--color-accent);
+            padding-bottom: 4px;
+        }}
+
+        .feed-header-caret {{
+            display: inline-block;
+            width: 10px;
+            height: 1em;
+            background-color: {_BRAND_PRIMARY};
+            margin-left: 6px;
+            vertical-align: text-bottom;
+            animation: blink-caret 1s step-end infinite;
+        }}
+
+        @keyframes blink-caret {{
+            from, to {{ opacity: 1; }}
+            50% {{ opacity: 0; }}
         }}
 
         .feed-layout {{
@@ -639,7 +674,10 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 </head>
 <body>
     <div class="feed-toolbar">
-        <div class="feed-title">eToro Feed</div>
+        <a href="/port" target="_top" class="feed-header-link">
+            <img src="{REPORT_LOGO_SRC}" height="40" class="feed-header-logo" alt="Logo">
+            <h1 class="feed-header-title">Feed<span class="feed-header-caret"></span></h1>
+        </a>
     </div>
     <div class="feed-layout">
         <div class="feed-list-panel" id="feedListPanel">

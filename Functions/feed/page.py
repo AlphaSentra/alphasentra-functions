@@ -851,7 +851,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
     <div class="feed-toolbar">
         <div class="feed-header-link" id="feedHeaderBtn" role="button" tabindex="0" aria-label="Open feed options">
             <img src="{REPORT_LOGO_SRC}" height="40" class="feed-header-logo" alt="Logo">
-            <h1 class="feed-header-title">Feed · Sort & Filter<span class="feed-header-caret"></span></h1>
+            <h1 class="feed-header-title">Trending Feed · Sort & Filter<span class="feed-header-caret"></span></h1>
         </div>
     </div>
 
@@ -960,6 +960,8 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             currentSort = sortMode;
             closeOverlay();
             selectPostByIndex(-1);
+            const listPanel = document.getElementById('feedListPanel');
+            if (listPanel) listPanel.scrollTop = 0;
             const displayPosts = getDisplayPosts();
             renderSortedList(displayPosts);
         }}

@@ -1076,6 +1076,12 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             console.log('[Feed] youtubeEmbed=' + youtubeEmbed);
             if (youtubeEmbed) {{
                 html = `<div class="youtube-container"><iframe src="${{_escape_js(youtubeEmbed)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;"></iframe></div>`;
+            }} else if (isYoutubeUrl(url)) {{
+                const fallbackId = getYoutubeVideoId(url);
+                if (fallbackId) {{
+                    const embedUrl = `https://www.youtube.com/embed/${{_escape_js(fallbackId)}}`;
+                    html = `<div class="youtube-container"><iframe src="${{embedUrl}}?si=${{_escape_js(fallbackId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;"></iframe></div>`;
+                }}
             }} else if (mediaType === 'video') {{
                 html = `<video controls autoplay style="max-width:90vw;max-height:90vh;width:100%;height:100%;"><source src="${{_escape_js(url)}}"></video>`;
             }} else {{
@@ -1100,23 +1106,55 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             `;
         }}
 
-            function getYoutubeEmbedUrl(url) {{
-                if (!url) return null;
-                let match = url.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/);
-                if (match) {{
-                    return `https://www.youtube.com/embed/${{match[1]}}`;
-                }}
-                return null;
+        function getYoutubeEmbedUrl(url) {{
+            if (!url) return null;
+            const videoId = getYoutubeVideoId(url);
+            if (videoId) {{
+                return `https://www.youtube.com/embed/${{videoId}}`;
             }}
+            return null;
+        }}
 
-            function getYoutubeVideoId(url) {{
-                if (!url) return null;
-                let match = url.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/);
-                if (match) {{
-                    return match[1];
+        function getYoutubeVideoId(url) {{
+            if (!url) return null;
+            console.log('[Feed] getYoutubeVideoId input=' + url);
+            let id = null;
+            if (url.indexOf('youtube.com/watch') !== -1) {{
+                const start = url.indexOf('v=');
+                if (start !== -1) {{
+                    const raw = url.substring(start + 2);
+                    const end = raw.indexOf('&');
+                    id = end === -1 ? raw : raw.substring(0, end);
                 }}
-                return null;
+            }} else if (url.indexOf('youtu.be/') !== -1) {{
+                const start = url.indexOf('youtu.be/') + 9;
+                const raw = url.substring(start);
+                const end = raw.indexOf('?');
+                id = end === -1 ? raw : raw.substring(0, end);
+            }} else if (url.indexOf('youtube.com/embed/') !== -1) {{
+                const start = url.indexOf('youtube.com/embed/') + 17;
+                const raw = url.substring(start);
+                const end = raw.indexOf('?');
+                id = end === -1 ? raw : raw.substring(0, end);
+            }} else if (url.indexOf('youtube.com/shorts/') !== -1) {{
+                const start = url.indexOf('youtube.com/shorts/') + 20;
+                const raw = url.substring(start);
+                const end = raw.indexOf('?');
+                id = end === -1 ? raw : raw.substring(0, end);
             }}
+            if (id) {{
+                id = id.split('/')[0].split('?')[0];
+            }}
+            console.log('[Feed] getYoutubeVideoId result=' + id);
+            return id || null;
+        }}
+
+        function isYoutubeUrl(url) {{
+            if (!url) return false;
+            const result = url.indexOf('youtube.com') !== -1 || url.indexOf('youtu.be') !== -1;
+            console.log('[Feed] isYoutubeUrl input=' + url + ' result=' + result);
+            return result;
+        }}
 
         document.addEventListener('keydown', function(e) {{
             if (e.key === 'Escape') {{
@@ -1396,17 +1434,23 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                     const url = att.url || att.src || att.href || att.link || '';
                     console.log('[Feed] attachment[' + idx + '] type=' + type + ' url=' + url + ' rawKeys=' + (att ? Object.keys(att).slice(0,10).join(',') : 'null'));
                     if (!url) return '';
+
+                    const youtubeEmbed = getYoutubeEmbedUrl(url);
+                    const videoId = getYoutubeVideoId(url);
+                    const isYoutube = !!(youtubeEmbed || (isYoutubeUrl(url) && videoId));
+                    console.log('[Feed] attachment[' + idx + '] isYoutube=' + isYoutube + ' youtubeEmbed=' + youtubeEmbed + ' videoId=' + videoId);
+                    if (isYoutube) {{
+                        const embedUrl = youtubeEmbed || `https://www.youtube.com/embed/${{_escape_js(videoId)}}`;
+                        return `<div class="youtube-container"><iframe src="${{_escape_js(embedUrl)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(embedUrl)}}','video')"></iframe></div>`;
+                    }}
+
                     const isImage = type === 'image' || /\\.(jpg|jpeg|png|gif|webp|svg)(\\?.*)?$/i.test(url);
                     const isVideoFile = type === 'video' || /\\.(mp4|webm|mov|m4v)(\\?.*)?$/i.test(url);
-                    const youtubeEmbed = getYoutubeEmbedUrl(url);
                     if (isImage) {{
                         return `<img src="${{_escape_js(url)}}" alt="" loading="lazy" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','image')">`;
                     }}
-                    if (youtubeEmbed) {{
-                        const videoId = getYoutubeVideoId(url);
-                        return `<div class="youtube-container"><iframe src="${{_escape_js(youtubeEmbed)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(youtubeEmbed)}}','video')"></iframe></div>`;
-                    }}
                     if (isVideoFile) {{
+                        console.log('[Feed] attachment[' + idx + '] FALLING BACK TO VIDEO TAG - isYoutube was false, url=' + url);
                         return `<video controls preload="metadata" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','video')"><source src="${{_escape_js(url)}}"></video>`;
                     }}
                     return '';

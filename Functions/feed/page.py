@@ -156,6 +156,7 @@ def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
         "post_url": str(p.get("post_url") or "#"),
         "avatar": str(p.get("avatar_medium") or ""),
         "badges": [str(b) for b in (p.get("badges") or []) if b],
+        "attachments": p.get("attachments") or [],
     }
 
 
@@ -184,6 +185,7 @@ def fetch_feed_posts(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> tu
                     "likes": 1,
                     "comments": 1,
                     "avatar_medium": 1,
+                    "attachments": 1,
                 },
             )
             .sort("created", -1)
@@ -648,6 +650,57 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             animation: blink-caret 1s step-end infinite;
         }}
 
+        .feed-media {{
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            margin-bottom: 16px;
+        }}
+
+        .feed-media img {{
+            max-width: 100%;
+            max-height: 400px;
+            height: auto;
+            object-fit: contain;
+            display: block;
+        }}
+
+        .feed-media video,
+        .feed-media iframe {{
+            max-width: 100%;
+            max-height: 400px;
+            display: block;
+        }}
+
+        .feed-media video {{
+            background: #000;
+        }}
+
+        .feed-media iframe {{
+            width: 100%;
+            aspect-ratio: 16 / 9;
+            border: none;
+        }}
+
+        .youtube-container {{
+            width: 100%;
+            max-width: 100%;
+            aspect-ratio: 16 / 9;
+            max-height: 400px;
+        }}
+
+        .youtube-container iframe {{
+            width: 100%;
+            height: 100%;
+            border: none;
+            display: block;
+        }}
+
+        .feed-media-overlay .youtube-container {{
+            max-width: 90vw;
+            max-height: 90vh;
+        }}
+
         .feed-list-empty {{
             text-align: center;
             padding: 40px 16px;
@@ -750,6 +803,64 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-overlay-close:hover {{
             background: var(--bg-subtle);
             color: var(--text-primary);
+        }}
+
+        .feed-media-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.85);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10001;
+            padding: 24px;
+        }}
+
+        .feed-media-overlay.active {{
+            display: flex;
+        }}
+
+        .feed-media-overlay-content {{
+            position: relative;
+            max-width: 90vw;
+            max-height: 90vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .feed-media-overlay-content img,
+        .feed-media-overlay-content video,
+        .feed-media-overlay-content iframe {{
+            max-width: 90vw;
+            max-height: 90vh;
+            object-fit: contain;
+            display: block;
+            border-radius: 0;
+        }}
+
+        .feed-media-overlay-close {{
+            position: absolute;
+            top: -36px;
+            right: 0;
+            width: 32px;
+            height: 32px;
+            border: none;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-family: {FONT_FAMILY};
+            font-size: 20px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: background 0.15s ease;
+        }}
+
+        .feed-media-overlay-close:hover {{
+            background: rgba(255, 255, 255, 0.25);
         }}
 
         .feed-option-group {{
@@ -952,6 +1063,74 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             feedOverlay.classList.remove('active');
         }}
 
+        function openMediaOverlay(url, mediaType) {{
+            const overlay = document.getElementById('feedMediaOverlay');
+            const content = document.getElementById('feedMediaOverlayContent');
+            if (!overlay || !content) return;
+
+            console.log('[Feed] openMediaOverlay url=' + url + ' mediaType=' + mediaType);
+
+            let html = '';
+            const youtubeEmbed = getYoutubeEmbedUrl(url);
+            const videoId = getYoutubeVideoId(url);
+            console.log('[Feed] youtubeEmbed=' + youtubeEmbed);
+            if (youtubeEmbed) {{
+                html = `<div class="youtube-container"><iframe src="${{_escape_js(youtubeEmbed)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;"></iframe></div>`;
+            }} else if (mediaType === 'video') {{
+                html = `<video controls autoplay style="max-width:90vw;max-height:90vh;width:100%;height:100%;"><source src="${{_escape_js(url)}}"></video>`;
+            }} else {{
+                html = `<img src="${{_escape_js(url)}}" alt="" style="max-width:90vw;max-height:90vh;object-fit:contain;">`;
+            }}
+
+            content.innerHTML = `
+                <button class="feed-media-overlay-close" id="feedMediaOverlayClose" type="button" aria-label="Close">&times;</button>
+                ${{html}}
+            `;
+
+            overlay.classList.add('active');
+            document.getElementById('feedMediaOverlayClose').addEventListener('click', closeMediaOverlay);
+        }}
+
+        function closeMediaOverlay() {{
+            const overlay = document.getElementById('feedMediaOverlay');
+            const content = document.getElementById('feedMediaOverlayContent');
+            if (overlay) overlay.classList.remove('active');
+            if (content) content.innerHTML = `
+                <button class="feed-media-overlay-close" id="feedMediaOverlayClose" type="button" aria-label="Close">&times;</button>
+            `;
+        }}
+
+            function getYoutubeEmbedUrl(url) {{
+                if (!url) return null;
+                let match = url.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/);
+                if (match) {{
+                    return `https://www.youtube.com/embed/${{match[1]}}`;
+                }}
+                return null;
+            }}
+
+            function getYoutubeVideoId(url) {{
+                if (!url) return null;
+                let match = url.match(/(?:youtube\\.com\\/watch\\?v=|youtu\\.be\\/|youtube\\.com\\/embed\\/|youtube\\.com\\/shorts\\/)([a-zA-Z0-9_-]{11})/);
+                if (match) {{
+                    return match[1];
+                }}
+                return null;
+            }}
+
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape') {{
+                const mediaOverlay = document.getElementById('feedMediaOverlay');
+                if (mediaOverlay && mediaOverlay.classList.contains('active')) {{
+                    closeMediaOverlay();
+                    return;
+                }}
+                if (feedOverlay.classList.contains('active')) {{
+                    closeOverlay();
+                }}
+            }}
+        }});
+
         feedHeaderBtn.addEventListener('click', openOverlay);
         feedHeaderBtn.addEventListener('keydown', function(e) {{
             if (e.key === 'Enter' || e.key === ' ') {{
@@ -960,11 +1139,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             }}
         }});
         feedOverlayClose.addEventListener('click', closeOverlay);
-        document.addEventListener('keydown', function(e) {{
-            if (e.key === 'Escape' && feedOverlay.classList.contains('active')) {{
-                closeOverlay();
-            }}
-        }});
 
         function sortPosts(postsArray, sortMode) {{
             const arr = postsArray.slice();
@@ -1214,6 +1388,35 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 ? `<img class="feed-detail-avatar-img" src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
                 : `<div class="feed-detail-avatar-placeholder">${{_escape_js(post.owner)[0].toUpperCase()}}</div>`;
 
+            function renderAttachments(attachments) {{
+                console.log('[Feed] renderAttachments input:', attachments);
+                if (!attachments || !attachments.length) return '';
+                const mediaHtml = attachments.map(function(att, idx) {{
+                    const type = (att.type || att.mediaType || '').toString().toLowerCase();
+                    const url = att.url || att.src || att.href || att.link || '';
+                    console.log('[Feed] attachment[' + idx + '] type=' + type + ' url=' + url + ' rawKeys=' + (att ? Object.keys(att).slice(0,10).join(',') : 'null'));
+                    if (!url) return '';
+                    const isImage = type === 'image' || /\\.(jpg|jpeg|png|gif|webp|svg)(\\?.*)?$/i.test(url);
+                    const isVideoFile = type === 'video' || /\\.(mp4|webm|mov|m4v)(\\?.*)?$/i.test(url);
+                    const youtubeEmbed = getYoutubeEmbedUrl(url);
+                    if (isImage) {{
+                        return `<img src="${{_escape_js(url)}}" alt="" loading="lazy" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','image')">`;
+                    }}
+                    if (youtubeEmbed) {{
+                        const videoId = getYoutubeVideoId(url);
+                        return `<div class="youtube-container"><iframe src="${{_escape_js(youtubeEmbed)}}?si=${{_escape_js(videoId)}}" title="YouTube video player" frameborder="0" allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share" referrerpolicy="strict-origin-when-cross-origin" allowfullscreen style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(youtubeEmbed)}}','video')"></iframe></div>`;
+                    }}
+                    if (isVideoFile) {{
+                        return `<video controls preload="metadata" style="cursor:pointer;" onclick="openMediaOverlay('${{_escape_js(url)}}','video')"><source src="${{_escape_js(url)}}"></video>`;
+                    }}
+                    return '';
+                }}).join('');
+                if (!mediaHtml) return '';
+                return `<div class="feed-media">${{mediaHtml}}</div>`;
+            }}
+
+            const attachmentsHtml = renderAttachments(post.attachments);
+
             readingContent.innerHTML = `
                 <div class="feed-detail-header">
                     <a class="feed-detail-avatar-link" href="javascript:void(0)" onclick="openEtoroPost('${{_escape_js(post.post_url)}}')">
@@ -1224,6 +1427,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         <div class="feed-detail-date">${{_escape_js(post.created_raw)}}</div>
                     </div>
                 </div>
+                ${{attachmentsHtml}}
                 <div class="feed-detail-body">${{_escape_js(post.message)}}</div>
                 ${{badgesHtml ? `<div class="feed-badges">${{badgesHtml}}</div>` : ''}}
                 <div class="feed-detail-footer">
@@ -1258,6 +1462,11 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         document.getElementById('feedListPanel').addEventListener('scroll', onListScroll);
         {_redirect_script}
     </script>
+    <div class="feed-media-overlay" id="feedMediaOverlay" onclick="if(event.target===this){{closeMediaOverlay();}}">
+        <div class="feed-media-overlay-content" id="feedMediaOverlayContent">
+            <button class="feed-media-overlay-close" id="feedMediaOverlayClose" type="button" aria-label="Close">&times;</button>
+        </div>
+    </div>
 </body>
 </html>
 """

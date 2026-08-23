@@ -667,6 +667,181 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             margin-bottom: 8px;
         }}
 
+        .feed-overlay {{
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.65);
+            backdrop-filter: blur(6px);
+            -webkit-backdrop-filter: blur(6px);
+            display: none;
+            align-items: center;
+            justify-content: center;
+            z-index: 10000;
+        }}
+
+        .feed-overlay.active {{
+            display: flex;
+        }}
+
+        .feed-overlay-panel {{
+            background: var(--bg-default);
+            border-radius: 10px;
+            padding: 20px;
+            width: 320px;
+            max-width: 90vw;
+            box-shadow: 0 10px 25px rgba(0, 0, 0, 0.25);
+            position: relative;
+        }}
+
+        .feed-overlay-panel h2 {{
+            margin: 0 0 14px 0;
+            font-size: 1.1em;
+            color: var(--text-heading);
+            padding-right: 24px;
+        }}
+
+        .feed-overlay-close {{
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            width: 24px;
+            height: 24px;
+            padding: 0;
+            border: none;
+            border-radius: 50%;
+            background: transparent;
+            color: var(--text-muted);
+            font-family: {FONT_FAMILY};
+            font-size: 18px;
+            line-height: 1;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }}
+
+        .feed-overlay-close:hover {{
+            background: var(--bg-subtle);
+            color: var(--text-primary);
+        }}
+
+        .feed-option-group {{
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }}
+
+        .feed-option-group + .feed-option-group {{
+            margin-top: 18px;
+        }}
+
+        .feed-option-label {{
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+            color: var(--text-muted);
+            font-weight: bold;
+        }}
+
+        .feed-sort-options {{
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+        }}
+
+        .feed-sort-btn {{
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            padding: 10px;
+            border-radius: 6px;
+            border: none;
+            background: var(--bg-subtle);
+            color: var(--text-primary);
+            font-family: {FONT_FAMILY};
+            font-size: 0.9em;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.15s ease;
+        }}
+
+        .feed-sort-btn:hover {{
+            background: var(--hover-surface);
+        }}
+
+        .feed-sort-btn.active {{
+            background: var(--brand-primary);
+            color: var(--neutral-0);
+        }}
+
+        .feed-sort-icon {{
+            font-size: 14px;
+        }}
+
+        .feed-option-header {{
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }}
+
+        .feed-option-header .feed-option-label {{
+            margin: 0;
+        }}
+
+        .feed-ticker-reset {{
+            display: none;
+            padding: 4px 10px;
+            border-radius: 6px;
+            border: 1px solid var(--border-default);
+            background: transparent;
+            color: var(--text-muted);
+            font-family: {FONT_FAMILY};
+            font-size: 11px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: color 0.15s ease, border-color 0.15s ease;
+        }}
+
+        .feed-ticker-reset:hover {{
+            color: var(--text-primary);
+            border-color: var(--brand-primary);
+        }}
+
+        .feed-ticker-pills {{
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }}
+
+        .feed-ticker-pill {{
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 6px 12px;
+            border-radius: 999px;
+            border: 1px solid var(--border-default);
+            background: var(--bg-subtle);
+            color: var(--text-primary);
+            font-family: {FONT_FAMILY};
+            font-size: 12px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: background 0.15s ease, border-color 0.15s ease;
+        }}
+
+        .feed-ticker-pill:hover {{
+            background: var(--hover-surface);
+            border-color: var(--brand-primary);
+        }}
+
+        .feed-ticker-pill.selected {{
+            background: var(--brand-primary);
+            color: var(--neutral-0);
+            border-color: var(--brand-primary);
+        }}
+
         ::-webkit-scrollbar {{ width: 8px; }}
         ::-webkit-scrollbar-track {{ background: var(--bg-subtle); }}
         ::-webkit-scrollbar-thumb {{ background: var(--border-default); border-radius: 4px; }}
@@ -674,10 +849,35 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 </head>
 <body>
     <div class="feed-toolbar">
-        <a href="/port" target="_top" class="feed-header-link">
+        <div class="feed-header-link" id="feedHeaderBtn" role="button" tabindex="0" aria-label="Open feed options">
             <img src="{REPORT_LOGO_SRC}" height="40" class="feed-header-logo" alt="Logo">
-            <h1 class="feed-header-title">Feed<span class="feed-header-caret"></span></h1>
-        </a>
+            <h1 class="feed-header-title">Feed · Sort & Filter<span class="feed-header-caret"></span></h1>
+        </div>
+    </div>
+
+    <div class="feed-overlay" id="feedOverlay" onclick="if(event.target===this){{closeOverlay();}}">
+        <div class="feed-overlay-panel">
+            <button class="feed-overlay-close" id="feedOverlayClose" type="button" aria-label="Close">&times;</button>
+            <h2>Feed Options</h2>
+            <div class="feed-option-group">
+                <label class="feed-option-label">Sort by</label>
+                <div class="feed-sort-options" id="feedSortOptions">
+                    <button class="feed-sort-btn active" data-sort="recent" type="button">
+                        <span class="feed-sort-icon">&#128336;</span> Most Recent
+                    </button>
+                    <button class="feed-sort-btn" data-sort="engaging" type="button">
+                        <span class="feed-sort-icon">&#128293;</span> Most Engaging
+                    </button>
+                </div>
+            </div>
+            <div class="feed-option-group">
+                <div class="feed-option-header">
+                    <label class="feed-option-label">Filter by instruments</label>
+                    <button class="feed-ticker-reset" id="feedTickerReset" type="button">Reset</button>
+                </div>
+                <div class="feed-ticker-pills" id="feedTickerPills"></div>
+            </div>
+        </div>
     </div>
     <div class="feed-layout">
         <div class="feed-list-panel" id="feedListPanel">
@@ -704,21 +904,179 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         const layout = document.querySelector('.feed-layout');
         const readingPanel = document.getElementById('feedReadingPanel');
         const readingClose = document.getElementById('feedReadingClose');
+        const feedHeaderBtn = document.getElementById('feedHeaderBtn');
+        const feedOverlay = document.getElementById('feedOverlay');
+        const feedOverlayClose = document.getElementById('feedOverlayClose');
+        const feedSortOptions = document.getElementById('feedSortOptions');
+        const feedTickerPills = document.getElementById('feedTickerPills');
+        const feedTickerReset = document.getElementById('feedTickerReset');
         let selectedIndex = -1;
         let currentPage = 1;
         let hasMore = true;
         let loadingMore = false;
+        let currentSort = 'recent';
+        const selectedTickers = new Set();
 
-        readingClose.addEventListener('click', () => selectPost(-1));
+        function openOverlay() {{
+            feedOverlay.classList.add('active');
+        }}
+
+        function closeOverlay() {{
+            feedOverlay.classList.remove('active');
+        }}
+
+        feedHeaderBtn.addEventListener('click', openOverlay);
+        feedHeaderBtn.addEventListener('keydown', function(e) {{
+            if (e.key === 'Enter' || e.key === ' ') {{
+                e.preventDefault();
+                openOverlay();
+            }}
+        }});
+        feedOverlayClose.addEventListener('click', closeOverlay);
+        document.addEventListener('keydown', function(e) {{
+            if (e.key === 'Escape' && feedOverlay.classList.contains('active')) {{
+                closeOverlay();
+            }}
+        }});
+
+        function sortPosts(postsArray, sortMode) {{
+            const arr = postsArray.slice();
+            if (sortMode === 'engaging') {{
+                arr.sort(function(a, b) {{
+                    const scoreA = a.comments || 0;
+                    const scoreB = b.comments || 0;
+                    if (scoreB !== scoreA) return scoreB - scoreA;
+                    return (b.created_ts || 0) - (a.created_ts || 0);
+                }});
+            }} else {{
+                arr.sort(function(a, b) {{
+                    return (b.created_ts || 0) - (a.created_ts || 0);
+                }});
+            }}
+            return arr;
+        }}
+
+        function applySort(sortMode) {{
+            currentSort = sortMode;
+            closeOverlay();
+            selectPostByIndex(-1);
+            const displayPosts = getDisplayPosts();
+            renderSortedList(displayPosts);
+        }}
+
+        feedSortOptions.addEventListener('click', function(e) {{
+            const btn = e.target.closest('.feed-sort-btn');
+            if (!btn) return;
+            const sortMode = btn.getAttribute('data-sort');
+            if (!sortMode || sortMode === currentSort) return;
+
+            feedSortOptions.querySelectorAll('.feed-sort-btn').forEach(function(b) {{
+                b.classList.toggle('active', b === btn);
+            }});
+            applySort(sortMode);
+        }});
+
+        function extractUniqueTickers() {{
+            const counts = {{}};
+            posts.forEach(function(post) {{
+                const seen = new Set();
+                (post.badges || []).forEach(function(badge) {{
+                    if (!badge) return;
+                    if (seen.has(badge)) return;
+                    seen.add(badge);
+                    counts[badge] = (counts[badge] || 0) + 1;
+                }});
+            }});
+            return Object.keys(counts)
+                .sort(function(a, b) {{
+                    if (counts[b] !== counts[a]) return counts[b] - counts[a];
+                    return a.localeCompare(b);
+                }})
+                .slice(0, 20);
+        }}
+
+        function renderTickerPills() {{
+            if (!feedTickerPills) return;
+            const tickers = extractUniqueTickers();
+            feedTickerPills.innerHTML = '';
+
+            tickers.forEach(function(ticker) {{
+                const pill = document.createElement('button');
+                pill.className = 'feed-ticker-pill' + (selectedTickers.has(ticker) ? ' selected' : '');
+                pill.type = 'button';
+                pill.textContent = ticker;
+                pill.addEventListener('click', function() {{
+                    if (selectedTickers.has(ticker)) {{
+                        selectedTickers.delete(ticker);
+                    }} else {{
+                        selectedTickers.add(ticker);
+                    }}
+                    renderTickerPills();
+                    applyTickerFilter();
+                }});
+                feedTickerPills.appendChild(pill);
+            }});
+
+            updateClearButton();
+        }}
+
+        function getDisplayPosts() {{
+            let filtered = posts;
+            if (selectedTickers.size > 0) {{
+                filtered = posts.filter(function(post) {{
+                    return (post.badges || []).some(function(badge) {{
+                        return selectedTickers.has(badge);
+                    }});
+                }});
+            }}
+            return sortPosts(filtered, currentSort);
+        }}
+
+        function applyTickerFilter() {{
+            selectPostByIndex(-1);
+            const displayPosts = getDisplayPosts();
+            renderSortedList(displayPosts);
+        }}
+
+        function updateClearButton() {{
+            if (!feedTickerReset) return;
+            feedTickerReset.style.display = selectedTickers.size > 0 ? '' : 'none';
+        }}
+
+        function clearTickerFilter() {{
+            selectedTickers.clear();
+            renderTickerPills();
+            applyTickerFilter();
+        }}
+
+        if (feedTickerReset) {{
+            feedTickerReset.addEventListener('click', clearTickerFilter);
+        }}
+
+        function renderSortedList(sortedPosts) {{
+            if (!sortedPosts.length) {{
+                if (listEmpty) listEmpty.style.display = '';
+                listContainer.innerHTML = '';
+                return;
+            }}
+            if (listEmpty) listEmpty.style.display = 'none';
+
+            const fragment = document.createDocumentFragment();
+            sortedPosts.forEach(function(post) {{
+                fragment.appendChild(createPostItem(post));
+            }});
+            listContainer.innerHTML = '';
+            listContainer.appendChild(fragment);
+        }}
 
         function openEtoroPost(url) {{
             window.open(url, '_blank', 'width=900,height=700');
         }}
 
-        function createPostItem(post, index) {{
+        function createPostItem(post) {{
             const item = document.createElement('div');
             item.className = 'feed-list-item';
-            item.setAttribute('data-index', index);
+            item.setAttribute('data-post-id', post.id);
 
             const avatarHtml = post.avatar
                 ? `<img src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
@@ -735,26 +1093,13 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 </div>
             `;
 
-            item.addEventListener('click', () => selectPost(index));
+            item.addEventListener('click', () => selectPostByIndex(posts.indexOf(post)));
             return item;
         }}
 
         function renderList(reset) {{
-            if (!posts.length) {{
-                if (listEmpty) listEmpty.style.display = '';
-                return;
-            }}
-            if (listEmpty) listEmpty.style.display = 'none';
-
-            const fragment = document.createDocumentFragment();
-            posts.forEach((post, index) => {{
-                fragment.appendChild(createPostItem(post, index));
-            }});
-
-            if (reset) {{
-                listContainer.innerHTML = '';
-            }}
-            listContainer.appendChild(fragment);
+            const displayPosts = getDisplayPosts();
+            renderSortedList(displayPosts);
         }}
 
         function showLoading() {{
@@ -791,16 +1136,12 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                     currentPage = data.page || currentPage;
                     hasMore = data.posts.length >= (data.page_size || 50);
 
-                    const startIndex = posts.length;
                     data.posts.forEach(function(post) {{
                         posts.push(post);
                     }});
 
-                    const fragment = document.createDocumentFragment();
-                    data.posts.forEach(function(post, idx) {{
-                        fragment.appendChild(createPostItem(post, startIndex + idx));
-                    }});
-                    listContainer.appendChild(fragment);
+                    const displayPosts = getDisplayPosts();
+                    renderSortedList(displayPosts);
                 }})
                 .catch(function() {{
                     hideLoading();
@@ -817,12 +1158,13 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             }}
         }}
 
-        function selectPost(index) {{
+        function selectPostByIndex(index) {{
             if (selectedIndex === index && index >= 0) return;
             selectedIndex = index;
 
-            document.querySelectorAll('.feed-list-item').forEach((el, i) => {{
-                el.classList.toggle('active', i === index);
+            const selectedPostId = posts[index] ? posts[index].id : null;
+            document.querySelectorAll('.feed-list-item').forEach((el) => {{
+                el.classList.toggle('active', el.getAttribute('data-post-id') === selectedPostId);
             }});
 
             const post = posts[index];
@@ -837,6 +1179,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             layout.classList.add('has-selection');
             readingEmpty.style.display = 'none';
             document.getElementById('feedReadingPanel').classList.add('open');
+            readingPanel.scrollTop = 0;
             const badgesHtml = post.badges.map(b => `<span class="feed-badge">${{_escape_js(b)}}</span>`).join('');
             const avatarHtml = post.avatar
                 ? `<img class="feed-detail-avatar-img" src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`
@@ -865,6 +1208,8 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             `;
         }}
 
+        readingClose.addEventListener('click', () => selectPostByIndex(-1));
+
         function _escape_js(text) {{
             if (text == null) return '';
             return String(text)
@@ -876,6 +1221,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         }}
 
         renderList(true);
+        renderTickerPills();
         document.getElementById('feedListPanel').addEventListener('scroll', onListScroll);
         {_redirect_script}
     </script>

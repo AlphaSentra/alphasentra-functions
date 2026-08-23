@@ -443,7 +443,6 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
 
         .feed-reading-panel {{
             overflow-y: auto;
-            background: var(--bg-subtle);
             padding: 24px 28px;
             display: none;
             position: relative;
@@ -619,6 +618,34 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-detail-stat-icon {{
             color: var(--semantic-negative-strong);
             font-size: 14px;
+        }}
+
+        .feed-comment-box {{
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            margin-top: 12px;
+            padding: 10px 12px;
+            border-radius: 0;
+            border: 1px solid var(--color-accent);
+            color: var(--text-muted);
+            font-size: 13px;
+            cursor: pointer;
+            transition: border-color 0.15s ease, color 0.15s ease;
+        }}
+
+        .feed-comment-box:hover {{
+            border-color: var(--color-accent);
+            color: var(--text-primary);
+        }}
+
+        .feed-comment-caret {{
+            display: inline-block;
+            width: 8px;
+            height: 1em;
+            background-color: var(--brand-primary);
+            flex-shrink: 0;
+            animation: blink-caret 1s step-end infinite;
         }}
 
         .feed-list-empty {{
@@ -1206,6 +1233,10 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                     <span class="feed-detail-stat">
                         <span class="feed-detail-stat-icon">&#9993;</span> ${{post.comments}}
                     </span>
+                </div>
+                <div class="feed-comment-box" onclick="openEtoroPost('${{_escape_js(post.post_url)}}')">
+                    <span class="feed-comment-caret"></span>
+                    <span>Write a comment...</span>
                 </div>
             `;
         }}

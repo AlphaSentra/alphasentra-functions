@@ -469,6 +469,21 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             flex-shrink: 0;
         }}
 
+        .feed-list-stat-pill {{
+            display: inline-flex;
+            align-items: center;
+            gap: 3px;
+            padding: 1px 8px;
+            border-radius: 999px;
+            background: var(--bg-subtle);
+            border: 1px solid var(--border-default);
+            color: var(--text-muted);
+            font-size: 10px;
+            font-weight: 600;
+            white-space: nowrap;
+            flex-shrink: 0;
+        }}
+
         .feed-list-preview {{
             color: var(--text-muted);
             font-size: 12px;
@@ -1358,6 +1373,8 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                     <div class="feed-list-row-top">
                         <span class="feed-list-owner">${{_escape_js(post.owner)}}</span>
                         ${{post.has_video ? '<span class="feed-list-video-pill">&#9654; Video</span>' : ''}}
+                        <span class="feed-list-stat-pill">&#9829; ${{post.likes}}</span>
+                        <span class="feed-list-stat-pill">&#9993; ${{post.comments}}</span>
                         <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
                     </div>
                     <div class="feed-list-preview">${{_escape_js(post.preview)}}</div>

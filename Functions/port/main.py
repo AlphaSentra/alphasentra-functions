@@ -32,7 +32,7 @@ from data.provider_factory import get_market_data_provider
 from engine.output.html import generate_html_report, generate_ai_content_fragment
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.db.repositories import get_pro_investor_by_username
-from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+from Functions.config import CACHE_TTL_REPORT as _REPORT_TTL
 from Functions.themes import font as _font_module
 
 _ETORO_COUNTRY_MAP: Dict[str, Dict[str, str]] = {}

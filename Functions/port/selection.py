@@ -16,7 +16,7 @@ from dotenv import load_dotenv
 
 from Functions.logging_utils import log_info
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
-from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
+from Functions.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, LOGIN_REDIRECT_URL
 from Functions.etoro.client import EToroClientError, get_public_client_from_env
 
 from Functions.db import DatabaseManager

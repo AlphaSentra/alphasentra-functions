@@ -99,7 +99,7 @@ from Functions.port.input import handle_portfolio_input, get_portfolio_cache_sta
 from Functions.port.selection import get_portfolio_selection_html, cached_portfolio_selection_html
 from Functions.db.cache import get_index_cache_from_mongo
 from Functions.feed.page import get_feed_html
-from Functions.port.config import LOGIN_REDIRECT_URL
+from Functions.config import LOGIN_REDIRECT_URL
 
 
 def index():
@@ -156,6 +156,27 @@ def cryp():
 
 
 def register_route(app, path, description, handler, methods=None, show_in_index=True):
+    """Register a single route and optionally include it in the Function Index."""
     if show_in_index:
         ROUTES.append((path, description))
-    app.route(path, methods=methods)(handler)
+    if app is not None:
+        app.route(path, methods=methods)(handler)
+
+
+def register_all_routes(app=None):
+    """Register all application routes in one place.
+
+    When called with a Flask app, the routes are bound to the app for live
+    serving. When called with ``None``, only the Function Index metadata
+    (``ROUTES``) is populated. This makes the list here the single source of
+    truth for both serving and indexing.
+    """
+    register_route(app, '/', 'Function Index', index)
+    register_route(app, '/ana', 'Analyse', ana)
+    register_route(app, '/etopi', 'Portfolio & Risk Analytics', port,
+                   methods=['GET', 'POST'], show_in_index=False)
+    register_route(app, '/port', 'Portfolio & Risk Analytics', sel)
+    register_route(app, '/eqs', 'Stocks AI Screener', eqs)
+    register_route(app, '/wcr', 'Forex AI Screener', wcr)
+    register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)
+    register_route(app, '/feed', 'eToro Feed: Trending Posts', feed)

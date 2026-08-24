@@ -346,4 +346,4 @@ Serialization format: **pickle** (`.pkl`) with **gzip** compression.
 | `Functions/db/cache.py` | MongoDB cache implementation |
 | `Functions/port/engine/analyzer.py` | Portfolio analysis orchestration |
 | `Functions/data/loader.py` | Trade history loader |
-| `Functions/port/config.py` | Cache TTL constants and configuration |
+| `Functions/config.py` | Cache TTL constants and configuration |

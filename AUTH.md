@@ -71,11 +71,11 @@ flowchart TD
 - Cookie path is `/` so it is sent on every route
 - Cookie TTL is 24 hours
 - No query-string auth fallback — cookie is required
-- 403 responses redirect to `LOGIN_REDIRECT_URL` configured in `Functions/port/config.py`
+- 403 responses redirect to `LOGIN_REDIRECT_URL` configured in `Functions/config.py`
 
 ## Configuration
 
-All auth-related settings are in `Functions/port/config.py`:
+All auth-related settings are in `Functions/config.py`:
 
 ```python
 PARENT_APP_DOMAIN = "alphasentra.com"

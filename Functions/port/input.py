@@ -7,7 +7,7 @@ import os
 from flask import request, jsonify, make_response
 import logging
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
-from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL
+from Functions.config import CACHE_TTL_REPORT as _REPORT_TTL
 from Functions.port.form import PORTFOLIO_FORM_HTML
 from Functions.port.engine.analyzer import PortfolioFunctionsError
 

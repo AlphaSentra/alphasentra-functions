@@ -8,7 +8,7 @@ import yfinance as yf
 from .protocols import MarketDataProvider
 from .models import AssetMetadata
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
-from Functions.port.config import CACHE_TTL_PRICE as _PRICE_TTL, CACHE_TTL_SECTOR as _SECTOR_TTL
+from Functions.config import CACHE_TTL_PRICE as _PRICE_TTL, CACHE_TTL_SECTOR as _SECTOR_TTL
 
 
 _PREFERRED_NAME_FIELDS = ["longName", "shortName", "displayName", "name", "title"]

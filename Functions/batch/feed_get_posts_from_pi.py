@@ -42,7 +42,7 @@ from Functions.etoro.client import (
 from Functions.logging_utils import log_info, log_warning, log_error
 
 try:
-    from Functions.port.config import ETORO_POST_URL
+    from Functions.config import ETORO_POST_URL
 except Exception:
     ETORO_POST_URL = "https://www.etoro.com/posts/[post_id]"
 

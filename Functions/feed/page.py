@@ -35,7 +35,7 @@ from Functions.themes import (
     _SEMANTIC_NEGATIVE_STRONG,
     font as _font_module,
 )
-from Functions.port.config import REPORT_LOGO_SRC
+from Functions.config import REPORT_LOGO_SRC
 
 FONT_FAMILY = _font_module.FONT_PRIMARY
 

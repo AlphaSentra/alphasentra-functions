@@ -31,7 +31,7 @@ sys.path.insert(0, str(_ROOT / "Functions" / "port"))
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
 from Functions.db.client import DatabaseManager
 from Functions.logging_utils import log_info, log_error, log_warning
-from Functions.port.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
+from Functions.config import CACHE_TTL_ETORO_PI as _ETORO_PI_TTL, CACHE_TTL_REPORT as _REPORT_TTL
 
 # ---------------------------------------------------------------------------
 # Batch configuration

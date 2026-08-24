@@ -4,12 +4,12 @@ import threading
 import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
-from Functions.routes import index, port, register_route, eqs, wcr, cryp, ana, port_cache_status, sel, feed
+from Functions.routes import index, port, register_all_routes, eqs, wcr, cryp, ana, port_cache_status, sel, feed
 from Functions.feed.page import get_feed_posts_json
 from Functions.port.selection import search_investors_api, get_portfolio_selection_html
-from Functions.port.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
+from Functions.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
-from Functions.port.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
+from Functions.config import CACHE_TTL_REPORT as _REPORT_TTL, CACHE_TTL_ETORO_PI as _ETORO_PI_TTL
 from Functions.themes import font as _font_module
 from Functions.themes import theme as _theme_module
 from dotenv import load_dotenv
@@ -278,7 +278,7 @@ def logout():
     if not _is_allowed_origin():
         return jsonify({
             'ok': False,
-            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/port/config.py"
+            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/config.py"
         }), 403
 
     policy = _get_cookie_policy()
@@ -299,7 +299,7 @@ def auth():
     if not _is_allowed_origin():
         return jsonify({
             'ok': False,
-            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/port/config.py"
+            'error': f"Unauthorized origin: {request.headers.get('Origin', '')}. Add this origin to PARENT_APP_ALLOWED_ORIGINS in Functions/config.py"
         }), 403
 
     username = request.form.get('etoro_authuser', '').strip()
@@ -320,15 +320,9 @@ def auth():
     )
     return resp
 
-register_route(app, '/', 'Function Index', index)
-register_route(app, '/ana', 'Analyse', ana)
-register_route(app, '/etopi', 'Portfolio & Risk Analytics', port, methods=['GET', 'POST'], show_in_index=False)
-app.route('/etopi/check_cache', methods=['POST'])(port_cache_status)
-register_route(app, '/port', 'Portfolio & Risk Analytics', sel)
-register_route(app, '/eqs', 'Stocks AI Screener', eqs)
-register_route(app, '/wcr', 'Forex AI Screener', wcr)
-register_route(app, '/cryp', 'Cryptocurrency AI Screener', cryp)
-register_route(app, '/feed', 'eToro Feed: Trending Posts', feed)
+# Register all main routes. This is the single source of truth; adding a
+# route here ensures it is served by the app and indexed automatically.
+register_all_routes(app)
 
 
 @app.route('/feed/posts', methods=['GET'])

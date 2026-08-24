@@ -11,7 +11,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 import requests
 
 from Functions.db.cache import get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
-from Functions.port.config import CACHE_TTL_ETORO as _ETORO_TTL
+from Functions.config import CACHE_TTL_ETORO as _ETORO_TTL
 from Functions.logging_utils import log_info, log_warning, log_error, log_debug
 
 _current_dir = Path(__file__).resolve().parent

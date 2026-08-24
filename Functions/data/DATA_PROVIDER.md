@@ -216,7 +216,7 @@ If your upstream API has rate limits, cache price data using:
 
 ```python
 from Functions.port.cache import get as cache_get, set as cache_set
-from Functions.port.config import CACHE_TTL_PRICE, CACHE_TTL_SECTOR
+from Functions.config import CACHE_TTL_PRICE, CACHE_TTL_SECTOR
 
 cache_key = (tuple(sorted(tickers)), str(start_date))
 cached = cache_get(cache_key, CACHE_TTL_PRICE, ext=".pkl")

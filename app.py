@@ -5,7 +5,7 @@ import time
 from urllib.parse import urlparse
 from flask import Flask, request, g, jsonify, make_response
 from Functions.routes import index, port, register_all_routes, eqs, wcr, cryp, ana, port_cache_status, sel, feed
-from Functions.feed.page import get_feed_posts_json
+from Functions.feed.page import get_feed_posts_json, fetch_feed_comments
 from Functions.port.selection import search_investors_api, get_portfolio_selection_html
 from Functions.config import PARENT_APP_DOMAIN, PARENT_APP_ALLOWED_ORIGINS, LOGIN_REDIRECT_URL
 from Functions.db.cache import delete_portfolio_cache_from_mongo, get_index_cache_from_mongo, get_portfolio_cache_from_mongo, set_portfolio_cache_to_mongo
@@ -330,6 +330,17 @@ def feed_posts():
     page = request.args.get('page', 1, type=int)
     page_size = request.args.get('pageSize', 50, type=int)
     return jsonify(json.loads(get_feed_posts_json(page=page, page_size=page_size)))
+
+
+@app.route('/feed/comments', methods=['GET'])
+def feed_comments():
+    post_id = request.args.get('post_id', '').strip()
+    if not post_id:
+        return jsonify({'comments': [], 'replies': []})
+
+    comments, replies = fetch_feed_comments(post_id)
+    return jsonify({'comments': comments, 'replies': replies})
+
 
 @app.route('/port/search_investors', methods=['GET'])
 def port_search_investors():

@@ -234,6 +234,84 @@ def fetch_feed_posts(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> tu
                 pass
 
 
+def fetch_feed_comments(post_id: str) -> tuple[List[Dict[str, Any]], List[Dict[str, Any]]]:
+    client = None
+    try:
+        client = _get_feed_client()
+        db_name = os.getenv(_FEED_DB_ENV, _DEFAULT_FEED_DB)
+        db = client[db_name]
+
+        comments_cursor = db["etoro_comments"].find(
+            {"post_id": post_id},
+            {
+                "comment_id": 1,
+                "post_id": 1,
+                "created": 1,
+                "text": 1,
+                "username": 1,
+                "owner_id": 1,
+                "likes": 1,
+                "replies_count": 1,
+                "avatar_medium": 1,
+            },
+        ).sort("created", 1)
+        comments = [
+            {
+                "comment_id": str(c.get("comment_id") or ""),
+                "created": c.get("created"),
+                "text": str(c.get("text") or ""),
+                "username": str(c.get("username") or "Unknown"),
+                "owner_id": str(c.get("owner_id") or ""),
+                "likes": _safe_int(c.get("likes")),
+                "replies_count": _safe_int(c.get("replies_count")),
+                "avatar_medium": str(c.get("avatar_medium") or ""),
+            }
+            for c in comments_cursor
+        ]
+
+        replies_cursor = db["etoro_replies"].find(
+            {"post_id": post_id},
+            {
+                "reply_id": 1,
+                "comment_id": 1,
+                "post_id": 1,
+                "created": 1,
+                "text": 1,
+                "username": 1,
+                "owner_id": 1,
+                "likes": 1,
+                "replies_count": 1,
+                "avatar_medium": 1,
+            },
+        ).sort("created", 1)
+        replies = [
+            {
+                "reply_id": str(r.get("reply_id") or ""),
+                "comment_id": str(r.get("comment_id") or ""),
+                "created": r.get("created"),
+                "text": str(r.get("text") or ""),
+                "username": str(r.get("username") or "Unknown"),
+                "owner_id": str(r.get("owner_id") or ""),
+                "likes": _safe_int(r.get("likes")),
+                "replies_count": _safe_int(r.get("replies_count")),
+                "avatar_medium": str(r.get("avatar_medium") or ""),
+            }
+            for r in replies_cursor
+        ]
+
+        return comments, replies
+    except PyMongoError:
+        return [], []
+    except EnvironmentError:
+        return [], []
+    finally:
+        if client:
+            try:
+                client.close()
+            except Exception:
+                pass
+
+
 def get_feed_posts_json(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> str:
     posts, error_message = fetch_feed_posts(page, page_size)
     payload: Dict[str, Any] = {
@@ -241,6 +319,16 @@ def get_feed_posts_json(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) ->
         "page_size": page_size,
         "posts": posts,
         "error": error_message or None,
+    }
+    return json.dumps(payload, ensure_ascii=False)
+
+
+def get_feed_comments_json(post_id: str) -> str:
+    comments, replies = fetch_feed_comments(post_id)
+    payload: Dict[str, Any] = {
+        "post_id": post_id,
+        "comments": comments,
+        "replies": replies,
     }
     return json.dumps(payload, ensure_ascii=False)
 
@@ -753,6 +841,157 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             background-color: var(--brand-primary);
             flex-shrink: 0;
             animation: blink-caret 1s step-end infinite;
+        }}
+
+        .feed-comments-section {{
+            margin-top: 20px;
+            padding-top: 16px;
+            border-top: 1px solid var(--border-default);
+        }}
+
+        .feed-comments-title {{
+            font-weight: bold;
+            color: var(--text-heading);
+            font-size: 14px;
+            margin-bottom: 12px;
+        }}
+
+        .feed-comments-loading {{
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 8px 0;
+        }}
+
+        .feed-comment-item {{
+            display: flex;
+            gap: 10px;
+            padding: 10px 0;
+            border-bottom: 1px solid var(--border-default);
+        }}
+
+        .feed-comment-item:last-child {{
+            border-bottom: none;
+        }}
+
+        .feed-comment-avatar {{
+            width: 32px;
+            height: 32px;
+            border-radius: 50%;
+            background: var(--semantic-neutral);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: var(--neutral-0);
+            font-weight: bold;
+            font-size: 13px;
+        }}
+
+        .feed-comment-body {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .feed-comment-meta {{
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 4px;
+        }}
+
+        .feed-comment-username {{
+            font-weight: bold;
+            color: var(--text-heading);
+            font-size: 13px;
+        }}
+
+        .feed-comment-date {{
+            color: var(--text-muted);
+            font-size: 11px;
+        }}
+
+        .feed-comment-text {{
+            color: var(--text-primary);
+            font-size: 13px;
+            line-height: 1.5;
+            word-break: break-word;
+        }}
+
+        .feed-comment-stats {{
+            display: flex;
+            gap: 12px;
+            margin-top: 4px;
+            color: var(--text-muted);
+            font-size: 11px;
+        }}
+
+        .feed-reply-item {{
+            display: flex;
+            gap: 8px;
+            padding: 8px 0 8px 42px;
+            border-bottom: 1px solid var(--border-default);
+        }}
+
+        .feed-reply-item:last-child {{
+            border-bottom: none;
+        }}
+
+        .feed-reply-avatar {{
+            width: 26px;
+            height: 26px;
+            border-radius: 50%;
+            background: var(--semantic-neutral);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
+            color: var(--neutral-0);
+            font-weight: bold;
+            font-size: 11px;
+        }}
+
+        .feed-reply-body {{
+            flex: 1;
+            min-width: 0;
+        }}
+
+        .feed-reply-meta {{
+            display: flex;
+            align-items: baseline;
+            gap: 8px;
+            margin-bottom: 3px;
+        }}
+
+        .feed-reply-username {{
+            font-weight: bold;
+            color: var(--text-heading);
+            font-size: 12px;
+        }}
+
+        .feed-reply-date {{
+            color: var(--text-muted);
+            font-size: 10px;
+        }}
+
+        .feed-reply-text {{
+            color: var(--text-primary);
+            font-size: 12px;
+            line-height: 1.5;
+            word-break: break-word;
+        }}
+
+        .feed-reply-stats {{
+            display: flex;
+            gap: 10px;
+            margin-top: 3px;
+            color: var(--text-muted);
+            font-size: 10px;
+        }}
+
+        .feed-no-comments {{
+            color: var(--text-muted);
+            font-size: 12px;
+            padding: 8px 0;
         }}
 
         .feed-media {{
@@ -1592,9 +1831,90 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         <span class="feed-detail-stat-icon">&#9993;</span> ${{post.comments}}
                     </span>
                 </div>
+                <div class="feed-comments-section" id="feedCommentsContainer">
+                    <div class="feed-comments-title">Comments</div>
+                    <div class="feed-comments-loading">Loading comments...</div>
+                </div>
             `;
             commentBox.style.display = '';
             commentBox.onclick = function() {{ openEtoroPost(post.post_url); }};
+
+            fetch('/feed/comments?post_id=' + encodeURIComponent(post.id))
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
+                    renderCommentsAndReplies(data.comments || [], data.replies || []);
+                }})
+                .catch(function() {{
+                    const container = document.getElementById('feedCommentsContainer');
+                    if (container) {{
+                        container.innerHTML = '<div class="feed-no-comments">Unable to load comments.</div>';
+                    }}
+                }});
+
+            function renderCommentsAndReplies(comments, replies) {{
+                const container = document.getElementById('feedCommentsContainer');
+                if (!container) return;
+
+                if (!comments.length && !replies.length) {{
+                    container.innerHTML = '<div class="feed-no-comments">No comments yet.</div>';
+                    return;
+                }}
+
+                const repliesByComment = {{}};
+                replies.forEach(function(r) {{
+                    const key = r.comment_id || r.reply_id;
+                    if (!repliesByComment[key]) repliesByComment[key] = [];
+                    repliesByComment[key].push(r);
+                }});
+
+                let html = '';
+                comments.forEach(function(c) {{
+                    const cReplies = repliesByComment[c.comment_id] || [];
+                    const cAvatarHtml = c.avatar_medium
+                        ? '<img src="' + _escape_js(c.avatar_medium) + '" alt="" loading="lazy" style="width:32px;height:32px;border-radius:50%;object-fit:cover;display:block;">'
+                        : '<div class="feed-comment-avatar">' + _escape_js((c.username || 'U')[0].toUpperCase()) + '</div>';
+                    html += '<div class="feed-comment-item">';
+                    html += '    ' + cAvatarHtml;
+                    html += '    <div class="feed-comment-body">';
+                    html += '        <div class="feed-comment-meta">';
+                    html += '            <span class="feed-comment-username">' + _escape_js(c.username) + '</span>';
+                    html += '            <span class="feed-comment-date">' + _escape_js(c.created ? _formatDate(c.created) : '') + '</span>';
+                    html += '        </div>';
+                    html += '        <div class="feed-comment-text">' + _escape_js(c.text) + '</div>';
+                    html += '        <div class="feed-comment-stats">';
+                    html += '            <span>&#9829; ' + (c.likes || 0) + '</span>';
+                    if (c.replies_count) {{
+                        html += '            <span>&#9993; ' + c.replies_count + ' replies</span>';
+                    }}
+                    html += '        </div>';
+                    html += '    </div>';
+                    html += '</div>';
+
+                    cReplies.forEach(function(r) {{
+                        const rAvatarHtml = r.avatar_medium
+                            ? '<img src="' + _escape_js(r.avatar_medium) + '" alt="" loading="lazy" style="width:26px;height:26px;border-radius:50%;object-fit:cover;display:block;">'
+                            : '<div class="feed-reply-avatar">' + _escape_js((r.username || 'U')[0].toUpperCase()) + '</div>';
+                        html += '<div class="feed-reply-item">';
+                        html += '    ' + rAvatarHtml;
+                        html += '    <div class="feed-reply-body">';
+                        html += '        <div class="feed-reply-meta">';
+                        html += '            <span class="feed-reply-username">' + _escape_js(r.username) + '</span>';
+                        html += '            <span class="feed-reply-date">' + _escape_js(r.created ? _formatDate(r.created) : '') + '</span>';
+                        html += '        </div>';
+                        html += '        <div class="feed-reply-text">' + _escape_js(r.text) + '</div>';
+                        html += '        <div class="feed-reply-stats">';
+                        html += '            <span>&#9829; ' + (r.likes || 0) + '</span>';
+                        if (r.replies_count) {{
+                            html += '            <span>&#9993; ' + r.replies_count + ' replies</span>';
+                        }}
+                        html += '        </div>';
+                        html += '    </div>';
+                        html += '</div>';
+                    }});
+                }});
+
+                container.innerHTML = html;
+            }}
         }}
 
         readingClose.addEventListener('click', () => selectPostByIndex(-1));
@@ -1607,6 +1927,23 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 .replace(/>/g, '&gt;')
                 .replace(/"/g, '&quot;')
                 .replace(/'/g, '&#39;');
+        }}
+
+        function _formatDate(created) {{
+            if (!created) return '';
+            if (typeof created === 'string') {{
+                let text = created;
+                if (text.endsWith('Z')) text = text.slice(0, -1);
+                const d = new Date(text);
+                if (!isNaN(d.getTime())) {{
+                    return d.toLocaleString('en-US', {{ year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }}) + ' UTC';
+                }}
+                return text;
+            }}
+            if (created instanceof Date) {{
+                return created.toLocaleString('en-US', {{ year: 'numeric', month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit', timeZone: 'UTC' }}) + ' UTC';
+            }}
+            return String(created);
         }}
 
         renderList(true);

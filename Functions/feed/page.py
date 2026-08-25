@@ -443,6 +443,11 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             animation: blink-caret 1s step-end infinite;
         }}
 
+        .feed-header-caret.hidden {{
+            opacity: 0;
+            animation: none;
+        }}
+
         @keyframes blink-caret {{
             from, to {{ opacity: 1; }}
             50% {{ opacity: 0; }}
@@ -860,6 +865,20 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             color: var(--text-muted);
             font-size: 12px;
             padding: 8px 0;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }}
+
+        .feed-comments-spinner {{
+            display: inline-block;
+            width: 16px;
+            height: 16px;
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            border-top-color: var(--brand-primary);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+            flex-shrink: 0;
         }}
 
         .feed-comment-item {{
@@ -913,14 +932,15 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-comment-text {{
             color: var(--text-primary);
             font-size: 13px;
-            line-height: 1.5;
+            line-height: 1.6;
             word-break: break-word;
+            white-space: pre-wrap;
         }}
 
         .feed-comment-stats {{
             display: flex;
             gap: 12px;
-            margin-top: 4px;
+            margin-top: 6px;
             color: var(--text-muted);
             font-size: 11px;
         }}
@@ -928,7 +948,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-reply-item {{
             display: flex;
             gap: 8px;
-            padding: 8px 0 8px 42px;
+            padding: 10px 0 10px 42px;
             border-bottom: 1px solid var(--border-default);
         }}
 
@@ -959,7 +979,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             display: flex;
             align-items: baseline;
             gap: 8px;
-            margin-bottom: 3px;
+            margin-bottom: 4px;
         }}
 
         .feed-reply-username {{
@@ -976,14 +996,15 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         .feed-reply-text {{
             color: var(--text-primary);
             font-size: 12px;
-            line-height: 1.5;
+            line-height: 1.6;
             word-break: break-word;
+            white-space: pre-wrap;
         }}
 
         .feed-reply-stats {{
             display: flex;
             gap: 10px;
-            margin-top: 3px;
+            margin-top: 6px;
             color: var(--text-muted);
             font-size: 10px;
         }}
@@ -1395,6 +1416,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
         const readingPanel = document.getElementById('feedReadingPanel');
         const readingClose = document.getElementById('feedReadingClose');
         const feedHeaderBtn = document.getElementById('feedHeaderBtn');
+        const feedHeaderCaret = document.querySelector('.feed-header-caret');
         const feedOverlay = document.getElementById('feedOverlay');
         const feedOverlayClose = document.getElementById('feedOverlayClose');
         const feedSortOptions = document.getElementById('feedSortOptions');
@@ -1767,12 +1789,14 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 readingEmpty.style.display = 'none';
                 readingScrollInner.innerHTML = '';
                 commentBox.style.display = 'none';
+                if (feedHeaderCaret) feedHeaderCaret.classList.remove('hidden');
                 return;
             }}
 
             layout.classList.add('has-selection');
             readingEmpty.style.display = 'none';
             document.getElementById('feedReadingPanel').classList.add('open');
+            if (feedHeaderCaret) feedHeaderCaret.classList.add('hidden');
             readingScroll.scrollTop = 0;
             const badgesHtml = post.badges.map(b => `<span class="feed-badge">${{_escape_js(b)}}</span>`).join('');
             const avatarHtml = post.avatar
@@ -1833,7 +1857,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                 </div>
                 <div class="feed-comments-section" id="feedCommentsContainer">
                     <div class="feed-comments-title">Comments</div>
-                    <div class="feed-comments-loading">Loading comments...</div>
+                    <div class="feed-comments-loading"><span class="feed-comments-spinner"></span>Loading comments...</div>
                 </div>
             `;
             commentBox.style.display = '';

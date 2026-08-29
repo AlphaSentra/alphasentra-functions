@@ -3,8 +3,8 @@ from pathlib import Path
 
 _HERE = Path(__file__).resolve()
 _ROOT = _HERE.parent.parent.parent
-sys.path.insert(0, str(_ROOT))
-sys.path.insert(0, str(_ROOT / "Functions"))
+sys.path.insert(0, str(_ROOT))  # type: ignore
+sys.path.insert(0, str(_ROOT / "Functions"))  # type: ignore
 
 from Functions.db.cache import set_index_cache_to_mongo
 from Functions.logging_utils import log_info

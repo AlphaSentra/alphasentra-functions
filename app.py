@@ -219,13 +219,9 @@ def _unauthorized_response():
             to {{ transform: rotate(360deg); }}
         }}
     </style>
-    <script>
-        if (window.top !== window.self) {{
+        <script>
             window.top.location.href = "{LOGIN_REDIRECT_URL}";
-        }} else {{
-            window.location.href = "{LOGIN_REDIRECT_URL}";
-        }}
-    </script>
+        </script>
 </head>
 <body>
     <div class="nav-loading-overlay" id="nav-loading-overlay">

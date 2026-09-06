@@ -176,6 +176,10 @@ def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
         "badges": [str(b) for b in (p.get("badges") or []) if b],
         "attachments": p.get("attachments") or [],
         "has_video": _post_has_video(p.get("attachments") or []),
+        "sentiment": {
+            "label": str((p.get("sentiment") or {}).get("label") or ""),
+            "score": float((p.get("sentiment") or {}).get("score") or 0),
+        },
     }
 
 
@@ -205,6 +209,7 @@ def fetch_feed_posts(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE) -> tu
                     "comments": 1,
                     "avatar_medium": 1,
                     "attachments": 1,
+                    "sentiment": 1,
                 },
             )
             .sort("created", -1)
@@ -350,7 +355,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
     if redirect_url:
         _redirect_script = f"""
         setTimeout(function() {{
-            window.location.href = {json.dumps(redirect_url)};
+            window.top.location.href = {json.dumps(redirect_url)};
         }}, 10000);
         """
 
@@ -581,6 +586,21 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             font-weight: 600;
             white-space: nowrap;
             flex-shrink: 0;
+        }}
+
+        .feed-list-stat-pill.sentiment-bullish {{
+            color: var(--semantic-positive);
+            border-color: var(--semantic-positive);
+        }}
+
+        .feed-list-stat-pill.sentiment-bearish {{
+            color: var(--semantic-negative);
+            border-color: var(--semantic-negative);
+        }}
+
+        .feed-list-stat-pill.sentiment-neutral {{
+            color: var(--semantic-neutral);
+            border-color: var(--semantic-neutral);
         }}
 
         .feed-list-preview {{
@@ -1698,6 +1718,7 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                         ${{post.has_video ? '<span class="feed-list-video-pill">&#9654; Video</span>' : ''}}
                         <span class="feed-list-stat-pill">&#9829; ${{post.likes}}</span>
                         <span class="feed-list-stat-pill">&#9993; ${{post.comments}}</span>
+                        ${{(post.sentiment && post.sentiment.label) ? '<span class="feed-list-stat-pill sentiment-' + _escape_js(post.sentiment.label) + '">' + _escape_js(post.sentiment.label) + '</span>' : ''}}
                         <span class="feed-list-date">${{_escape_js(post.created_raw)}}</span>
                     </div>
                     <div class="feed-list-preview-row">

@@ -74,11 +74,7 @@ def _redirect_html(title: str, message: str, url: str) -> str:
             }}
         </style>
         <script>
-            if (window.top !== window.self) {{
-                window.top.location.href = "{url}";
-            }} else {{
-                window.location.href = "{url}";
-            }}
+            window.top.location.href = "{url}";
         </script>
     </head>
     <body>

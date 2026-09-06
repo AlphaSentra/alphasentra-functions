@@ -40,6 +40,7 @@ from Functions.etoro.client import (
     _ETORO_ENDPOINT_COMMENT_REPLIES as _COMMENT_REPLIES_ENDPOINT,
 )
 from Functions.logging_utils import log_info, log_warning, log_error
+from Functions.sentiment.get_sentiment_score import get_sentiment_score
 
 try:
     from Functions.config import ETORO_POST_URL
@@ -341,6 +342,7 @@ def _prepare_documents(posts: list) -> list:
             if "[post_id]" in ETORO_POST_URL
             else f"{ETORO_POST_URL.rstrip('/')}/{post['post_id']}"
         )
+        sentiment = get_sentiment_score(post.get("message_text") or "")
         raw = post.get("raw") or {}
         post_data = raw.get("post") or {}
         tags = post_data.get("tags") or []
@@ -357,6 +359,7 @@ def _prepare_documents(posts: list) -> list:
             {
                 "post_id": post["post_id"],
                 "post_url": post_url,
+                "sentiment": sentiment,
                 "badges": badges,
                 "attachments": attachments,
                 "created": created_at,

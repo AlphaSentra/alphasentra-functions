@@ -603,6 +603,36 @@ def _prepare_reply_documents(replies: list) -> list:
     return documents
 
 
+def _get_comment_username(comment: dict) -> str | None:
+    """Extract comment author username from raw comment payload."""
+    raw = comment.get("raw") or {}
+    entity = raw.get("entity") or {}
+    owner = entity.get("owner") or {}
+    username = owner.get("username")
+    return username if username else None
+
+
+def _filter_posts_by_non_author_comments(posts, comments, replies):
+    """Filter posts to only those with at least one comment from a non-author.
+
+    Returns filtered (posts, comments, replies) tuple.
+    """
+    valid_post_ids = set()
+    for comment in comments:
+        post_id = comment.get("post_id")
+        comment_username = _get_comment_username(comment)
+        post = next((p for p in posts if p.get("post_id") == post_id), None)
+        if post and comment_username is not None and comment_username != post.get("owner_username"):
+            valid_post_ids.add(post_id)
+
+    valid_posts = [p for p in posts if p.get("post_id") in valid_post_ids]
+    valid_comments = [c for c in comments if c.get("post_id") in valid_post_ids]
+    valid_comment_ids = {c.get("comment_id") for c in valid_comments}
+    valid_replies = [r for r in replies if r.get("comment_id") in valid_comment_ids]
+
+    return valid_posts, valid_comments, valid_replies
+
+
 def _fetch_instrument_feed(session_factory, market_id: str) -> list:
     """Fetch all posts for an instrument within the lookback window.
 
@@ -845,13 +875,10 @@ def main() -> None:
 
     log_info(f"Collected {len(unique_posts)} unique posts across all instruments.")
 
-    documents = _prepare_documents(unique_posts)
-    log_info(f"Prepared {len(documents)} post documents.")
-
     db = feed_client[os.getenv("MONGODB_DATABASE_FEED", "alphasentra-feed")]
     posts_collection = db["etoro_posts"]
 
-    post_ids = [doc["post_id"] for doc in documents if doc.get("post_id")]
+    post_ids = [post.get("post_id") for post in unique_posts if post.get("post_id")]
     existing_posts_by_id = {}
     if post_ids:
         cursor = posts_collection.find(
@@ -927,6 +954,16 @@ def main() -> None:
             except Exception as exc:
                 log_warning(f"Failed to fetch replies for comment {cid}: {exc}")
 
+    unique_posts, pending_comments, pending_replies = _filter_posts_by_non_author_comments(
+        unique_posts, pending_comments, pending_replies
+    )
+    if not unique_posts:
+        log_info("No posts remaining after author-comment filter.")
+        feed_client.close()
+        return
+
+    documents = _prepare_documents(unique_posts)
+    log_info(f"Prepared {len(documents)} post documents after author-comment filter.")
     upserted = _write_to_feed(documents, pending_comments, pending_replies, feed_client)
     log_info(f"Upserted {upserted} documents into feed.etoro_posts/etoro_comments/etoro_replies.")
     feed_client.close()

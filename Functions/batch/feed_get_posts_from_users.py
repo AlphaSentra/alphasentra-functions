@@ -634,6 +634,36 @@ def _prepare_reply_documents(replies: list) -> list:
     return documents
 
 
+def _get_comment_username(comment: dict) -> str | None:
+    """Extract comment author username from raw comment payload."""
+    raw = comment.get("raw") or {}
+    entity = raw.get("entity") or {}
+    owner = entity.get("owner") or {}
+    username = owner.get("username")
+    return username if username else None
+
+
+def _filter_posts_by_non_author_comments(posts, comments, replies):
+    """Filter posts to only those with at least one comment from a non-author.
+
+    Returns filtered (posts, comments, replies) tuple.
+    """
+    valid_post_ids = set()
+    for comment in comments:
+        post_id = comment.get("post_id")
+        comment_username = _get_comment_username(comment)
+        post = next((p for p in posts if p.get("post_id") == post_id), None)
+        if post and comment_username is not None and comment_username != post.get("owner_username"):
+            valid_post_ids.add(post_id)
+
+    valid_posts = [p for p in posts if p.get("post_id") in valid_post_ids]
+    valid_comments = [c for c in comments if c.get("post_id") in valid_post_ids]
+    valid_comment_ids = {c.get("comment_id") for c in valid_comments}
+    valid_replies = [r for r in replies if r.get("comment_id") in valid_comment_ids]
+
+    return valid_posts, valid_comments, valid_replies
+
+
 def _fetch_user_feed(session_factory, user_id: str) -> list:
     """Fetch all posts for a user within the lookback window.
 
@@ -927,7 +957,19 @@ def main() -> None:
                 except Exception as exc:
                     log_warning(f"Failed to fetch replies for comment {cid}: {exc}")
 
+        original_post_count = len(posts)
+        posts, batch_comments, pending_replies = _filter_posts_by_non_author_comments(
+            posts, batch_comments, pending_replies
+        )
+        filtered_count = original_post_count - len(posts)
+        if filtered_count > 0:
+            log_info(f"Filtered out {filtered_count} posts where all comments are from the author.")
+        if not posts:
+            log_info("No posts remaining after author-comment filter.")
+            return
+
         documents = _prepare_documents(posts)
+        log_info(f"Prepared {len(documents)} post documents after author-comment filter.")
         upserted = _write_to_feed(documents, batch_comments, pending_replies, feed_client)
         total_upserted += upserted
         log_info(

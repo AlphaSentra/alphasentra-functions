@@ -153,13 +153,17 @@ def _post_has_video(attachments: list) -> bool:
 def _transform_post(p: Dict[str, Any]) -> Dict[str, Any]:
     created = p.get("created")
     if isinstance(created, datetime):
-        ts = created.timestamp()
+        dt = created if created.tzinfo else created.replace(tzinfo=timezone.utc)
+        ts = dt.timestamp()
     else:
         text = str(created or "")
         if text.endswith("Z"):
             text = text[:-1]
         try:
-            ts = datetime.fromisoformat(text).timestamp()
+            dt = datetime.fromisoformat(text)
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            ts = dt.timestamp()
         except Exception:
             ts = 0
     return {
@@ -498,6 +502,16 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             background: var(--hover-surface);
             border-left: 3px solid var(--brand-primary);
             padding-left: 13px;
+        }}
+
+        .feed-list-item.fresh {{
+            animation: freshBlink 1s ease-in-out 10;
+            transition: none;
+        }}
+
+        @keyframes freshBlink {{
+            0%, 100% {{ background-color: transparent; }}
+            50% {{ background-color: rgba(0, 128, 255, 0.35); }}
         }}
 
         .feed-list-avatar {{
@@ -1705,6 +1719,16 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             const item = document.createElement('div');
             item.className = 'feed-list-item';
             item.setAttribute('data-post-id', post.id);
+
+            const now = Date.now() / 1000;
+            if (post.created_ts && (now - post.created_ts) < 7200) {{
+                item.classList.add('fresh');
+                item.style.boxShadow = 'inset 3px 0 0 #0080ff';
+                setTimeout(function() {{
+                    item.classList.remove('fresh');
+                    item.style.boxShadow = '';
+                }}, 5000);
+            }}
 
             const avatarHtml = post.avatar
                 ? `<img src="${{_escape_js(post.avatar)}}" alt="" loading="lazy">`

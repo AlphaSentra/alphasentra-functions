@@ -355,10 +355,16 @@ def _prepare_documents(posts: list) -> list:
             and tag["market"].get("symbolName")
         ]
         created_at = _get_created_at(post)
+        published_weekday = created_at.strftime("%A") if created_at else None
+        published_hour = str(created_at.hour) if created_at else None
+        published_timezone = created_at.tzname() if created_at else None
         documents.append(
             {
                 "post_id": post["post_id"],
                 "post_url": post_url,
+                "published_weekday": published_weekday,
+                "published_hour": published_hour,
+                "published_timezone": published_timezone,
                 "sentiment": sentiment,
                 "badges": badges,
                 "attachments": attachments,

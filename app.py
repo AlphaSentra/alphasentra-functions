@@ -117,7 +117,7 @@ def _require_etoro_auth():
         if request.path == '/port' and request.method == 'GET':
             return
 
-        if request.path == '/feed' or request.path.startswith('/feed/posts'):
+        if request.path == '/feed' or request.path.startswith('/feed/posts') or request.path.startswith('/feed/comments'):
             return
 
         if request.path == '/' and request.method == 'GET':

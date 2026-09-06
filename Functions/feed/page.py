@@ -498,10 +498,26 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             background: var(--bg-subtle);
         }}
 
+        .feed-list-item.sentiment-bullish:hover {{
+            background: rgba(0, 255, 128, 0.28);
+        }}
+
+        .feed-list-item.sentiment-bearish:hover {{
+            background: rgba(255, 70, 70, 0.28);
+        }}
+
         .feed-list-item.active {{
             background: var(--hover-surface);
             border-left: 3px solid var(--brand-primary);
             padding-left: 13px;
+        }}
+
+        .feed-list-item.sentiment-bullish {{
+            background: rgba(0, 255, 128, 0.18);
+        }}
+
+        .feed-list-item.sentiment-bearish {{
+            background: rgba(255, 70, 70, 0.18);
         }}
 
         .feed-list-item.fresh {{
@@ -1728,6 +1744,13 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
                     item.classList.remove('fresh');
                     item.style.boxShadow = '';
                 }}, 5000);
+            }}
+
+            if ((post.comments || 0) >= 4) {{
+                const label = (post.sentiment && post.sentiment.label || '').toLowerCase();
+                if (label === 'bullish' || label === 'bearish') {{
+                    item.classList.add('sentiment-' + label);
+                }}
             }}
 
             const avatarHtml = post.avatar

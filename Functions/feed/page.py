@@ -2038,6 +2038,39 @@ def get_feed_html(page: int = 1, page_size: int = _FEED_POSTS_PER_PAGE, redirect
             return String(created);
         }}
 
+        function pollNewPosts() {{
+            fetch('/feed/posts?page=1')
+                .then(function(response) {{ return response.json(); }})
+                .then(function(data) {{
+                    if (!data || !data.posts || !data.posts.length) return;
+
+                    const existingIds = {{}};
+                    posts.forEach(function(p) {{
+                        existingIds[p.id] = true;
+                    }});
+
+                    const newPosts = [];
+                    for (var i = 0; i < data.posts.length; i++) {{
+                        if (!existingIds[data.posts[i].id]) {{
+                            newPosts.push(data.posts[i]);
+                        }} else {{
+                            break;
+                        }}
+                    }}
+
+                    if (newPosts.length > 0) {{
+                        for (var i = newPosts.length - 1; i >= 0; i--) {{
+                            posts.unshift(newPosts[i]);
+                        }}
+                        renderList(true);
+                        renderTickerPills();
+                    }}
+                }})
+                .catch(function() {{}});
+        }}
+
+        setInterval(pollNewPosts, 60000);
+
         renderList(true);
         renderTickerPills();
         document.getElementById('feedListPanel').addEventListener('scroll', onListScroll);

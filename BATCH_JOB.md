@@ -39,11 +39,43 @@ Collects eToro feed data (trending PIs, instruments, and posts) and stores it in
 | 1 | `clear_feed.py` | Drops `etoro_trending_instruments` and `etoro_trending_pi` collections; removes `etoro_posts` older than 10 days. |
 | 2 | `feed_get_pi.py` | Fetches current-year top-copier Popular Investor rankings and upserts into `etoro_trending_pi`. |
 | 3 | `feed_get_instruments.py` | Fetches top 100 instruments by 7-day viewer popularity and trader change, upserts into `etoro_trending_instruments`. |
-| 4 | `feed_get_posts_from_pi.py` | Reads `etoro_trending_pi`, fetches each PI's public feed posts (last 30 days), stores in `etoro_posts`. |
-| 5 | `feed_get_posts_from_instruments.py` | Reads `etoro_trending_instruments`, fetches each instrument's public market feed posts (last 30 days), stores in `etoro_posts`. |
-| 6 | `feed_get_posts_from_users.py` | Reads `users` collection, fetches public feed posts for each user with `etoro_username` (last 30 days), stores in `etoro_posts`. |
+| 4 | `feed_get_posts_from_pi.py` | Reads `etoro_trending_pi`, fetches each PI's public feed posts (last 10 days), skips posts with no comments or where all comments are from the post author, stores in `etoro_posts` with weekday/hour/timezone metadata. |
+| 5 | `feed_get_posts_from_instruments.py` | Reads `etoro_trending_instruments`, fetches each instrument's public market feed posts (last 10 days), skips posts with no comments or where all comments are from the post author, stores in `etoro_posts` with weekday/hour/timezone metadata. |
+| 6 | `feed_get_posts_from_users.py` | Reads `users` collection, fetches public feed posts for each user with `etoro_username` (last 10 days), skips posts with no comments or where all comments are from the post author, stores in `etoro_posts` with weekday/hour/timezone metadata. |
 
 **Timeout:** 3 hours per script (`SCRIPT_TIMEOUT_SECONDS = 10800`).
+
+### `etoro_posts` Schema
+
+Posts stored by `feed_get_posts_from_*.py` include the following fields:
+
+| Field | Type | Description |
+|-------|------|-------------|
+| `post_id` | string | Unique eToro post identifier |
+| `post_url` | string | Direct URL to the post on eToro |
+| `published_weekday` | string | Weekday name of publication, e.g. `"Monday"`, `"Tuesday"` |
+| `published_hour` | string | Hour of publication in 24h format without leading zero, e.g. `"8"`, `"20"` |
+| `published_timezone` | string | Timezone name derived from the post timestamp, e.g. `"UTC"` |
+| `sentiment` | object | Sentiment analysis result with `score`, `label`, and `confidence` |
+| `badges` | array | Market symbols tagged on the post, e.g. `["SPX500", "GOLD"]` |
+| `attachments` | array | Media attachments from the post |
+| `created` | datetime | UTC timestamp of when the post was created |
+| `owner_username` | string | eToro username of the post author |
+| `message_text` | string | Full text content of the post |
+| `likes` | int | Number of likes |
+| `comments` | int | Number of comments (aggregate from API) |
+| `avatar_medium` | string | Medium avatar URL of the post author |
+| `raw` | object | Full raw API response payload |
+
+### Post Filtering Logic
+
+Before persisting posts, the feed scripts apply two filters:
+
+1. **No-comment filter:** Posts with zero reported comments are skipped entirely. This is an early optimization to avoid fetching comments for posts that cannot satisfy the engagement requirement.
+
+2. **Author-comment filter:** After fetching comments for a post, posts where **every comment is from the post author itself** are excluded. Only posts with at least one comment from a different user are stored. This ensures the feed reflects genuine engagement rather than self-commenting.
+
+If a post fails either filter, it and its associated comments/replies are not written to the database.
 
 ### 3. `Functions/batch/logs_rm_duplicated.py`
 

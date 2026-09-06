@@ -1151,7 +1151,7 @@ The feed database (`MONGODB_URI_FEED` / `MONGODB_DATABASE_FEED`, default `alphas
 |------------|-------------|--------------|
 | `etoro_trending_pi` | Current-year top-copier Popular Investor rankings | `feed_get_pi.py` |
 | `etoro_trending_instruments` | Top 100 instruments by 7-day viewer popularity and trader change | `feed_get_instruments.py` |
-| `etoro_posts` | Raw eToro public feed posts from PIs and instruments (last 30 days) | `feed_get_posts_from_pi.py`, `feed_get_posts_from_instruments.py` |
+| `etoro_posts` | Raw eToro public feed posts from PIs, instruments, and users (last 10 days). Posts are filtered to exclude those with no comments or where all comments are from the post author. Includes derived fields: `published_weekday`, `published_hour`, `published_timezone`. | `feed_get_posts_from_pi.py`, `feed_get_posts_from_instruments.py`, `feed_get_posts_from_users.py` |
 
 #### Feed Job Pipeline
 
@@ -1161,18 +1161,20 @@ flowchart LR
     B --> C[feed_get_instruments.py]
     C --> D[feed_get_posts_from_pi.py]
     D --> E[feed_get_posts_from_instruments.py]
+    E --> F[feed_get_posts_from_users.py]
 
-    A -->|drops| F[etoro_trending_pi]
-    A -->|drops| G[etoro_trending_instruments]
-    A -->|prunes >60d| H[etoro_posts]
+    A -->|drops| G[etoro_trending_pi]
+    A -->|drops| H[etoro_trending_instruments]
+    A -->|prunes >10d| I[etoro_posts]
 
-    B -->|upserts| F
-    C -->|upserts| G
-    D -->|reads F, writes| H
-    E -->|reads G, writes| H
+    B -->|upserts| G
+    C -->|upserts| H
+    D -->|reads G, writes| I
+    E -->|reads H, writes| I
+    F -->|reads users, writes| I
 ```
 
-**Schedule:** Daily at 03:00 UTC via `.github/workflows/feed-job.yml`
+**Schedule:** Every 4 hours (04:00, 08:00, 12:00, 16:00, 20:00 UTC) via `.github/workflows/feed-job.yml`
 
 **Timeout:** 3 hours per script.
 
